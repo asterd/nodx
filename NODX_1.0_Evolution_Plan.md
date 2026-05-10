@@ -1,201 +1,424 @@
 # NODX 1.0 Evolution Plan
 
-**Purpose.** Precise, agent-executable roadmap to take NODX from the current `nodx/0.1` draft and reference engine to a complete, secure, progressively implementable `nodx/1.0`.
+**Purpose.** This document is the agent-executable roadmap for taking the current
+`nodx/0.1` reference implementation to a stable `nodx/1.0` format and a credible
+reference implementation, then continuing into `1.1`, `1.2`, and later profiles.
 
-**Audience.** Coding agents (Codex, Claude Code), human maintainers, security reviewers, parser/renderer/editor/exporter implementers, RAG/agent integrators.
+**Audience.** Coding agents, human maintainers, security reviewers, parser
+authors, renderer authors, package implementers, editor implementers, and
+agent/RAG integrators.
 
-**Reading guide.** The plan is normative for the reference implementation in this repository. Sections marked **Status** describe what already exists; sections marked **Target** describe what must exist at `nodx/1.0`. Every phase carries explicit **Inputs**, **Tasks**, **Out-of-scope**, **Done criteria**, **Test artifacts**, **Risk**, and **Dependencies**.
+**Core decision.** NODX 1.0 is a stable document format and safe reference
+implementation, not the full future ecosystem. The 1.0 release must be small
+enough to finish and strict enough to trust.
 
-**Core rule.** NODX 1.0 must be **easy to implement partially** and **hard to implement unsafely**. A minimal reader must not need package support, signatures, CST, NODS cascade, PDF/DOCX/PPTX export, or agent mutations.
+**North star.** NODX must be:
+
+1. easy to implement partially;
+2. hard to implement unsafely;
+3. deterministic where hashes, signatures, interop, and agents depend on it;
+4. explicit about unsupported features;
+5. useful as plain text before advanced packaging, signing, or editing exists.
+
+**Non-negotiable 1.0 rule.** A minimal conforming reader must not need package
+support, signatures, lossless CST, full NODS cascade, PDF/DOCX/PPTX export, or
+agent mutations.
 
 ---
 
 ## Table of Contents
 
-1. Product Position
-2. Versioning, Compatibility, Stability Pledge
-3. Profile Model and Declaration Format
-4. Security Baseline and Resource Limits
-5. Workspace Layout, Crate Boundaries, Module Decomposition
-6. Implementation Phases (P0 → P10)
-7. Dependency Graph and Parallelism
-8. CLI Surface and Exit Codes
-9. JavaScript Parser Scope (`nodx-js`)
-10. Testing, Fuzzing, Interop Strategy
-11. Error Registry Coverage and Severity Rules
-12. Documentation Deliverables
-13. 1.0 Definition of Done
-14. Execution Guidance for Coding Agents
-15. Appendix A — Phase Status Snapshot (current repo)
-16. Appendix B — Mapping Plan Phases → Spec Sections
-17. Appendix C — Non-Goals at 1.0
+1. Current State
+2. Release Architecture
+3. Versioning and Compatibility
+4. Profile Model
+5. Security Baseline
+6. Resource Limits
+7. Workspace Target
+8. Milestone Roadmap
+9. Detailed Milestone Specs
+10. CLI Contract
+11. JavaScript Implementation Contract
+12. Testing and Release Gates
+13. Error Registry
+14. Agent Execution Rules
+15. Documentation Deliverables
+16. Final Definitions of Done
+17. Appendix A: Current Gaps
+18. Appendix B: Deferred Profiles
+19. Appendix C: Agent Handoff Template
 
 ---
 
-## 1. Product Position
+## 1. Current State
 
-NODX 1.0 is an **open, text-first, semantic source and exchange format for documents**. It is not a pixel-perfect replacement for PDF, DOCX, ODT, PPTX, or HTML. It is the **authoritative source layer** from which those formats are generated, validated, audited, signed, chunked, and safely processed by software agents.
+This repository currently implements a minimal public `nodx/0.1` reference
+engine.
 
-The value proposition is:
+### 1.1 Implemented today
 
-1. readable plain text source;
-2. structured semantic AST;
-3. safe-by-default rendering;
-4. progressive profiles;
-5. deterministic canonicalization;
-6. package-local assets;
-7. stable node addressing;
-8. LLM/RAG/agent projections and validated mutations.
+- Rust reference crate: `crates/nodx-core`.
+- CLI facade: `crates/nodx-cli`.
+- Independent JavaScript parser: `packages/nodx-js/parser.mjs`.
+- Public conformance fixtures: `spec/tests/conformance`.
+- Examples for plain, rich, typography, i18n, print, agent workflow, and package.
+- Desktop local viewer: `apps/desktop/nodx_viewer.py`.
+- Deterministic stored-ZIP package builder: `scripts/build_package.py`.
 
-NODX 1.0 deliberately ships **no execution model**. Documents are inert.
+Implemented behavior includes:
+
+- UTF-8 parsing path in Rust.
+- Plain/Core syntax and a practical Rich subset.
+- Front matter parser for simple mappings, nested maps, arrays, strings,
+  booleans, numbers, and null.
+- Delimited blocks, headings, paragraphs, lists, pipe tables, literal blocks.
+- Attribute blocks, IDs, classes, named attributes.
+- Common inline nodes.
+- Deterministic canonical JSON with sorted object keys.
+- Focused semantic validation inside `nodx-core`.
+- Safe HTML renderer and TUI renderer.
+- NCP semantic projection with deterministic SHA-256 hashes.
+- Minimal stored-ZIP package reader with manifest digest verification.
+- Rust/JS conformance on current fixtures and examples.
+
+### 1.2 Known implementation shape
+
+At the time of this plan:
+
+- `crates/nodx-core/src/lib.rs` is a 3,134-line monolith.
+- `packages/nodx-js/parser.mjs` is a 489-line single-file parser.
+- The Rust workspace contains only `nodx-core` and `nodx-cli`.
+- The CLI has only `ast`, `html`, `tui`, `ncp`, `diagnostics`, `validate`, and
+  `inspect`.
+- The conformance runner compares Rust and JS canonical AST output.
+- There is no `fuzz/` directory.
+- There are no security corpus directories.
+- There is no lossless CST, JWS signature support, full NODS cascade, package
+  virtual filesystem, or mutation SDK.
+
+### 1.3 Verification baseline
+
+These commands are the baseline before any milestone work:
+
+```sh
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
+
+Any milestone that changes behavior must keep these commands green or explicitly
+update the affected fixtures and documentation in the same change.
 
 ---
 
-## 2. Versioning, Compatibility, Stability Pledge
+## 2. Release Architecture
 
-### 2.1 Version identifiers
+The project has three separate layers. Agents must not collapse them into one
+mega-release.
 
-- Source version is declared via the front-matter `schema` field (e.g. `schema: nodx/1.0`).
-- The Canonical Semantic AST carries an implicit `schema` derived from the source.
-- The Compact Projection carries `"schema": "nodx-ncp/1.0"`.
-- Change records carry `"schema": "nodx/change/1.0"`.
-- Manifests carry `"manifest_version": "1.0"`.
+### 2.1 Format layer
 
-### 2.2 Stability pledge (frozen at 1.0)
+The format layer defines the syntax, AST shape, canonicalization rules, error
+registry, security model, and compatibility promises.
 
-The following surfaces are **frozen** at 1.0 and require a major version bump to change:
+For 1.0, the format layer includes:
 
-1. surface syntax for Plain, Core, Rich;
-2. Canonical Semantic AST JSON shape and JCS-sorted serialization rules;
-3. NCP `lossless` and `semantic` mode JSON shapes;
-4. error code numbers and severity assignments listed in §11;
-5. JWS protected header `typ` and `cty`;
-6. package layout requirements (entry list, mimetype rules, manifest required fields);
-7. CLI exit code semantics (§8).
+- Text NODX.
+- Plain, Core, and Rich profiles.
+- Optional Style syntax with safe rejection of unsupported features.
+- Optional Package syntax and manifest rules.
+- Canonical Semantic AST.
+- NCP semantic projection.
+- Error registry.
+- Security baseline.
+- Resource limits.
 
-The following surfaces are **unstable** at 1.0 and may evolve in 1.x minor versions:
+### 2.2 Reference implementation layer
 
-1. NCP `summary` mode heuristics;
-2. validator severity for `warning`/`info` codes;
-3. renderer output bytes (only the canonical AST is frozen, not rendered HTML/PDF/DOCX/PPTX);
-4. CLI subcommand flags marked `--unstable-*`.
+The reference implementation proves the format can be implemented safely.
 
-### 2.3 Canonical AST versioning
+For 1.0, the reference implementation includes:
 
-The canonical bytes produced by `nodx-sign`'s canonicalizer are the contract that signatures depend on. If the canonical serialization rules change, the major version MUST be bumped. A `canonicalVersion: "1.0"` marker is embedded in JWS protected headers so signers and verifiers can detect mismatch deterministically.
+- Rust parser.
+- JavaScript parser.
+- Rust validator.
+- Rust safe HTML renderer.
+- Rust and JS canonical AST parity.
+- Rust and JS NCP semantic parity.
+- Rust package reader for safe packages.
+- CLI with stable exit semantics.
+- Public fixture corpora and conformance report.
+
+### 2.3 Ecosystem layer
+
+The ecosystem layer includes advanced profiles and integrations. These are not
+required for `nodx/1.0` unless explicitly listed in Section 16.
+
+Examples:
+
+- Lossless CST and editor rewrites.
+- JWS signature verification.
+- Agent mutation SDK.
+- NCP lossless and summary modes.
+- Full NODS cascade and computed style.
+- DOCX/PPTX exporters.
+- Browser playground.
+- Python bindings.
+
+These belong to `1.1`, `1.2`, or later unless a maintainer explicitly moves a
+specific item into the 1.0 scope.
 
 ---
 
-## 3. Profile Model and Declaration Format
+## 3. Versioning and Compatibility
 
-### 3.1 Profile list
+### 3.1 Version identifiers
 
-Implementations declare exactly which profiles they support. No implementation is required to support all profiles.
+- Source schema: `schema: nodx/1.0`.
+- Canonical Semantic AST schema: derived from the source schema.
+- NCP semantic projection schema: `"schema": "nodx-ncp/1.0"`.
+- Package manifest version: `"manifest_version": "1.0"`.
+- Future change records: `"schema": "nodx/change/1.1"` or later.
 
-| Profile | Required for 1.0 ecosystem | Scope |
-|---|---:|---|
-| `NODX-Plain-1.0` | yes | UTF-8, paragraphs, headings, safe escaping, implicit metadata. |
-| `NODX-Core-1.0` | yes | front matter, blocks, attrs, lists, inline base, diagnostics. |
-| `NODX-Rich-1.0` | yes | tables, figures, images, math, footnotes, bibliography, forms, media fallbacks. |
-| `NODX-Style-1.0` | yes | full NODS parser, allowlist, cascade, computed style. |
-| `NODX-Package-1.0` | yes | ZIP package, manifest, assets, digest verification, safe includes. |
-| `NODX-Agent-1.0` | yes | NCP, stable IDs, hashes, validated mutations, change records. |
-| `NODX-Signature-1.0` | yes | canonical AST, manifest signing, JWS verification. |
-| `NODX-Editor-1.0` | yes | lossless CST, source maps, local rewrites. |
-| `NODX-Presentation-1.0` | optional | deck/slide/speaker-notes export semantics. |
+### 3.2 Frozen at 1.0
 
-A Rich implementation MUST also satisfy Core. A Package implementation MUST at least understand Core parsing for its entry document. Style, Agent, Signature, Editor, and Presentation are orthogonal and combinable.
+Changing any of these after 1.0 requires a major version bump:
 
-### 3.2 Declaration format
+1. Plain/Core/Rich surface syntax.
+2. Canonical Semantic AST JSON shape.
+3. Canonical JSON serialization rules.
+4. Error code numbers and default severities.
+5. Required package layout fields.
+6. Resource limit defaults and enforcement points.
+7. CLI exit code semantics.
+8. Profile declaration field names and fail-closed behavior.
 
-A document MAY declare which profiles its content **requires** and which it **uses optionally**. Declaration lives in front matter:
+### 3.3 Not frozen at 1.0
+
+These may evolve in `1.x`:
+
+1. Renderer output bytes, except where a golden test explicitly freezes output.
+2. NCP summary heuristics.
+3. Advanced package writer compression choices.
+4. Style cascade internals.
+5. Exporter fidelity details.
+6. CLI flags marked `--unstable-*`.
+
+### 3.4 Migration rule
+
+Every breaking change from `nodx/0.1` to `nodx/1.0` must appear in
+`MIGRATION-0.1-TO-1.0.md` with:
+
+- old input;
+- new input;
+- expected diagnostic if an old construct is rejected;
+- suggested mechanical patch when possible.
+
+---
+
+## 4. Profile Model
+
+Profiles are capability declarations. They are not release milestones.
+
+### 4.1 Profile tiers
+
+| Tier | Profile | 1.0 status | Scope |
+|---|---|---:|---|
+| Required format | `NODX-Plain-1.0` | blocking | UTF-8 text, paragraphs, headings, safe escaping, implicit metadata. |
+| Required format | `NODX-Core-1.0` | blocking | front matter, blocks, attrs, lists, inline base, diagnostics. |
+| Required format | `NODX-Rich-1.0` | blocking | tables, figures, images, math text, footnotes, bibliography, forms, media fallbacks where specified. |
+| Supported subset | `NODX-Style-1.0` | partial blocking | safe NODS allowlist and rejection. Full cascade may land after 1.0. |
+| Supported subset | `NODX-Package-1.0` | blocking for package reader only | ZIP package read, manifest, assets, digest verification, no extraction. |
+| Projection | `NODX-Agent-Read-1.0` | blocking | stable IDs, hashes, NCP semantic, read-only agent consumption. |
+| Future | `NODX-Agent-Mutate-1.1` | deferred | validated mutations, batches, change records. |
+| Future | `NODX-Signature-1.1` | deferred | JWS verification, trust hooks, signature corpus. |
+| Future | `NODX-Editor-1.2` | deferred | lossless CST, source maps, local rewrites. |
+| Future | `NODX-Presentation-1.2` | deferred | deck/slide/speaker-notes semantics and PPTX export. |
+
+### 4.2 Declaration format
+
+A document may declare which profiles it requires and which it can use
+optionally:
 
 ```yaml
 schema: nodx/1.0
 profiles:
   requires: [core, rich]
-  optional: [style, signature]
+  optional: [style, package]
 ```
 
-Normative rules:
+Rules:
 
-1. `profiles.requires` and `profiles.optional` are arrays of profile short names (`plain`, `core`, `rich`, `style`, `package`, `agent`, `signature`, `editor`, `presentation`).
-2. A processor MUST emit `NODX-E024` (severity `error`) when a profile listed under `requires` is not supported.
-3. A processor MUST emit `NODX-E023` (severity `warning`) when a profile listed under `optional` is not supported.
-4. In a Packaged document, the package manifest `profiles` field has the same shape and MUST be a superset of the entry document's `profiles.requires`.
-5. When a document omits `profiles`, the processor infers requirements from used features and applies the same fail-closed rules.
+1. `profiles.requires` and `profiles.optional` are arrays of short names.
+2. Valid short names at 1.0 are `plain`, `core`, `rich`, `style`, `package`,
+   and `agent-read`.
+3. Short names reserved for later versions are `agent-mutate`, `signature`,
+   `editor`, and `presentation`.
+4. Unsupported required profiles emit `NODX-E024` with severity `error`.
+5. Unsupported optional profiles emit `NODX-E023` with severity `warning`.
+6. A CLI build that cannot satisfy a required profile exits with code `3`.
+7. Omitted `profiles` means the validator infers required features from used
+   syntax and applies the same rules.
+8. Package manifests must declare a profile set that is a superset of the entry
+   document's required profiles.
 
-### 3.3 Minimum viable safe viewer
+### 4.3 Minimal viable reader
 
-A minimal viewer is conformant if it:
+A minimal conforming reader may implement only Plain or only Core if it:
 
-1. implements `NODX-Plain-1.0` or `NODX-Core-1.0`;
-2. renders fallback children for unknown/custom blocks;
-3. escapes all output per context;
-4. blocks unsafe URL schemes (§4.5);
-5. never executes document content;
-6. never fetches remote resources by default;
-7. emits structured diagnostics for unsupported `profiles.requires` features;
-8. exits with code `3` (§8) if a required feature is unsupported.
+1. validates UTF-8;
+2. rejects BOM and U+0000 according to policy;
+3. enforces source size and line length limits;
+4. escapes rendered text by output context;
+5. blocks unsafe URL schemes;
+6. never executes document content;
+7. never fetches remote resources by default;
+8. renders fallback children for unknown blocks where possible;
+9. reports unsupported required features with `NODX-E024`;
+10. exits with code `3` for unsupported required features in the CLI.
 
 ---
 
-## 4. Security Baseline and Resource Limits
+## 5. Security Baseline
 
-NODX 1.0 security defaults MUST be **fail-closed**. Every processor handling untrusted input MUST enforce every rule below or document a host-policy override.
+NODX processors handling untrusted input must fail closed by default.
 
-### 4.1 Default policy table
+### 5.1 Default forbidden surface
 
 ```text
 embedded scripts:               forbidden
-macros:                          forbidden
-plugins:                         forbidden
-remote resource loading:         forbidden
-file:// references:              forbidden
-javascript:/vbscript: refs:      forbidden
-remote styles/imports/includes:  forbidden
-active SVG:                      forbidden
-MathML active/foreign content:   forbidden
-media autoplay:                  forbidden
-package extraction to disk:      forbidden
-unknown component execution:     forbidden
-unknown component fallback:      allowed
-canonical AST execution:         forbidden
-agent mutations w/o validation:  forbidden
+macros:                         forbidden
+plugins:                        forbidden
+remote resource loading:        forbidden
+file:// references:             forbidden
+javascript:/vbscript: refs:     forbidden
+remote styles/imports/includes: forbidden
+active SVG:                     forbidden
+inline SVG:                     forbidden at 1.0
+inline MathML:                  forbidden at 1.0
+media autoplay:                 forbidden
+package extraction to disk:     forbidden
+unknown component execution:    forbidden
+unknown component fallback:     allowed
+agent mutations:                not part of 1.0
+filesystem writes during read:  forbidden
+network access during read:     forbidden
 ```
 
-### 4.2 Required enforcement points
+### 5.2 Required enforcement order
 
-Every processor MUST enforce, in order:
+Reference implementation processors enforce these checks in order:
 
-1. UTF-8 validation (`NODX-E001` fatal);
-2. BOM/U+0000 handling (`NODX-E002`/`NODX-E018`);
-3. byte/line/node/nesting/memory limits (§4.4);
-4. safe front matter (§4.6);
-5. package path validation (`NODX-E010`);
-6. ZIP bomb controls (§4.7);
-7. manifest digest verification (`NODX-E021`);
-8. URL policy (§4.5);
-9. CSS/NODS allowlist (`NODX-E027`);
-10. SVG/MathML sanitization or fallback;
-11. HTML/text/attribute/style escaping per context;
-12. no filesystem writes during normal reading;
-13. no network access unless host policy explicitly enables it.
+1. input byte size;
+2. UTF-8 validation;
+3. BOM and U+0000 handling;
+4. line length and front matter size;
+5. front matter safe subset;
+6. block and inline parse limits;
+7. package path validation when packaged;
+8. package ZIP bomb controls when packaged;
+9. package manifest digest verification when packaged;
+10. centralized URL policy;
+11. NODS allowlist or safe rejection;
+12. semantic validation;
+13. renderer escaping by output context.
 
-### 4.3 Filesystem and network policy
+### 5.3 Network and filesystem policy
 
-- Reading a Text NODX document MUST NOT write any file.
-- Reading a Packaged NODX document MUST NOT extract to the filesystem; it exposes a **virtual read-only filesystem** to consumers.
-- No subsystem in the reference implementation MAY open a network socket. The HTTP/HTTPS surface is reserved for explicitly opted-in host integrations outside this codebase.
-- Renderers MUST treat every URL as if it were untrusted and apply the URL policy below.
+- Reading Text NODX must not write files.
+- Reading Packaged NODX must not extract files to disk.
+- Package readers expose a virtual read-only filesystem.
+- No reference crate may open a network socket.
+- Host integrations may fetch resources only outside the reference crates and
+  only through an explicit host policy.
 
-### 4.4 Resource limits (normative defaults)
+### 5.4 URL policy
 
-These defaults are the contract; host policy MAY tighten them, never relax beyond a documented ceiling.
+URL handling is centralized in `nodx-url` by 1.0. Ad-hoc string checks are not
+allowed after that crate exists.
 
-| Parameter | Default limit | Code on overflow |
+Allowed schemes by reference kind:
+
+| Kind | Allowed by default |
+|---|---|
+| `link` | `https`, `http`, `mailto`, `tel`, package-relative |
+| `asset` | `data:` if size-limited and safe MIME, package-relative |
+| `style` | package-relative |
+| `include` | package-relative |
+| `font` | package-relative |
+| `media-fallback` | package-relative |
+
+Forbidden everywhere by default:
+
+- `javascript:`;
+- `vbscript:`;
+- `file:`;
+- `jar:`;
+- `chrome:`;
+- `about:`;
+- percent-encoded scheme bypasses;
+- control bytes;
+- backslash path tricks;
+- path traversal;
+- `data:text/html`;
+- `data:application/xhtml+xml`;
+- remote `@import`;
+- remote NODS `url(...)`.
+
+### 5.5 YAML front matter safe subset
+
+Allowed:
+
+- mapping;
+- sequence;
+- plain scalar;
+- double-quoted scalar;
+- single-quoted scalar;
+- block literal scalar;
+- block folded scalar.
+
+Forbidden, all fatal `NODX-E019`:
+
+1. anchors;
+2. aliases;
+3. explicit tags;
+4. merge keys;
+5. duplicate mapping keys;
+6. multiple YAML documents;
+7. non-string mapping keys;
+8. non-finite numbers;
+9. binary/octal/hex integer specials outside the accepted core schema;
+10. native timestamps.
+
+### 5.6 Package safety
+
+The package reader rejects:
+
+1. absolute paths;
+2. `..` path segments;
+3. empty path segments;
+4. backslashes;
+5. NUL or control bytes;
+6. duplicate names after normalization;
+7. symlinks, hardlinks, and special files;
+8. encrypted entries;
+9. ZIP64 entries at 1.0;
+10. nested ZIP archives;
+11. unsupported compression methods;
+12. invalid central directory or local header mismatch;
+13. CRC mismatch;
+14. manifest digest mismatch;
+15. size and compression ratio overflow.
+
+---
+
+## 6. Resource Limits
+
+The reference implementation exposes a single `ResourceLimits` source of truth.
+Every parser, validator, package reader, renderer, and projection uses it.
+
+| Parameter | Default limit | Code |
 |---|---:|---|
-| Source bytes (single `.nodx` file) | 64 MiB | `NODX-E012` fatal |
+| Source bytes, single Text NODX | 64 MiB | `NODX-E012` fatal |
 | Front matter bytes | 64 KiB | `NODX-E012` fatal |
 | Line length | 1 MiB | `NODX-E012` error |
 | Single attribute value | 64 KiB | `NODX-E012` error |
@@ -204,1031 +427,1200 @@ These defaults are the contract; host policy MAY tighten them, never relax beyon
 | Inline nesting depth | 32 | `NODX-E012` error |
 | Nodes per document | 100,000 | `NODX-E012` fatal |
 | Data URI size | 5 MiB | `NODX-E012` error |
-| Expanded AST memory (Rust `Document`) | 64 MiB | `NODX-E012` fatal |
-| Include depth | 8 | `NODX-E011` / `NODX-E012` |
+| Expanded AST memory estimate | 64 MiB | `NODX-E012` fatal |
+| Include depth | 8 | `NODX-E011` or `NODX-E012` |
 | Package uncompressed size | 256 MiB | `NODX-E012` fatal |
 | Package file count | 1,024 | `NODX-E012` error |
-| Package single entry uncompressed | 64 MiB | `NODX-E012` error |
-| Package compression ratio (per entry) | 100:1 | `NODX-E012` fatal |
-| Package nested ZIP depth | 0 (no nesting) | `NODX-E010` fatal |
-| URL length (absolute or relative) | 4 KiB | `NODX-E020` error |
+| Package single entry size | 64 MiB | `NODX-E012` error |
+| Package compression ratio, per entry | 100:1 | `NODX-E012` fatal |
+| Package nested ZIP depth | 0 | `NODX-E010` fatal |
+| URL length | 4 KiB | `NODX-E020` error |
 | Manifest entries | 1,024 | `NODX-E012` error |
 
-Limits are normative; the reference implementation reads them from a single `ResourceLimits` struct exposed by `nodx-core` and consumed by every other crate.
-
-### 4.5 URL policy
-
-Centralized in `nodx-url`. Every reference (`href`, `src`, asset URL, font URL, include target, NODS `url(...)`, NODS `@import`) MUST be classified and validated by `nodx-url`. Ad-hoc string checks are forbidden.
-
-Allowed schemes by reference kind (default):
-
-| Reference kind | Allowed schemes |
-|---|---|
-| `link` | `https`, `http`, `mailto`, `tel`, package-relative |
-| `asset` (image, audio, video, embed, font) | `data:` (size-limited), package-relative |
-| `style` (NODS `@import`, `url()`) | package-relative |
-| `include` | package-relative |
-| `media-fallback` | package-relative |
-
-Forbidden everywhere unless host policy explicitly enables: `javascript:`, `vbscript:`, `file:`, `jar:`, `chrome:`, `about:`, percent-encoded scheme bypasses (e.g. `%6Aavascript:`), `data:text/html`, `data:application/xhtml+xml`.
-
-### 4.6 Front-matter YAML safe subset (binding)
-
-Allowed: mapping, sequence, plain scalar, double-quoted scalar, single-quoted scalar, block literal scalar (`|`), block folded scalar (`>`).
-
-Forbidden (each fatal `NODX-E019`):
-
-1. anchors `&`;
-2. aliases `*`;
-3. explicit tags `!!...`, `!<...>`;
-4. merge keys `<<`;
-5. duplicate mapping keys;
-6. multiple documents (`---` more than once before content);
-7. non-string mapping keys;
-8. non-finite numbers (`NaN`, `+.inf`, `-.inf`);
-9. binary/octal/hexadecimal integer specials beyond YAML 1.2 core schema;
-10. timestamps as YAML-native types (must be quoted strings).
-
-### 4.7 ZIP safety
-
-Beyond §4.4 limits, the package reader MUST:
-
-1. reject entries whose normalized path is absolute, contains `..`, contains backslashes, or contains NUL/control bytes;
-2. reject duplicate entry names after Unicode NFC normalization;
-3. reject symlink, hardlink, or special-file entries;
-4. reject encrypted entries (no encryption profile at 1.0);
-5. reject entries whose declared size, declared CRC, or declared compression method are inconsistent with the central directory;
-6. reject ZIP64 only when needed for entries above 4 GiB — at 1.0, **ZIP64 is forbidden**;
-7. reject nested ZIP archives as package entries;
-8. reject `Zip Slip` patterns via fully normalized path comparison against an allowed prefix list (`assets/`, `styles/`, `components/`, `i18n/`, `keys/`, `signatures/`, `history/`, `media/`, plus the entry document, `mimetype`, `manifest.yaml`, `META-INF/`).
-
-### 4.8 SVG/MathML
-
-Inline SVG and MathML are forbidden at 1.0. SVG and MathML are referenced only as opaque assets and rendered through a sanitized profile in a future minor version. At 1.0 the renderer either:
-
-1. emits a fallback (`alt`, caption, or component children); or
-2. embeds the asset as a referenced file with `sandbox` semantics handled by the host viewer.
-
-### 4.9 Security deliverables for 1.0
-
-Before tagging `nodx/1.0`:
-
-1. `spec/tests/security/zip` (≥ 30 hostile archives);
-2. `spec/tests/security/url` (≥ 50 URL inputs);
-3. `spec/tests/security/nods` (≥ 30 forbidden CSS constructs);
-4. `spec/tests/security/svg` (≥ 10 hostile SVG samples used as fallback assets);
-5. `spec/tests/security/yaml` (≥ 30 hostile front-matter samples);
-6. `spec/tests/security/html` (≥ 40 XSS payloads embedded in safe nodes);
-7. `fuzz/` targets for: byte parser, front-matter parser, inline parser, attribute parser, NODS parser, package reader, manifest parser, NCP serializer;
-8. Public `SECURITY.md` describing scope, threat model, disclosure channel, and supported versions.
+Host policy may tighten these limits. It must not relax them in the reference
+implementation without a documented ceiling and tests.
 
 ---
 
-## 5. Workspace Layout, Crate Boundaries, Module Decomposition
+## 7. Workspace Target
 
-### 5.1 Status (current repo)
+### 7.1 Current workspace
 
-```
+```text
 crates/
-  nodx-core/   <- single crate, 3,134-line lib.rs monolith
-  nodx-cli/    <- minimal CLI facade
+  nodx-core/
+  nodx-cli/
 packages/
-  nodx-js/     <- single-file parser, 489 lines (Plain + Core subset + minimal Rich)
-spec/tests/
-  conformance/ <- 5 fixtures
-  golden/      <- empty
-examples/      <- 8+ documents including i18n, print, packaged
-scripts/       <- conformance runner, package builder
-apps/
-  desktop/     <- Python viewer
-  web/         <- HTML playground
+  nodx-js/
+spec/tests/conformance/
+examples/
+scripts/
+apps/desktop/
 ```
 
-### 5.2 Target workspace at 1.0
+### 7.2 Required by 1.0
 
-```
+```text
 crates/
-  nodx-core/          # Semantic AST, parser, canonical JSON, ResourceLimits
-  nodx-cst/           # Lossless CST, source maps, local rewrites
-  nodx-validate/      # Profile validators, error registry coverage
-  nodx-url/           # URI parser, resolver, ResourcePolicy
-  nodx-package/       # ZIP reader/writer, manifest verifier, virtual FS
-  nodx-style/         # NODS lexer, parser, allowlist, cascade, computed style
-  nodx-sign/          # Canonicalization, hashes, JWS verification
-  nodx-agent-sdk/     # Operations, change records, batches, transactions
-  nodx-ncp/           # Compact projection (lossless/semantic/summary), chunking, hashes
-  nodx-render-html/   # Safe HTML renderer
-  nodx-render-pdf/    # PDF bridge/exporter (paged HTML by default)
-  nodx-render-docx/   # DOCX exporter
-  nodx-render-pptx/   # PPTX exporter
+  nodx-core/          # AST, parser, canonical JSON, ResourceLimits
+  nodx-validate/      # semantic validation and profile support
+  nodx-url/           # URL parsing, normalization, ResourcePolicy
+  nodx-package/       # safe package reader, manifest verifier, virtual FS
+  nodx-style/         # NODS allowlist parser or safe rejector
+  nodx-ncp/           # NCP semantic projection
+  nodx-render-html/   # safe HTML renderer
   nodx-cli/           # CLI facade
 packages/
-  nodx-js/            # Independent parser + renderer (Plain/Core/Rich + NCP semantic)
-  nodx-python/        # Optional Python bindings (deferred to 1.x)
+  nodx-js/            # independent parser, canonical JSON, NCP semantic
 spec/
   grammar/
   schemas/
   tests/
-    conformance/      # ≥ 80 positive fixtures
-    negative/         # ≥ 50 invalid fixtures
-    golden/           # Canonical AST, NCP, HTML, computed-style goldens
-    security/         # ≥ 200 hostile inputs across all subsystems
-    loss/             # Loss report goldens
-fuzz/                  # Cargo-fuzz / JS fuzz harnesses
-apps/
-  desktop/
-  web/
+    conformance/
+    negative/
+    security/
+    golden/
+fuzz/
 ```
 
-### 5.3 Boundary rules (must hold at 1.0)
+### 7.3 Deferred workspace crates
 
-Each rule is checked in CI via `cargo deny` on dependency declarations and `cargo udeps` on feature flags.
+These are not required for 1.0:
 
-1. `nodx-core` MUST NOT depend on renderers, network, ZIP, crypto, LLM APIs, regex with backtracking, async runtime, or filesystem.
-2. `nodx-validate` depends on `nodx-core` and `nodx-url`; nothing else.
-3. `nodx-url` MUST NOT depend on any other workspace crate.
-4. `nodx-package` MUST NOT extract to disk by default and MUST NOT depend on renderers.
-5. `nodx-style` MUST NOT depend on renderers; it produces a computed-style model consumed by renderers.
-6. `nodx-render-html` MUST NOT fetch network resources and MUST NOT depend on `nodx-sign` or `nodx-agent-sdk`.
-7. `nodx-agent-sdk` MUST NOT call LLM APIs; it produces structured operations only.
-8. `nodx-sign` signs canonical semantic data, never visual output, never CST trivia.
-9. `nodx-cli` depends on every crate; no other crate depends on `nodx-cli`.
-10. No crate may use `unsafe` in code that touches untrusted input without an explicit, reviewed safety comment.
-
-### 5.4 Internal split of `nodx-core` (Phase P0.5 deliverable)
-
-The monolith MUST be split into the following files inside `crates/nodx-core/src/` before any other phase begins. This is a precondition for parallel work.
-
+```text
+crates/
+  nodx-cst/
+  nodx-sign/
+  nodx-agent-sdk/
+  nodx-render-docx/
+  nodx-render-pptx/
+  nodx-render-pdf-native/
+packages/
+  nodx-python/
 ```
+
+### 7.4 Boundary rules
+
+1. `nodx-core` has no renderer, ZIP, crypto, network, async runtime, or
+   filesystem dependency.
+2. `nodx-url` depends on no other workspace crate.
+3. `nodx-validate` depends on `nodx-core` and `nodx-url`.
+4. `nodx-package` does not depend on renderers.
+5. `nodx-style` does not depend on renderers.
+6. `nodx-ncp` depends on `nodx-core` and validation types only when needed.
+7. `nodx-render-html` never fetches resources.
+8. `nodx-cli` may depend on every crate; no crate depends on `nodx-cli`.
+9. No crate uses `unsafe` in code that touches untrusted input.
+10. Any dependency added to a security boundary requires a short threat note in
+    the pull request.
+
+---
+
+## 8. Milestone Roadmap
+
+Milestones are ordered to reduce security risk and maximize usable releases.
+
+| Milestone | Release | Goal | Blocking for |
+|---|---|---|---|
+| M0 | pre-1.0 | Contract cleanup and repo hygiene | all |
+| M1 | pre-1.0 | Split monolith without behavior change | all implementation work |
+| M2 | 1.0 alpha | Validator, profiles, diagnostics, CLI contract | 1.0 |
+| M3 | 1.0 alpha | Central URL policy and resource limits | 1.0 |
+| M4 | 1.0 beta | Safe YAML and safe package reader | 1.0 |
+| M5 | 1.0 beta | NODS safe subset and safe HTML renderer | 1.0 |
+| M6 | 1.0 rc | JS parity, NCP semantic, fixture corpora | 1.0 |
+| M7 | 1.0 | Release gate, docs, conformance report | 1.0 |
+| M8 | 1.1 | Signature profile | 1.1 |
+| M9 | 1.1 | Agent mutate profile | 1.1 |
+| M10 | 1.2 | Editor CST profile | 1.2 |
+| M11 | 1.2 | Presentation and exporters | 1.2 |
+
+### 8.1 Dependency graph
+
+```text
+M0 -> M1 -> M2 -> M3 -> M4 -> M5 -> M6 -> M7
+
+After M7:
+
+M8  depends on M7
+M9  depends on M7 and may use M8 hashes but must not require trust policy
+M10 depends on M7
+M11 depends on M7 and optionally M10
+```
+
+### 8.2 Parallelism
+
+After M1:
+
+- M2 and M3 may start in parallel if they do not both edit AST types.
+- M4 package work may start after the `ResourceLimits` and `nodx-url` API are
+  stable.
+- M5 may start after `nodx-url` is stable.
+- M6 JS work may run continuously, but parity is only judged against committed
+  fixture contracts.
+
+Agents must coordinate before editing:
+
+- `crates/nodx-core/src/ast.rs`;
+- canonical JSON output;
+- error registry;
+- CLI exit codes;
+- fixture expected outputs.
+
+---
+
+## 9. Detailed Milestone Specs
+
+Each milestone below is designed as one or more pull requests. A coding agent
+should implement only the requested milestone unless explicitly told otherwise.
+
+### M0: Contract Cleanup
+
+**Release target.** pre-1.0.
+
+**Goal.** Make the public contract precise before code changes.
+
+**Inputs.**
+
+- `NODX_0.1_Working_Draft.md`.
+- `README.md`.
+- `IMPLEMENTATION_PLAN.md`.
+- This plan.
+
+**Tasks.**
+
+1. Create `NODX_1.0_Working_Draft.md` from the 0.1 draft.
+2. Preserve the 0.1 draft as historical input.
+3. Replace `0.1` with `1.0` only where the contract is intentionally promoted.
+4. Add the profile model from Section 4.
+5. Add the minimal viable reader rules.
+6. Add resource limits from Section 6.
+7. Add CLI exit code semantics from Section 10.
+8. Add unsupported-feature behavior.
+9. Add the error registry from Section 13.
+10. Update README and `IMPLEMENTATION_PLAN.md` so they do not claim unsupported
+    modules.
+11. Add `SECURITY.md` and `THREAT_MODEL.md` skeletons.
+
+**Out of scope.**
+
+- No parser changes.
+- No renderer changes.
+- No new crates.
+
+**Done criteria.**
+
+- The spec clearly distinguishes required 1.0 scope from future profiles.
+- README describes the current implementation honestly.
+- `IMPLEMENTATION_PLAN.md` no longer conflicts with this roadmap.
+- Error registry is defined in one place and cross-referenced.
+
+**Verification.**
+
+```sh
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
+
+### M1: Split `nodx-core` Without Behavior Change
+
+**Release target.** pre-1.0.
+
+**Goal.** Decompose the monolith so independent agents can work safely.
+
+**Target module layout.**
+
+```text
 crates/nodx-core/src/
-  lib.rs               # re-exports, top-level types
-  limits.rs            # ResourceLimits, counters
-  diagnostic.rs        # Diagnostic, severity, codes
-  ast.rs               # Document, Node, Inline, Attrs, Value
-  bytes.rs             # parse_bytes, is_packaged_nodx, BOM/UTF-8 handling
-  front_matter.rs      # YAML safe subset parser
-  block_parser.rs      # delimited blocks, headings, paragraphs, lists, tables
-  inline_parser.rs     # inline tokens, escapes, refs, variables, inline math
-  attrs.rs             # attribute block parser
-  canonical.rs         # canonical JSON (JCS-style, stable for 1.0)
-  ncp_semantic.rs      # baseline NCP semantic projection (kept until P8 split)
-  render_html.rs       # baseline safe HTML renderer (kept until P9 split)
-  render_tui.rs        # baseline TUI renderer
-  package_read.rs      # baseline stored-ZIP reader (kept until P3 split)
-  url_baseline.rs      # baseline URL safety checks (kept until P2 split)
-  validate_baseline.rs # baseline validator (kept until P1 split)
+  lib.rs
+  ast.rs
+  diagnostic.rs
+  limits.rs
+  bytes.rs
+  front_matter.rs
+  block_parser.rs
+  inline_parser.rs
+  attrs.rs
+  canonical.rs
+  package_baseline.rs
+  style_baseline.rs
+  validate_baseline.rs
+  html_baseline.rs
+  tui.rs
+  ncp_baseline.rs
 ```
 
-Each `*_baseline.rs` is migrated and deleted when its dedicated crate lands. Until then, the public API exposed by `nodx-core` is the same as today, with no behavioral regression on existing fixtures.
-
----
-
-## 6. Implementation Phases
-
-Phases are ordered by **security surface** and **dependency**, not by user-visible value. Done criteria are objective and CI-checkable.
-
-Severity legend:
-
-- **R1** = release-blocking for 1.0.
-- **R2** = release-blocking for 1.0 but parallelizable with R1.
-- **S** = post-1.0 stretch; tracked but not blocking.
-
-### Phase P0 — Spec and Contract Cleanup (R1)
-
-**Goal.** Make the public contract precise before adding code.
-
-**Inputs.** Current Working Draft, current README, current implementation plan.
-
 **Tasks.**
 
-1. Replace `0.1` markers with `1.0` in the spec where appropriate, while preserving `0.1` as a historical reference.
-2. Add an explicit **Minimum Viable Reader** subsection in the spec (mirrors §3.3 of this plan).
-3. Document **unsupported-feature behavior** in the spec: required features fail closed with `NODX-E024`; optional features emit `NODX-E023` and degrade.
-4. Pin the **profile declaration format** (§3.2 of this plan) in the spec.
-5. Publish **error code ownership and severity rules** (§11 of this plan) as a normative table.
-6. Publish the **media-type registration plan** with a target IANA submission window.
-7. Update README and `IMPLEMENTATION_PLAN.md` to remove any claim of unsupported modules.
+1. Move code mechanically.
+2. Keep public API compatible.
+3. Add `ResourceLimits` with the Section 6 defaults.
+4. Keep existing hard-coded behavior unchanged unless moved into limits.
+5. Keep baseline modules until their dedicated crates replace them.
+6. Keep canonical JSON byte-identical for all current fixtures.
 
-**Out-of-scope.** No code changes other than doc cross-references.
+**Out of scope.**
+
+- No new syntax.
+- No new error codes.
+- No validator expansion.
+- No dependency additions unless needed only for module split tooling.
 
 **Done criteria.**
 
-1. README, `IMPLEMENTATION_PLAN.md`, and the spec do not claim unsupported modules.
-2. Every profile has explicit MUST/SHOULD/MAY behavior at 1.0.
-3. `nodx validate --profile <profile>` has a defined input/output contract documented in the CLI section of the spec.
-4. The error registry table in the spec matches §11 of this plan byte-for-byte.
+- `lib.rs` is under 200 LOC.
+- Existing tests pass.
+- Rust/JS canonical AST conformance remains byte-identical.
+- Public function names used by the CLI still compile.
 
-**Test artifacts.** None (documentation phase).
+**Verification.**
 
-**Risk.** Low.
+```sh
+rtk cargo test -p nodx-core
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
 
-**Dependencies.** None.
+### M2: Validator, Profiles, Diagnostics, CLI Contract
 
----
+**Release target.** 1.0 alpha.
 
-### Phase P0.5 — Internal Split of `nodx-core` Monolith (R1)
-
-**Goal.** Decompose `crates/nodx-core/src/lib.rs` (3,134 LOC monolith) into named modules so subsequent phases can land independently.
-
-**Inputs.** Current `nodx-core` source.
-
-**Tasks.**
-
-1. Create the file layout in §5.4.
-2. Move existing functions into the listed files without behavioral changes.
-3. Introduce `ResourceLimits` as a struct with the §4.4 defaults; thread it through `parse_bytes`.
-4. Promote all hard-coded constants for limits into `limits.rs`.
-5. Make every existing public symbol re-exported from `lib.rs` so downstream code (CLI, JS conformance script) continues to work.
-6. Add module-level `#![forbid(unsafe_code)]` where possible.
-
-**Out-of-scope.** No new behavior. No new error codes.
-
-**Done criteria.**
-
-1. `lib.rs` is under 200 LOC and contains only re-exports and top-level wiring.
-2. Every previously passing test still passes.
-3. Conformance Rust↔JS still matches byte-for-byte.
-4. CI step `cargo test -p nodx-core` runs each module file independently for unit tests.
-
-**Test artifacts.** No new fixtures; existing tests must remain green.
-
-**Risk.** Medium (large mechanical refactor; risk of regressing canonical JSON byte output).
-
-**Dependencies.** P0.
-
----
-
-### Phase P1 — Validation as a First-Class Module (R1)
-
-**Goal.** Separate semantic validation from parsing; expand error code coverage.
-
-**Inputs.** P0.5 split, error registry in §11.
+**Goal.** Make validation explicit and profile-aware.
 
 **Tasks.**
 
-1. Create `crates/nodx-validate` with `Validator` API: `validate(&Document, &Profiles, &ResourceLimits) -> Vec<Diagnostic>`.
-2. Move `validate_*` functions out of `nodx-core` into `nodx-validate`. `nodx-core` retains only fatal parse-time errors (E001, E002, E003, E005, E012, E018).
-3. Implement validators for Core and Rich profile.
-4. Expand error coverage from the current 14 emitted codes to the full set in §11 that applies to validation phase: `NODX-E006`, `E007`, `E008`, `E009`, `E013`, `E014`, `E015`, `E016`, `E022`, `E023`, `E024`, `E025`, `E026`.
-5. Implement profile support matrix: validator receives the host's supported-profile list and emits `NODX-E024` (required missing) or `NODX-E023` (optional missing) accordingly.
-6. Add JSON diagnostic output mode: `nodx validate --format json` produces a stable JSON array of diagnostics with the shape defined in spec §5.1.
-7. Ensure validators are composable: callers can run only a subset of validators (e.g., accessibility only).
+1. Create `crates/nodx-validate`.
+2. Move semantic validation out of `nodx-core`.
+3. Keep parse-time fatal/error diagnostics in `nodx-core`.
+4. Implement `Validator`.
+5. Implement `ProfileSet`.
+6. Implement unsupported required/optional profile diagnostics.
+7. Implement `nodx validate --profile <profile>`.
+8. Implement `nodx validate --format json`.
+9. Implement stable JSON diagnostic array output.
+10. Add negative fixtures for every validation-owned error code.
+11. Add golden diagnostics.
+12. Update CLI exit codes to Section 10.
 
-**Out-of-scope.** URL policy details (P2). NODS validation details (P5). Package validation details (P3). Signature validation details (P7).
+**Validation-owned codes at 1.0.**
+
+- `NODX-E004`
+- `NODX-E006`
+- `NODX-E007`
+- `NODX-E008`
+- `NODX-E009`
+- `NODX-E013`
+- `NODX-E014`
+- `NODX-E016`
+- `NODX-E022`
+- `NODX-E023`
+- `NODX-E024`
+- `NODX-E025`
+
+**Out of scope.**
+
+- URL parser details beyond calling `nodx-url` once available.
+- Full NODS cascade.
+- Package internals.
+- Signature checks.
 
 **Done criteria.**
 
-1. Every error code in §11 with phase `validate` is emitted by at least one negative fixture.
-2. Invalid fixtures fail validation deterministically across Rust and JS parsers.
-3. Parsers still produce a partial AST when only `error` (not `fatal`) diagnostics occur.
-4. `nodx validate --format json` output is golden-tested.
-5. Validator can be run with an empty supported-profile list and reports every used profile feature as `NODX-E024`.
+- Parser can produce partial AST for non-fatal errors.
+- Validator can run independently on a `Document`.
+- Unsupported required profile exits code `3`.
+- `warning` and `info` do not raise exit code above `0`.
+- Every validation code has at least one fixture.
 
-**Test artifacts.**
+**Verification.**
 
-- ≥ 30 negative fixtures under `spec/tests/negative/validate/`.
-- Golden JSON diagnostics under `spec/tests/golden/diagnostics/`.
+```sh
+rtk cargo test -p nodx-validate
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
 
-**Risk.** Low.
+### M3: URL Policy and Resource Limits
 
-**Dependencies.** P0.5.
+**Release target.** 1.0 alpha.
 
----
-
-### Phase P2 — URL Resolver and Resource Policy (R1)
-
-**Goal.** Centralize URL handling and resource classification.
-
-**Inputs.** §4.5 URL policy.
+**Goal.** Centralize all URL and limit enforcement.
 
 **Tasks.**
 
 1. Create `crates/nodx-url`.
-2. Implement a standards-compatible URI reference parser (RFC 3986 + WHATWG URL where they overlap; default to the stricter rule).
-3. Implement `ResourcePolicy` with the table in §4.5.
-4. Classify references by kind: `link`, `asset`, `style`, `include`, `font`, `media`.
-5. Reject controls (U+0000–U+001F, U+007F), dangerous schemes, percent-encoded scheme bypasses, path traversal, backslashes, mixed-encoding tricks.
-6. Normalize package-relative paths: `../`, `./`, redundant slashes, NFC normalization, case-folding only for ASCII drive-letter-style prefixes (forbidden anyway).
-7. Enforce offline default. Network access is impossible from this crate.
-8. Migrate all callers (`render_html`, validator, package reader) to `nodx-url`. Remove every `starts_with("javascript:")`-style ad-hoc check.
-9. Add the URL obfuscation corpus (§10).
+2. Implement `ResourcePolicy`.
+3. Implement URI classification by kind.
+4. Implement package-relative path normalization.
+5. Reject dangerous schemes and obfuscation.
+6. Reject control characters and backslash path tricks.
+7. Add URL security corpus.
+8. Migrate validator, renderer, package baseline, and style baseline to
+   `nodx-url`.
+9. Remove ad-hoc `starts_with("javascript:")`-style safety checks.
+10. Ensure every subsystem receives `ResourceLimits`.
 
-**Out-of-scope.** Asset fetching (no network code at 1.0).
+**Out of scope.**
+
+- Network fetching.
+- URL rewriting.
+- Browser policy integration.
 
 **Done criteria.**
 
-1. All renderers, validators, and the package reader call `nodx-url`.
-2. No module contains ad-hoc URL safety checks.
-3. The URL security corpus passes 100%.
-4. Fuzz target `fuzz_targets/url_parse.rs` runs ≥ 1 M iterations without panic.
+- `rg` finds no ad-hoc URL safety checks outside `nodx-url` tests.
+- URL corpus passes.
+- Unsafe URLs never reach rendered HTML as active links or asset sources.
+- Data URI size and MIME restrictions are enforced.
 
-**Test artifacts.** ≥ 50 fixtures in `spec/tests/security/url/`.
+**Verification.**
 
-**Risk.** Medium (URL parsers historically harbor subtle bugs).
+```sh
+rtk cargo test -p nodx-url
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
 
-**Dependencies.** P0.5.
+### M4: Safe YAML and Safe Package Reader
 
----
+**Release target.** 1.0 beta.
 
-### Phase P3 — Safe Package Reader/Writer (R1)
+**Goal.** Replace the risky input surfaces with tested safe implementations.
 
-**Goal.** Extend current stored-ZIP reader to a complete, safe Packaged NODX implementation.
+**YAML tasks.**
 
-**Status.** A baseline stored-only reader and manifest digest checker already exist in `nodx-core` (`parse_package_manifest`, `validate_package_path`). They cover the happy path for the bundled showcase.
+1. Replace line-oriented front matter parsing with an event-driven safe subset.
+2. Reject forbidden YAML constructs before deserialization.
+3. Preserve unknown metadata fields.
+4. Keep Rust and JS canonical AST parity.
+5. Add YAML security corpus.
 
-**Inputs.** §4.4 limits, §4.7 ZIP safety, package layout from spec §18.
-
-**Tasks.**
+**Package tasks.**
 
 1. Create `crates/nodx-package`.
-2. Use a mature, well-reviewed ZIP library behind a strict wrapper (the wrapper, not the library, is the trust boundary).
-3. Support stored and deflate entries. **ZIP64 is forbidden at 1.0.**
-4. Reject unsafe paths, duplicates after NFC normalization, symlinks, hardlinks, special files, encrypted entries.
-5. Enforce file count, total size, single entry size, depth, name length, compression ratio (§4.4).
-6. Parse manifest with the `nodx-core` YAML safe-subset parser.
-7. Verify declared size and SHA-256 for every listed entry. Mismatch is fatal (`NODX-E021`).
-8. Expose a read-only **virtual filesystem** abstraction (`PackageFs::read(path) -> Result<&[u8], _>`). Never write to disk during read.
-9. Make the package writer deterministic: fixed entry order, zeroed timestamps, fixed external attributes, deterministic deflate level.
-10. Add the ZIP security corpus.
+2. Support stored and deflate entries if a vetted ZIP dependency is selected.
+3. Keep ZIP64 forbidden for 1.0.
+4. Enforce package limits.
+5. Verify manifest entries, size, digest, and CRC.
+6. Expose read-only `PackageFs`.
+7. Never extract during read.
+8. Add package security corpus.
+9. Keep package writer deterministic if writer remains in scope.
 
-**Out-of-scope.** Encryption (deferred). ZIP64 (deferred). Signature verification (P7).
+**Out of scope.**
 
-**Done criteria.**
-
-1. Reader never writes to disk during read.
-2. ZIP security corpus passes 100%.
-3. Two consecutive runs of `nodx package build` on the same source produce byte-identical archives.
-4. Manifest digest mismatch produces `NODX-E021` and aborts the document load.
-5. Fuzz target `fuzz_targets/package_read.rs` runs ≥ 5 M iterations without panic.
-
-**Test artifacts.** ≥ 30 fixtures in `spec/tests/security/zip/` covering: path traversal, absolute paths, NUL bytes, backslashes, duplicate names, NFC collisions, symlink markers, encrypted entries, oversized entries, zip-bomb ratios, corrupted central directory, mismatched CRC, declared-size vs actual-size mismatch.
-
-**Risk.** High (ZIP parsing is a classic exploitation surface).
-
-**Dependencies.** P0.5, P2 (for URL handling of package-relative paths).
-
----
-
-### Phase P4 — Safe YAML Front Matter (R1)
-
-**Goal.** Replace the ad-hoc front-matter parser with an event-driven safe subset.
-
-**Status.** Current front-matter parser in `nodx-core` covers simple mappings, sequences, scalars, booleans, numbers, null. It is hand-rolled, line-oriented, and does not produce event-level diagnostics.
-
-**Inputs.** §4.6 YAML safe subset.
-
-**Tasks.**
-
-1. Adopt a YAML 1.2 event parser (e.g., `saphyr-parser` in Rust; `yaml` in JS with the unsafe constructors disabled).
-2. Validate events **before** deserialization. The validator runs over the raw event stream and rejects forbidden constructs from §4.6 with `NODX-E019`.
-3. Reject aliases, anchors, tags, merge keys, duplicate keys, multiple documents, non-string keys, non-finite numbers, native timestamps.
-4. Preserve unknown metadata fields verbatim in `Document.meta` so future profiles can add fields without breaking 1.0 readers.
-5. Normalize only YAML event content, not Unicode text (Unicode normalization is the renderer's choice when needed).
-6. Add the YAML security corpus.
-7. Ensure Rust and JS produce **identical** canonical AST output for every front-matter shape in the conformance corpus.
-
-**Out-of-scope.** Full YAML 1.2 surface (e.g., flow-style merge keys).
+- Encrypted packages.
+- ZIP64.
+- Remote includes.
+- Signature verification.
 
 **Done criteria.**
 
-1. Every fixture in `spec/tests/security/yaml/` produces `NODX-E019` (fatal) where expected and accepts the documented safe subset where expected.
-2. Rust and JS canonical AST remain interoperable on conformance fixtures.
-3. Fuzz target `fuzz_targets/front_matter.rs` runs ≥ 5 M iterations without panic.
+- Hostile YAML fixtures produce expected diagnostics.
+- Hostile ZIP fixtures are rejected deterministically.
+- Package digest mismatch produces `NODX-E021`.
+- Two builds of the same package produce byte-identical output if package build
+  is included in this milestone.
+- Reading a package performs no filesystem writes.
 
-**Test artifacts.** ≥ 30 fixtures in `spec/tests/security/yaml/`.
+**Verification.**
 
-**Risk.** Medium.
+```sh
+rtk cargo test -p nodx-package
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
 
-**Dependencies.** P0.5.
+### M5: NODS Safe Subset and HTML Renderer
 
----
+**Release target.** 1.0 beta.
 
-### Phase P5 — Full NODS Parser and Cascade (R1)
-
-**Goal.** Replace the current textual NODS lexer with a structured CSS parser, allowlist, cascade, and computed-style model.
-
-**Status.** Current implementation lexes inline `:::style` blocks textually, detects forbidden patterns (`animation`, `:hover`, `position: fixed`, `attr()`, `expression()`, `</style>` breakout), strips offending lines, and emits `NODX-E027`. See [README.md:111](README.md#L111).
-
-**Inputs.** Spec §17 (NODS).
+**Goal.** Make style and HTML safe before any export work.
 
 **Tasks.**
 
 1. Create `crates/nodx-style`.
-2. Implement a NODS lexer with token kinds: ident, hash, atkeyword, function, string, number, dimension, percentage, url, delim, whitespace, comment, semicolon, comma, colon, lbrace, rbrace, lbracket, rbracket, lparen, rparen.
-3. Implement a selector parser for the allowlist in spec §17.2 only: type, class, ID, attribute presence/equality, descendant combinator, child combinator, `:root`, `:first-child`, `:last-child`, `:nth-child(...)`, `:lang(...)`, `:dir(...)`, `:not(...)` over allowed selectors. Reject everything else.
-4. Implement a declaration parser with per-property value parsers, driven by the property allowlist in spec §17.3.
-5. Support allowed at-rules: `@page`, `@font-face`, package-local `@import`, `@media print`, `@media (color-scheme: …)` restricted to `light` and `dark`.
-6. Reject forbidden selectors (e.g. `:hover`, `:focus`, `::before`, `::after` for content injection), forbidden at-rules (`@keyframes`, `@supports`, `@layer` are out at 1.0), forbidden properties, forbidden functions (`expression()`, `attr()` outside of `content`, `url()` with remote schemes), and remote `url()`.
-7. Implement cascade order: origin (user-agent < user < author < `!important` reversed), specificity per CSS3 rules with deterministic tie-breakers, source order.
-8. Output a **computed-style model**: `ComputedStyle { selector_path, property_name, computed_value, source }` per addressable node.
-9. Render goldens for cascade results.
-10. Update the safe HTML renderer to consume the computed-style model where it currently embeds raw CSS.
+2. Parse enough NODS to accept the documented 1.0 safe subset.
+3. Reject forbidden selectors, at-rules, properties, and functions.
+4. Validate all style URLs through `nodx-url`.
+5. Emit `NODX-E027` deterministically.
+6. Split safe HTML renderer to `crates/nodx-render-html`.
+7. Escape by context: text, attribute, URL, and style.
+8. Add CSP for standalone HTML.
+9. Add XSS corpus.
+10. Add NODS security corpus.
 
-**Out-of-scope.** CSS variables custom properties beyond the `--nodx-*` namespace listed in spec §17. CSS grid. CSS subgrid.
+**Important scope rule.**
+
+Full CSS cascade and computed style are not required for 1.0 unless examples or
+spec tests require them. The 1.0 requirement is safe acceptance/rejection, not
+pixel-perfect styling.
+
+**Out of scope.**
+
+- CSS grid.
+- Container queries.
+- Animations.
+- Transitions.
+- JS-driven interactivity.
+- DOCX/PPTX/PDF exporters.
 
 **Done criteria.**
 
-1. Raw CSS is never trusted; every byte passes through the lexer + allowlist.
-2. Forbidden NODS emits `NODX-E027` deterministically.
-3. Safe mode rejects or drops invalid rules consistently across Rust and JS.
-4. Renderers consume computed style for properties they support; unsupported properties pass through as `style="..."` only when the property is in the renderer's safe list.
-5. Fuzz target `fuzz_targets/nods.rs` runs ≥ 5 M iterations without panic.
+- HTML XSS corpus passes 100%.
+- Forbidden NODS corpus passes 100%.
+- Renderer never embeds unsanitized CSS.
+- Renderer never emits executable document content.
+- Existing print examples still render through safe HTML.
 
-**Test artifacts.**
+**Verification.**
 
-- ≥ 30 fixtures in `spec/tests/security/nods/`.
-- ≥ 20 cascade goldens in `spec/tests/golden/computed-style/`.
+```sh
+rtk cargo test -p nodx-style
+rtk cargo test -p nodx-render-html
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
 
-**Risk.** High.
+### M6: JavaScript Parity, NCP Semantic, Fixture Corpora
 
-**Dependencies.** P0.5, P2 (for `url()` validation).
+**Release target.** 1.0 rc.
 
----
-
-### Phase P6 — Lossless CST and Editor Profile (R2)
-
-**Goal.** Support byte-preserving editor workflows.
-
-**Inputs.** Spec §8.3.
+**Goal.** Prove independent implementation and publish useful corpora.
 
 **Tasks.**
 
-1. Create `crates/nodx-cst`.
-2. Preserve original bytes or source ranges per token.
-3. Preserve line endings, delimiters, whitespace, attribute order.
-4. Preserve invalid recoverable tokens so editors can show and repair them.
-5. Map every CST node to its corresponding AST node deterministically.
-6. Implement a no-op formatter: parse → emit → byte-identical original.
-7. Implement local patch primitives: set attribute, remove attribute, insert node, delete node, replace text. Each primitive operates on the minimal CST region.
-8. Integrate with `nodx-agent-sdk` (P8) so mutations rewrite source minimally.
+1. Split `packages/nodx-js` into modules.
+2. Keep zero runtime dependencies for the 1.0 JS parser.
+3. Implement Plain/Core/Rich parser parity for the 1.0 corpus.
+4. Implement canonical JSON parity.
+5. Implement NCP semantic parity.
+6. Add JS diagnostics parity for shared parser/validator errors.
+7. Expand conformance fixtures.
+8. Add negative fixtures.
+9. Add security fixtures.
+10. Expand `scripts/run_conformance.sh` to compare:
+    - Rust AST vs JS AST;
+    - Rust NCP semantic vs JS NCP semantic.
+11. Produce `target/conformance-report.json`.
 
-**Out-of-scope.** Full structural refactoring (rename-id-everywhere, etc.). Auto-formatting. IDE-side incremental parsing.
+**Out of scope for JS 1.0.**
+
+- Lossless CST.
+- Full package reader.
+- Signature verification.
+- Agent mutation SDK.
+- DOCX/PPTX/PDF export.
 
 **Done criteria.**
 
-1. Parse + no-op rewrite is byte-identical for every conformance fixture.
-2. Editing one attribute rewrites only the minimal source region (tested via diff line count: ≤ N lines per single-attribute change, where N depends on attribute kind).
-3. Source maps address nodes by ID, path, and byte range.
-4. Malformed but recoverable syntax can be re-emitted unchanged so editors can show diagnostics in-place.
+- Rust and JS canonical AST match byte-for-byte for every conformance fixture.
+- Rust and JS NCP semantic match byte-for-byte for every NCP fixture.
+- Conformance report is generated.
+- Fixtures are small, targeted, and documented.
 
-**Test artifacts.** Goldens under `spec/tests/golden/cst/` for parse-emit round-trip and minimal-edit diffs.
+**Verification.**
 
-**Risk.** Medium.
+```sh
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+node packages/nodx-js/test/conformance.test.mjs
+```
 
-**Dependencies.** P0.5, P1.
+### M7: 1.0 Release Gate
 
----
+**Release target.** 1.0.
 
-### Phase P7 — Canonicalization and Signature Profile (R1)
+**Goal.** Freeze the format and publish a defensible release.
 
-**Goal.** Verify authenticity and integrity without trusting visual output.
+**Tasks.**
 
-**Inputs.** Spec §23, §2.3 of this plan.
+1. Freeze `NODX_1.0_Working_Draft.md`.
+2. Freeze the canonical AST contract.
+3. Freeze error registry and CLI exit codes.
+4. Run the full fixture corpus.
+5. Run fuzz targets for parser, inline parser, attrs, YAML, URL, package, NODS.
+6. Publish `CONFORMANCE.md`.
+7. Publish `INTEROP.md`.
+8. Publish `SECURITY.md`.
+9. Publish `THREAT_MODEL.md`.
+10. Publish `MIGRATION-0.1-TO-1.0.md`.
+11. Add release notes with known limitations.
+12. Start media type registration or document the planned submission process.
+
+**Done criteria.**
+
+- Section 16.1 is fully satisfied.
+- Every known limitation is documented.
+- Unsupported future profiles fail closed or warn correctly.
+- All release artifacts are generated from committed code and fixtures.
+
+**Verification.**
+
+```sh
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
+
+Fuzz verification is milestone-specific and may use local or CI-specific
+commands documented in `fuzz/README.md`.
+
+### M8: Signature Profile
+
+**Release target.** 1.1.
+
+**Goal.** Add integrity and authenticity without changing the 1.0 format.
 
 **Tasks.**
 
 1. Create `crates/nodx-sign`.
-2. Implement JSON Canonicalization Scheme (RFC 8785) rules, or use a vetted crate. The canonical JSON in `nodx-core::canonical` MUST already satisfy JCS by the end of this phase.
-3. Canonicalize the Semantic AST **without** diagnostics, source ranges, CST trivia, computed-style results, or renderer state.
-4. Canonicalize the package manifest separately.
-5. Compute `sha256-BASE64URL_WITHOUT_PADDING` digests.
-6. Verify JWS signatures with `ES256` (mandatory) and `EdDSA` (recommended).
-7. Support detached and packaged signatures (`signatures/*.jws`).
-8. Expose `TrustResult` separately from `CryptoResult`. A valid signature from an unknown key is reported as `cryptoValid: true, trusted: false`.
-9. Define an external trust policy hook (`TrustPolicy` trait): `fn check(public_key: &Jwk, alg: Alg, doc_hash: &Sha256) -> TrustDecision`.
-10. Embed `canonicalVersion: "1.0"` in the JWS protected header (per §2.3).
-11. Drop everything Phase P6 (CST) added during canonicalization; this is the contract that makes signatures stable across editors.
-12. Freeze canonical bytes for 1.0; any change requires a major version bump.
+2. Implement JCS-compatible canonicalization or prove existing canonical JSON
+   satisfies the frozen contract.
+3. Compute `sha256-BASE64URL_WITHOUT_PADDING`.
+4. Verify JWS signatures.
+5. Support ES256 as mandatory.
+6. Support EdDSA as recommended if dependencies are acceptable.
+7. Separate cryptographic validity from trust.
+8. Add `TrustPolicy` hook.
+9. Verify detached and packaged signatures.
+10. Add positive and tamper vectors.
 
-**Out-of-scope.** Key management UI. Certificate-transparency integration. DID methods (interface only).
+**Dependency rule.**
 
-**Done criteria.**
+M8 depends on the 1.0 canonical AST, not on lossless CST. CST trivia must never
+affect signature verification.
 
-1. Canonical bytes are deterministic and identical across Rust, JS, macOS, Linux, Windows.
-2. Tampered AST or tampered package assets fail verification.
-3. A valid signature with an untrusted key reports `valid but untrusted`.
-4. Signature corpus covers positive, tampered, wrong-key, expired-policy, wrong-`typ`, wrong-`alg`, and `canonicalVersion` mismatch.
-5. JCS test vectors from RFC 8785 pass byte-for-byte.
+### M9: Agent Mutate Profile
 
-**Test artifacts.**
+**Release target.** 1.1.
 
-- ≥ 20 fixtures in `spec/tests/security/sign/`.
-- ≥ 5 vectors from RFC 8785 reused under `spec/tests/golden/jcs/`.
-
-**Risk.** High (cryptographic correctness).
-
-**Dependencies.** P0.5, P3, P6.
-
----
-
-### Phase P8 — NCP and Agent SDK (R1)
-
-**Goal.** Make NODX genuinely differentiated for LLM/RAG/agent workflows; add transactional safety.
-
-**Status.** A baseline NCP semantic projection with deterministic SHA-256 hashes exists in `nodx-core::ncp_json` (semantic mode only). No agent SDK yet.
-
-**Inputs.** Spec §22 (Agent profile, NCP, change records).
+**Goal.** Add validated document mutations for supervised agents.
 
 **Tasks.**
 
-1. Split NCP into `crates/nodx-ncp`.
-2. Implement modes:
-   - `lossless`: preserves AST one-for-one (loss array always empty).
-   - `semantic`: drops CST trivia and computed style (current behavior).
-   - `summary`: lossy, optimized for retrieval; required loss report.
-3. For each mode include `sourceHash`, per-node `nodeHash`, per-chunk `chunkHash`, stable paths, IDs, text, attrs, references.
-4. Add deterministic chunking by semantic boundaries (section, heading, table, figure, codeblock) with configurable token budgets. Default budget: 1,500 tokens per chunk for `semantic`, 600 for `summary`.
-5. Emit a `loss` array for every lossy projection, with one entry per dropped feature.
-6. Create `crates/nodx-agent-sdk`.
-7. Implement operations: `insert`, `replace`, `delete`, `add-attribute`, `set-attribute`, `remove-attribute`, `add-comment`, `approve`, `reject`.
-8. Add **transactional batches**: a `ChangeSet` is a list of operations applied atomically. Either the entire set commits and validates, or none of it is applied. Batch commit emits a single JSONL `change-batch` record that references each child change.
-9. Enforce target resolution by ID, path, or hash. Ambiguity is an error.
-10. Enforce `beforeHash` (required for mutating ops) and compute `afterHash` post-application.
-11. Validate the document after every operation; on failure, roll back the entire batch.
-12. Emit JSONL change records into `history/changes.jsonl` (in-memory in non-packaged contexts).
-13. Integrate with `nodx-cst` (P6) so mutations rewrite the minimal source region.
+1. Create `crates/nodx-agent-sdk`.
+2. Implement operations:
+   - insert;
+   - replace;
+   - delete;
+   - add-attribute;
+   - set-attribute;
+   - remove-attribute;
+   - add-comment;
+   - approve;
+   - reject.
+3. Require target resolution by ID, path, or hash.
+4. Require `beforeHash` for mutating operations.
+5. Compute `afterHash`.
+6. Validate after every operation.
+7. Roll back failed batches atomically.
+8. Emit JSONL change records.
+9. Keep LLM API integration out of scope.
 
-**Out-of-scope.** LLM API integration. Prompt templates. Tool-calling protocols.
+**Dependency rule.**
 
-**Done criteria.**
+M9 may use signature hashes, but it must not require a trusted signature to
+apply a local validated change.
 
-1. Agent operations cannot silently mutate the wrong node (ID/path/hash mismatch always fails closed).
-2. Every mutating operation has `beforeHash` and `afterHash`.
-3. Batch failure leaves the document unchanged.
-4. Validation failure prevents commit.
-5. NCP `semantic` and `lossless` outputs are byte-identical across Rust and JS.
-6. RAG indexing can consume NCP directly (documented integration example).
+### M10: Editor CST Profile
 
-**Test artifacts.**
+**Release target.** 1.2.
 
-- ≥ 20 fixtures in `spec/tests/golden/ncp/` (covers all three modes).
-- ≥ 15 fixtures in `spec/tests/golden/agent/` (single operations + batches).
-- ≥ 10 fixtures in `spec/tests/negative/agent/` (hash mismatch, target ambiguity, post-mutation validation failure).
-
-**Risk.** Medium.
-
-**Dependencies.** P0.5, P1, P6, P7 (for `sourceHash` consistency).
-
----
-
-### Phase P9 — Renderers and Exporters (R2)
-
-**Goal.** Provide credible output targets while preserving loss reporting. Never compromise the safety contract for fidelity.
-
-**Inputs.** Existing safe HTML renderer; spec §24 (HTML), §26 (interop).
+**Goal.** Support byte-preserving editor workflows.
 
 **Tasks.**
 
-1. Before splitting, the existing HTML renderer in `nodx-core::render_html` MUST pass the full XSS security corpus.
-2. Split safe HTML renderer to `crates/nodx-render-html`. Consume computed style from `nodx-style`.
-3. Generated standalone HTML embeds the CSP from spec §24.1 in a `<meta http-equiv="Content-Security-Policy">` tag.
-4. Implement `nodx-render-pdf` via safe HTML paged output first. The renderer uses headless Chromium-style printing via an opt-in host bridge; the crate itself contains no browser binary. A pure-Rust paged renderer is a P9.5 stretch goal.
-5. Implement `nodx-render-docx` for semantic text, runs, tables, images, footnotes, headings, lists, citations.
-6. Implement `nodx-render-pptx` for the Presentation Profile (slides, speaker notes, slide titles, slide notes).
-7. Every lossy exporter MUST emit a machine-readable **loss report** (`exports/<name>.loss.json`).
-8. Add golden export tests where output is deterministic (HTML, DOCX, PPTX). PDF is checked via structural smoke tests, not byte equality.
-9. Validate exports with external validators where available (HTML via `nu` validator; DOCX via `python-docx` round-trip; PPTX via `python-pptx`).
+1. Create `crates/nodx-cst`.
+2. Preserve source bytes, line endings, delimiters, whitespace, and attribute
+   order.
+3. Preserve recoverable invalid syntax.
+4. Map CST nodes to AST nodes.
+5. Implement parse -> emit byte-identical round-trip.
+6. Implement local patch primitives.
+7. Integrate with M9 for minimal rewrites.
 
-**Out-of-scope.** WYSIWYG editing. Print preview UI. Font embedding governance (deferred).
+**Dependency rule.**
 
-**Done criteria.**
+CST is editor state. It must not change canonical AST hashes.
 
-1. HTML escapes by context (text, attribute, URL, style) and never executes document content.
-2. HTML XSS corpus passes 100%.
-3. PDF export works for the existing `examples/print/*` set.
-4. DOCX export preserves semantic structure for the conformance corpus.
-5. PPTX export preserves slide structure and speaker notes for the presentation fixture set.
-6. Every lossy export emits a loss report.
+### M11: Presentation and Exporters
 
-**Test artifacts.**
+**Release target.** 1.2 or later.
 
-- ≥ 40 fixtures in `spec/tests/security/html/` (XSS payloads).
-- Goldens under `spec/tests/golden/html/`, `spec/tests/golden/docx/`, `spec/tests/golden/pptx/`.
-- Loss-report goldens under `spec/tests/loss/`.
-
-**Risk.** Medium (HTML XSS is the highest-frequency external risk).
-
-**Dependencies.** P0.5, P1, P2, P5, P8.
-
----
-
-### Phase P10 — Interop, Fuzzing, and 1.0 Release Gate (R1)
-
-**Goal.** Prove NODX is independently implementable; pass external security review; freeze the format.
-
-**Inputs.** All prior phases.
+**Goal.** Add credible output targets without weakening the source format.
 
 **Tasks.**
 
-1. Maintain Rust and JS parsers as independent implementations.
-2. The JS parser at 1.0 covers Plain, Core, Rich, NCP `semantic`, NCP `lossless`, and safe HTML rendering. See §9.
-3. Publish the conformance fixture corpus with ≥ 80 positive fixtures.
-4. Publish the negative-fixture corpus with ≥ 50 invalid fixtures.
-5. Publish the security-fixture corpus with ≥ 200 hostile inputs.
-6. Run fuzz harnesses (P2, P3, P4, P5, P8) for at least 24 CPU-hours each before tagging.
-7. Run cross-platform CI on Linux, macOS, Windows for every release branch.
-8. Generate a **public conformance report** comparing Rust and JS outputs across the full corpus.
-9. Conduct an external security review and publish the report.
-10. Register or start registration for `text/nodx` and `application/nodx+zip` media types with IANA.
-11. Freeze `nodx/1.0` syntax, canonical AST, error registry, and the §2.2 stability surfaces.
+1. Define Presentation Profile.
+2. Implement PDF through safe paged HTML host bridge first.
+3. Implement DOCX exporter if semantic loss reports are ready.
+4. Implement PPTX exporter after Presentation fixtures exist.
+5. Emit loss reports for every lossy export.
+6. Validate exports with external validators where practical.
 
-**Done criteria.**
+**Out of scope until explicitly approved.**
 
-1. Two parsers emit byte-identical canonical AST for the full conformance corpus.
-2. Safe HTML renderer passes the XSS/security corpus 100%.
-3. Package reader passes the ZIP security corpus 100%.
-4. Validator emits every documented error code in at least one fixture.
-5. Documented unsupported features fail closed.
-6. Public release notes describe compatibility guarantees, frozen surfaces, and known limitations.
-7. Media-type registration is at least filed with IANA.
-
-**Test artifacts.** All prior corpora + the public conformance report.
-
-**Risk.** Low at this point if prior phases land cleanly.
-
-**Dependencies.** All.
+- Native pure-Rust PDF renderer.
+- WYSIWYG editor.
+- Pixel-perfect DOCX/PPTX round-trip.
 
 ---
 
-## 7. Dependency Graph and Parallelism
+## 10. CLI Contract
 
-Phases form this DAG. Edges mean "must complete before".
-
-```
-P0  ─►  P0.5  ─┬─►  P1  ─┬─►  P6  ─┐
-              ├─►  P2  ─┼─►  P3  ─┼─►  P7  ─►  P8  ─►  P9  ─►  P10
-              ├─►  P4  ─┘         │
-              └─►  P5  ───────────┘
-```
-
-Parallel-safe pairs once P0.5 lands:
-
-- (P1, P2, P4, P5) can be worked on in parallel after P0.5.
-- (P3) depends on P2 only.
-- (P6) depends on P1 only.
-- (P7) depends on P3 and P6.
-- (P8) depends on P1, P6, P7.
-- (P9) depends on P1, P2, P5, P8.
-- (P10) depends on everything.
-
-Agents working in parallel MUST coordinate on the shared `Document` AST: changes to `crates/nodx-core/src/ast.rs` are R1 and must land via small, reviewed PRs.
-
----
-
-## 8. CLI Surface and Exit Codes
-
-### 8.1 Subcommand list (1.0)
+### 10.1 Required 1.0 commands
 
 ```sh
 nodx inspect file.nodx
 nodx ast file.nodx [--format json]
-nodx validate --profile core file.nodx [--format json]
-nodx diagnostics file.nodx [--format json]
+nodx validate file.nodx [--profile plain|core|rich|style|package|agent-read] [--format text|json]
+nodx diagnostics file.nodx [--format text|json]
 nodx html file.nodx [--standalone] [--csp]
 nodx tui file.nodx
-nodx ncp file.nodx [--mode lossless|semantic|summary] [--budget N]
+nodx ncp file.nodx [--mode semantic]
 nodx package inspect file.nodx
 nodx package verify file.nodx
+```
+
+### 10.2 Deferred commands
+
+These are not required for 1.0:
+
+```sh
+nodx ncp file.nodx --mode lossless|summary
 nodx package build dir/ -o out.nodx
-nodx sign verify file.nodx [--key file.jwk] [--policy file.json]
-nodx sign sign file.nodx --key file.jwk [--out file.jws]
-nodx agent apply changes.jsonl file.nodx [--out updated.nodx]
+nodx sign verify file.nodx
+nodx sign sign file.nodx
+nodx agent apply changes.jsonl file.nodx
 nodx agent diff file.nodx changes.jsonl
-nodx export pdf  file.nodx -o out.pdf
+nodx export pdf file.nodx -o out.pdf
 nodx export docx file.nodx -o out.docx
 nodx export pptx file.nodx -o out.pptx
 ```
 
-Flags marked `--unstable-*` are non-frozen at 1.0 and may change in 1.x.
+If any deferred command is present before its milestone, it must be clearly
+marked unstable in help output and documentation.
 
-### 8.2 Exit codes (frozen)
+### 10.3 Exit codes
 
 | Code | Meaning |
 |---:|---|
 | 0 | Success. No `fatal` or `error` diagnostics. |
-| 1 | I/O or runtime failure (file not found, permission denied, internal error). |
-| 2 | Parse, validation, or security failure (any `fatal` or `error` diagnostic). |
-| 3 | A required profile or feature is unsupported by this CLI build. |
+| 1 | I/O or runtime failure. |
+| 2 | Parse, validation, package, URL, style, or security failure. |
+| 3 | Required profile or feature unsupported by this CLI build. |
 
-The CLI MUST set exit code based on the highest-severity outcome across all subcommand stages. `info` and `warning` never raise the exit code above 0.
+Rules:
 
-### 8.3 Output stability
+1. `fatal` and `error` diagnostics produce exit code `2` unless the specific
+   failure is unsupported required capability, which produces `3`.
+2. `warning` and `info` diagnostics produce exit code `0`.
+3. File read/write errors produce exit code `1`.
+4. Unknown CLI command or invalid CLI arguments produce exit code `1`.
+5. JSON output must be parseable even when diagnostics exist.
 
-`nodx ast --format json` output is byte-stable for a given input and CLI version. The hash of this output is the public canonical hash for the document.
+### 10.4 Stable diagnostic JSON
+
+`nodx validate --format json` emits:
+
+```json
+[
+  {
+    "code": "NODX-E024",
+    "severity": "error",
+    "message": "Required profile is unsupported.",
+    "line": null,
+    "column": null,
+    "target": "profile:signature"
+  }
+]
+```
+
+Fields are always present. Unknown extra fields are not allowed in 1.0.
 
 ---
 
-## 9. JavaScript Parser Scope (`nodx-js`)
+## 11. JavaScript Implementation Contract
 
-### 9.1 Target at 1.0
+The JavaScript implementation is a first-class interop implementation for 1.0.
+It is not required to implement every Rust subsystem.
 
-The JS parser is a **first-class implementation**, not a toy. At 1.0 it MUST cover the majority of NODX documents end-to-end so that browser-based viewers, CI scripts, and embeddable widgets do not need a Rust toolchain.
+### 11.1 Required for JS 1.0
 
-In scope:
+1. Plain parser.
+2. Core parser.
+3. Rich parser for the 1.0 conformance corpus.
+4. Safe front matter subset.
+5. Inline parser parity.
+6. Attribute parser parity.
+7. Canonical Semantic AST parity.
+8. NCP semantic parity.
+9. Shared diagnostics for parser-owned errors.
+10. Resource limits matching Section 6 where applicable.
+11. ESM package.
+12. Node 20 and modern browser compatibility.
+13. Zero runtime dependencies.
 
-1. **Plain profile** — full.
-2. **Core profile** — full.
-3. **Rich profile** — full surface: tables (canonical Rich + compact pipe), figures, images, media fallbacks, embeds, footnotes, citations, bibliography, table of contents, page breaks, formulas, read-only forms, language/direction inheritance.
-4. **Front matter** — full safe-subset YAML matching P4 rules, sharing fixtures with the Rust parser.
-5. **Inline parser** — full: text, strong, emphasis, code, links, spans, refs, variables, inline math, escapes.
-6. **Attributes** — IDs, classes, named attributes, quoted values, common attributes (`lang`, `dir`, `id`, `class`, `role`).
-7. **Canonical Semantic AST** — byte-identical to Rust on the full conformance corpus.
-8. **Diagnostics** — emits the same error codes as Rust where applicable.
-9. **Safe HTML rendering** — produces byte-identical HTML to Rust on the conformance corpus for Plain, Core, and Rich (excluding NODS-driven style which is computed style from P5).
-10. **NCP semantic and lossless modes** — byte-identical to Rust.
-11. **Resource limits** — implements the §4.4 table.
+### 11.2 Optional for JS 1.0
 
-Out of scope at 1.0 (deferred to JS in 1.x):
+1. Safe HTML rendering.
+2. Stored-entry package sniffing.
+3. NODS safe rejection.
 
-1. **Lossless CST** (Editor profile) — Rust-only at 1.0.
-2. **NODS cascade and computed style** — JS implements the same allowlist and emits `NODX-E027`, but the full cascade is Rust-only at 1.0. JS renders raw allow-listed style declarations into a sanitized `<style>` block; renderer goldens for browser output remain byte-identical to Rust.
-3. **Signature verification** — JS verifies JWS in a follow-up; at 1.0 the JS parser exposes the canonical AST so an external verifier can be plugged in.
-4. **Package reader** — JS reads stored entries only; full deflate is Rust-only at 1.0 (small enough gap that a single follow-up can close it).
-5. **Agent SDK mutations** — JS exposes read-only NCP and validation; mutations are Rust-only at 1.0.
-6. **PDF/DOCX/PPTX export** — Rust-only.
+If implemented, optional JS behavior must share fixtures with Rust.
 
-### 9.2 Architecture target
+### 11.3 Deferred for JS
 
-`packages/nodx-js/` becomes a small package, not a single file:
+1. Full package reader.
+2. Signature verification.
+3. Lossless CST.
+4. Agent mutations.
+5. DOCX/PPTX/PDF export.
 
-```
+### 11.4 Target JS layout
+
+```text
 packages/nodx-js/
   src/
-    index.mjs            # public API: parse, canonicalJson, renderHtml, ncp
+    index.mjs
+    ast.mjs
     bytes.mjs
     frontMatter.mjs
     blockParser.mjs
     inlineParser.mjs
     attrs.mjs
-    ast.mjs
     canonical.mjs
-    renderHtml.mjs
-    ncp.mjs
-    url.mjs              # mirrors nodx-url policy
-    limits.mjs
     diagnostics.mjs
-    nods.mjs             # allowlist lexer for Style fixtures
-    package.mjs          # stored-entry ZIP reader
+    limits.mjs
+    ncp.mjs
+    url.mjs
   test/
     conformance.test.mjs
     canonical.test.mjs
-    html.test.mjs
     ncp.test.mjs
-  package.json           # explicit; no dependencies at 1.0
+  package.json
   README.md
 ```
 
-The package MUST publish as ESM, work in Node ≥ 20 and modern browsers, and have **zero runtime dependencies** at 1.0.
-
-### 9.3 Interop contract
-
-For every fixture in `spec/tests/conformance/`:
-
-1. `canonicalJson(parse(bytes))` is byte-identical to Rust.
-2. `renderHtml(parse(bytes))` is byte-identical to Rust for Plain/Core/Rich.
-3. `ncp(parse(bytes), 'semantic')` and `ncp(parse(bytes), 'lossless')` are byte-identical to Rust.
-
-The conformance runner (`scripts/run_conformance.sh`) MUST be expanded to check all four streams above.
-
-### 9.4 Build, packaging, distribution
-
-- The package is published unbundled. No transpilation.
-- TypeScript declarations (`*.d.ts`) are emitted by `tsc --emitDeclarationOnly` from JSDoc annotations.
-- A browser-ready single-file bundle is produced via a tiny `esbuild` script in `scripts/` and shipped alongside the npm package as `dist/nodx.min.mjs`.
-
 ---
 
-## 10. Testing, Fuzzing, Interop Strategy
+## 12. Testing and Release Gates
 
-### 10.1 Test layers (binding)
+### 12.1 Test layers
 
-1. **Unit tests** for parsers, allowlists, policy functions.
-2. **Conformance fixtures** for valid syntax (≥ 80 at 1.0). Each fixture targets one syntactic feature.
-3. **Negative fixtures** for invalid syntax (≥ 50 at 1.0). Each fixture asserts the exact error code emitted.
-4. **Security fixtures** for hostile input (≥ 200 at 1.0).
-5. **Golden canonical AST** tests.
-6. **Golden NCP** tests (`lossless` and `semantic`).
-7. **Golden computed-style** tests.
-8. **Golden HTML/DOCX/PPTX** tests where output is deterministic.
-9. **Loss-report goldens** for every lossy projection.
-10. **Package digest/tamper** tests.
-11. **Fuzz harnesses** for byte parser, front matter, inline, attributes, NODS, package, manifest, NCP, URL.
-12. **Cross-platform CI** on Linux/macOS/Windows.
+1. Unit tests for parser, validator, URL, package, style, renderer.
+2. Positive conformance fixtures.
+3. Negative fixtures with exact diagnostic codes.
+4. Security fixtures.
+5. Canonical AST goldens.
+6. NCP semantic goldens.
+7. HTML safety tests.
+8. Package tamper tests.
+9. Fuzz harnesses.
+10. Cross-platform CI.
 
-Tests assert **external contracts**, not internal structure. A test that only validates an internal field name is a smell.
+### 12.2 Corpus targets for 1.0
 
-### 10.2 Conformance runner
-
-`scripts/run_conformance.sh` MUST:
-
-1. Build Rust CLI.
-2. For each fixture: run Rust `ast`, JS `canonicalJson`, Rust `html`, JS `renderHtml`, Rust `ncp --mode semantic`, JS `ncp('semantic')`, Rust `ncp --mode lossless`, JS `ncp('lossless')`.
-3. Diff each pair byte-for-byte.
-4. Exit non-zero on any mismatch.
-5. Produce a summary report in `target/conformance-report.json`.
-
-### 10.3 Fuzz budget at 1.0
-
-Each fuzz target runs for at least **24 CPU-hours** on the 1.0 release branch with no panics, OOMs, or new findings. Findings older than the release branch must be fixed or accepted with a public rationale.
-
-### 10.4 Coverage targets
-
-| Surface | Minimum coverage |
+| Corpus | Minimum before 1.0 |
 |---|---:|
-| `nodx-core` block parser | 95% line, 90% branch |
-| `nodx-core` inline parser | 95% line, 90% branch |
-| `nodx-url` | 95% line, 95% branch |
-| `nodx-package` | 95% line, 95% branch |
-| `nodx-validate` | 90% line, 80% branch |
-| `nodx-style` | 90% line, 80% branch |
-| `nodx-sign` | 95% line, 90% branch |
+| Conformance positive fixtures | 80 |
+| Negative fixtures | 50 |
+| URL security inputs | 50 |
+| YAML hostile inputs | 30 |
+| ZIP hostile archives | 30 |
+| NODS hostile inputs | 30 |
+| HTML/XSS payload fixtures | 40 |
+| Package digest/tamper fixtures | 10 |
+| NCP semantic goldens | 20 |
 
-Coverage is informational, not blocking, but a regression below the floor in CI requires reviewer sign-off.
+These numbers are release gates. During earlier milestones, smaller corpora are
+acceptable only if the milestone document says so.
+
+### 12.3 Conformance runner
+
+By 1.0, `scripts/run_conformance.sh` must:
+
+1. build Rust CLI;
+2. run Rust AST;
+3. run JS canonical AST;
+4. diff AST byte-for-byte;
+5. run Rust NCP semantic;
+6. run JS NCP semantic;
+7. diff NCP byte-for-byte;
+8. write `target/conformance-report.json`;
+9. exit non-zero on any mismatch.
+
+### 12.4 Fuzz targets
+
+Required fuzz targets by 1.0:
+
+- byte parser;
+- front matter parser;
+- block parser;
+- inline parser;
+- attribute parser;
+- URL parser;
+- package reader;
+- NODS parser or rejector;
+- NCP serializer.
+
+Release candidate fuzz budget:
+
+- at least 24 CPU-hours per target on the 1.0 release branch;
+- no known panics;
+- no known OOMs;
+- every accepted finding documented in `SECURITY.md`.
+
+### 12.5 Golden policy
+
+Goldens freeze external contracts only. Do not write goldens for internal helper
+shapes unless those helpers are public API.
+
+Frozen goldens at 1.0:
+
+- canonical AST;
+- diagnostic JSON;
+- NCP semantic;
+- selected standalone HTML security outputs.
+
+Not frozen at 1.0:
+
+- pretty HTML formatting;
+- TUI formatting;
+- internal validation traversal order unless visible in diagnostics.
 
 ---
 
-## 11. Error Registry Coverage and Severity Rules
+## 13. Error Registry
 
-### 11.1 Frozen registry
+The registry is frozen at 1.0.
 
-The codes, severities, and phases below are frozen at 1.0. Severity may be downgraded by host policy in narrowly documented cases (e.g. authoring tools allowing `error` to surface non-fatally), but the **default** severity is the contract.
-
-| Code | Default severity | Phase | Description |
+| Code | Default severity | Owner | Description |
 |---|---|---|---|
-| `NODX-E001` | fatal | parse | Invalid UTF-8. |
-| `NODX-E002` | fatal | parse | U+0000 present. |
-| `NODX-E003` | fatal | parse | Unterminated front matter. |
-| `NODX-E004` | error | validate | Missing or invalid schema for claimed profile. |
-| `NODX-E005` | error | parse | Unbalanced or mismatched block delimiter. |
-| `NODX-E006` | error | validate | Duplicate ID. |
-| `NODX-E007` | error | validate | Unresolved reference. |
-| `NODX-E008` | error | validate | Unresolvable asset. |
-| `NODX-E009` | error | validate | Missing required text alternative. |
-| `NODX-E010` | error | package/url | Path traversal or unsafe package path. |
-| `NODX-E011` | error | package | Include cycle. |
-| `NODX-E012` | fatal/error | any | Resource limit exceeded. (Severity per limit; see §4.4.) |
-| `NODX-E013` | warning | validate | Variable referenced but not declared. |
-| `NODX-E014` | warning | validate | Custom component not declared. |
-| `NODX-E015` | info/warning | render | Fallback rendering applied. |
-| `NODX-E016` | info | validate | Unknown attribute preserved. |
-| `NODX-E017` | info/warning | sign | Signature absent or not verified. |
-| `NODX-E018` | fatal/warning | parse | Byte Order Mark encountered. |
-| `NODX-E019` | fatal | parse | Forbidden YAML construct. |
-| `NODX-E020` | error | url | Unsafe URL or scheme. |
-| `NODX-E021` | error | package | Package digest mismatch. |
-| `NODX-E022` | warning | validate | Accessibility issue. |
-| `NODX-E023` | warning | validate | Unsupported optional feature. |
-| `NODX-E024` | error | validate | Required feature unsupported. |
-| `NODX-E025` | error | validate | Table grid invalid. |
+| `NODX-E001` | fatal | `nodx-core` | Invalid UTF-8. |
+| `NODX-E002` | fatal | `nodx-core` | U+0000 present. |
+| `NODX-E003` | fatal | `nodx-core` | Unterminated front matter. |
+| `NODX-E004` | error | `nodx-validate` | Missing or invalid schema for claimed profile. |
+| `NODX-E005` | error | `nodx-core` | Unbalanced or mismatched block delimiter. |
+| `NODX-E006` | error | `nodx-validate` | Duplicate ID. |
+| `NODX-E007` | error | `nodx-validate` | Unresolved reference. |
+| `NODX-E008` | error | `nodx-validate` | Unresolvable asset. |
+| `NODX-E009` | error | `nodx-validate` | Missing required text alternative. |
+| `NODX-E010` | error | `nodx-url`, `nodx-package` | Unsafe path or path traversal. |
+| `NODX-E011` | error | `nodx-package` | Include cycle. |
+| `NODX-E012` | fatal/error | shared | Resource limit exceeded. |
+| `NODX-E013` | warning | `nodx-validate` | Variable referenced but not declared. |
+| `NODX-E014` | warning | `nodx-validate` | Custom component not declared. |
+| `NODX-E015` | info/warning | renderer | Fallback rendering applied. |
+| `NODX-E016` | info | `nodx-validate` | Unknown attribute preserved. |
+| `NODX-E017` | info/warning | `nodx-sign` | Signature absent or not verified. |
+| `NODX-E018` | fatal/warning | `nodx-core` | Byte Order Mark encountered. |
+| `NODX-E019` | fatal | `nodx-core` | Forbidden YAML construct. |
+| `NODX-E020` | error | `nodx-url` | Unsafe URL or scheme. |
+| `NODX-E021` | error | `nodx-package` | Package digest mismatch. |
+| `NODX-E022` | warning | `nodx-validate` | Accessibility issue. |
+| `NODX-E023` | warning | `nodx-validate` | Unsupported optional feature. |
+| `NODX-E024` | error | `nodx-validate` | Required feature unsupported. |
+| `NODX-E025` | error | `nodx-validate` | Table grid invalid. |
 | `NODX-E026` | warning | export/ncp | Lossy conversion or projection. |
-| `NODX-E027` | error/warning | style | Forbidden NODS construct. |
+| `NODX-E027` | error/warning | `nodx-style` | Forbidden NODS construct. |
 
-### 11.2 Coverage requirement at 1.0
+### 13.1 Coverage rule
 
-Every code above MUST be emitted by at least one fixture in `spec/tests/`:
+Every error code must be emitted by at least one fixture before 1.0. For future
+owners such as `nodx-sign`, the 1.0 fixture may assert the correct unsupported
+profile behavior instead of actual signature verification.
 
-- positive fixtures for codes that have a non-failure variant (`E015`, `E016`, `E017`, `E023`, `E026`);
-- negative fixtures for everything else.
+### 13.2 Severity rule
 
-A CI step `cargo run --bin nodx -- ci-coverage` MUST iterate fixtures and assert this.
-
-### 11.3 Ownership
-
-| Crate | Owns |
-|---|---|
-| `nodx-core` | E001, E002, E003, E005, E012 (parse-phase), E018 |
-| `nodx-url` | E010 (URL form), E020 |
-| `nodx-package` | E010 (path form), E011, E012 (package-phase), E021 |
-| `nodx-validate` | E004, E006, E007, E008, E009, E013, E014, E016, E022, E023, E024, E025 |
-| `nodx-style` | E027 |
-| `nodx-sign` | E017 |
-| `nodx-render-html` and exporters | E015, E026 |
+Default severity is part of the 1.0 contract. Host tools may downgrade only in
+documented authoring modes. The reference CLI uses default severity.
 
 ---
 
-## 12. Documentation Deliverables
+## 14. Agent Execution Rules
 
-At 1.0 the repository MUST publish:
+These rules are for coding agents implementing this plan.
 
-1. The normative spec (`NODX_1.0_Working_Draft.md` — renamed and updated from `NODX_0.1_Working_Draft.md`).
-2. This evolution plan (frozen as the historical 1.0 plan; superseded plans archived under `old/`).
-3. `SECURITY.md` with threat model, scope, supported versions, disclosure address.
-4. `CONFORMANCE.md` describing the corpus structure, the conformance runner, and the public report URL.
-5. `INTEROP.md` describing the Rust ↔ JS parity contract.
-6. `MIGRATION-0.1-TO-1.0.md` listing every breaking change with a sample patch per change.
-7. Per-crate `README.md` describing the crate boundary, public API, and security posture.
-8. A short `THREAT_MODEL.md` listing the trust boundaries.
+### 14.1 Work unit discipline
+
+1. Implement one milestone or one explicitly assigned slice of a milestone.
+2. Do not start future profiles while working on a 1.0 milestone.
+3. Keep each PR externally verifiable.
+4. Add fixtures for every new external behavior.
+5. Update docs in the same PR as behavior changes.
+6. Do not weaken security policy to make examples pass.
+7. Do not silently ignore unsupported required features.
+8. Do not change canonical output without updating goldens and migration notes.
+9. Do not add dependencies to security boundary crates without justification.
+10. Do not refactor unrelated code while fixing milestone issues.
+
+### 14.2 Required agent preflight
+
+Before editing, an agent must read:
+
+1. this plan;
+2. the active spec;
+3. `README.md`;
+4. `IMPLEMENTATION_PLAN.md`;
+5. the files it will edit;
+6. relevant tests and fixtures.
+
+### 14.3 Required agent output
+
+Every implementation agent final report must include:
+
+- files changed;
+- behavior changed;
+- fixtures added;
+- commands run;
+- commands not run and why;
+- known follow-up work;
+- whether canonical AST output changed.
+
+### 14.4 Stop conditions
+
+An agent must stop and ask for maintainer decision if:
+
+1. a milestone requires changing a frozen 1.0 contract;
+2. two valid implementation choices produce different canonical bytes;
+3. a security fixture appears wrong but relaxing policy would broaden attack
+   surface;
+4. dependency choice affects crypto, ZIP, YAML, or URL trust boundaries;
+5. required behavior conflicts with the active spec;
+6. the work needs destructive git operations.
+
+### 14.5 Review checklist
+
+Reviewers check:
+
+1. Is scope limited to the assigned milestone?
+2. Are new public behaviors covered by fixtures?
+3. Does canonical JSON remain stable unless intentionally changed?
+4. Are diagnostics deterministic?
+5. Are resource limits enforced at the boundary?
+6. Are unsafe URLs blocked before rendering?
+7. Does parser recovery preserve partial AST where expected?
+8. Does CLI exit code match Section 10?
+9. Did README/spec change when behavior changed?
+10. Did any dependency broaden the trust boundary?
 
 ---
 
-## 13. 1.0 Definition of Done
+## 15. Documentation Deliverables
 
-NODX is ready for `nodx/1.0` only when **all** of the following hold:
+Required before 1.0:
 
-1. Plain, Core, Rich syntax is frozen.
-2. Profile conformance requirements (§3) are explicit and tested.
-3. Two independent parsers (Rust, JS) pass the public conformance corpus byte-for-byte.
-4. Safe HTML renderer passes the XSS/security corpus 100%.
-5. Package reader verifies manifest digests and rejects every fixture in the ZIP security corpus.
-6. NODS parser/cascade rejects every forbidden construct in the NODS security corpus.
-7. CST can perform byte-identical no-op rewrites for every conformance fixture.
-8. Signature verification succeeds on positive vectors and fails on every tamper vector.
-9. NCP supports deterministic semantic and lossless chunking; goldens pass on Rust and JS.
-10. Agent SDK validates and hashes every mutation; batch failures roll back atomically.
-11. Exporters produce loss reports.
-12. Unsupported required features fail closed with `NODX-E024` and exit code 3.
-13. Every error code in §11 is emitted by at least one fixture.
-14. Resource limits (§4.4) are read from a single `ResourceLimits` source across all crates.
-15. Media-type registration is at least filed with IANA.
-16. External security review findings are resolved or explicitly documented.
-17. The §2.2 stability pledge is published.
+1. `NODX_1.0_Working_Draft.md`.
+2. `NODX_1.0_Evolution_Plan.md`.
+3. `README.md`.
+4. `IMPLEMENTATION_PLAN.md`.
+5. `SECURITY.md`.
+6. `THREAT_MODEL.md`.
+7. `CONFORMANCE.md`.
+8. `INTEROP.md`.
+9. `MIGRATION-0.1-TO-1.0.md`.
+10. Per-crate README for every public crate.
+11. `fuzz/README.md`.
 
----
+Required before 1.1:
 
-## 14. Execution Guidance for Coding Agents
+1. `SIGNATURE_PROFILE.md`.
+2. Signature security vectors documentation.
+3. Trust policy integration notes.
+4. `AGENT_MUTATE_PROFILE.md` if M9 ships in 1.1.
 
-When implementing this plan:
+Required before 1.2:
 
-1. Work one phase at a time per pull request.
-2. Respect crate boundaries; do not reach across.
-3. Do not add broad abstractions before tests require them.
-4. Add one focused fixture per new external behavior.
-5. Run `cargo test`, `sh scripts/run_conformance.sh`, and the relevant fuzz target after each phase.
-6. Never weaken security policy to make an example pass. If a fixture needs a relaxation, the **fixture** is wrong.
-7. Update README/spec when behavior changes, in the same commit.
-8. Keep unsupported advanced features explicit (`NODX-E023` / `NODX-E024`), never silently no-op.
-9. When in doubt about whether something is a `fatal` or `error`, default to the higher severity and ask in PR review.
-10. Prefer small, reviewable PRs over phase-sized ones. A phase landing as 10 PRs is healthier than as one.
-11. Before deleting a `*_baseline.rs` file, verify every caller has migrated; a `compile_error!` placeholder is acceptable for one cycle to force a downstream fix.
-12. When two phases conflict on `crates/nodx-core/src/ast.rs`, the earlier phase by the §7 DAG wins.
-
-Preferred sequence for solo agents:
-
-```
-P0  →  P0.5  →  P1  →  P2  →  P4  →  P3  →  P5  →  P6  →  P7  →  P8  →  P9  →  P10
-```
-
-Do not start with exporters. Exporters multiply ambiguity if validation, URL policy, package handling, and canonicalization are not stable.
+1. `EDITOR_PROFILE.md`.
+2. `PRESENTATION_PROFILE.md`.
+3. Exporter loss report schema.
 
 ---
 
-## 15. Appendix A — Phase Status Snapshot (current repo)
+## 16. Final Definitions of Done
 
-Snapshot taken at the date this plan replaces the previous one. Update on every phase landing.
+### 16.1 NODX 1.0 Definition of Done
 
-| Phase | Status | Notes |
+NODX 1.0 is ready only when all of these hold:
+
+1. Plain, Core, and Rich syntax are frozen.
+2. Canonical Semantic AST is frozen.
+3. Error registry is frozen.
+4. CLI exit codes are frozen.
+5. Profile declaration and unsupported-feature behavior are implemented.
+6. Rust parser passes conformance corpus.
+7. JS parser passes conformance corpus.
+8. Rust and JS canonical AST match byte-for-byte.
+9. Rust and JS NCP semantic match byte-for-byte.
+10. Validator emits every 1.0 validation code in fixtures.
+11. Required unsupported features emit `NODX-E024`.
+12. CLI exits code `3` for unsupported required features.
+13. URL security corpus passes.
+14. YAML security corpus passes.
+15. ZIP security corpus passes.
+16. NODS forbidden corpus passes.
+17. HTML/XSS corpus passes.
+18. Package reader verifies manifest digests.
+19. Package reader never extracts during read.
+20. Resource limits use a single shared source.
+21. Safe HTML renderer escapes by context.
+22. No reference crate opens network sockets.
+23. Fuzz targets exist and release budget is complete or documented.
+24. `SECURITY.md`, `THREAT_MODEL.md`, `CONFORMANCE.md`, `INTEROP.md`, and
+    migration docs are published.
+25. Known limitations are explicit in release notes.
+
+### 16.2 NODX 1.1 Definition of Done
+
+NODX 1.1 is ready when:
+
+1. 1.0 conformance remains green.
+2. Signature profile verifies positive and tamper vectors, if shipped.
+3. Trust policy separates crypto validity from trust, if shipped.
+4. Agent mutate profile validates and rolls back failed batches, if shipped.
+5. New profiles are opt-in and do not alter 1.0 canonical AST.
+6. New CLI commands are documented and tested.
+
+### 16.3 NODX 1.2 Definition of Done
+
+NODX 1.2 is ready when:
+
+1. 1.0 and 1.1 conformance remain green.
+2. CST round-trip is byte-identical for editor fixtures, if shipped.
+3. Local rewrite primitives modify minimal source ranges, if shipped.
+4. Presentation profile has fixtures before PPTX export ships.
+5. Every lossy export emits a loss report.
+
+---
+
+## 17. Appendix A: Current Gaps
+
+Current gaps relative to 1.0:
+
+| Area | Current status | 1.0 target |
 |---|---|---|
-| P0 | partial | Spec and README claim some unsupported features; profile declaration format not yet pinned. |
-| P0.5 | not started | `nodx-core` is a 3,134-line monolith. |
-| P1 | partial | Validators exist inside `nodx-core` and cover ~14 of the 27 error codes. |
-| P2 | partial | URL safety is split across ad-hoc `safe_link_url` / `safe_image_url` checks; no centralized crate. |
-| P3 | partial | Stored-ZIP reader and manifest digest verifier exist for the bundled showcase; deflate, full ZIP-bomb controls, and virtual FS are missing. |
-| P4 | partial | Hand-rolled front matter parser; YAML safe subset is not enforced at event-stream level. |
-| P5 | partial | Textual NODS lexer with allowlist heuristics; no structured parser, no cascade, no computed style. |
-| P6 | not started | No CST, no source ranges, no minimal-edit primitives. |
-| P7 | not started | Canonical JSON exists; no JWS, no canonicalization rules per JCS, no trust hooks. |
-| P8 | partial | NCP `semantic` mode is implemented and used in examples; no `lossless`, no `summary`, no agent SDK, no batches. |
-| P9 | partial | Safe HTML and TUI renderers exist; no PDF/DOCX/PPTX exporters; no loss reports. |
-| P10 | not started | 5 conformance fixtures, 5 golden fixtures, no fuzz harnesses, no security corpus directories. |
+| Spec | 0.1 draft exists | 1.0 draft frozen |
+| Core crate | monolith | split modules |
+| Validation | inside `nodx-core` | `nodx-validate` |
+| URL policy | ad-hoc checks | `nodx-url` |
+| Resource limits | partial hard-coded | shared `ResourceLimits` |
+| YAML | line-oriented parser | safe event subset |
+| Package | stored ZIP baseline | safe reader, virtual FS, corpus |
+| Style | textual heuristic | safe NODS parser/rejector |
+| HTML | safe baseline | split crate, XSS corpus |
+| NCP | semantic baseline | `nodx-ncp`, Rust/JS parity |
+| JS | single-file parser | modular package |
+| Tests | small conformance set | conformance, negative, security, goldens |
+| Fuzz | absent | required targets |
+| Docs | README and 0.1 docs | 1.0 release docs |
 
 ---
 
-## 16. Appendix B — Mapping Plan Phases → Spec Sections
+## 18. Appendix B: Deferred Profiles
 
-| Plan phase | Spec sections (NODX_0.1_Working_Draft.md) |
-|---|---|
-| P0 | 1, 4, 5, 28, Appendix A |
-| P0.5 | 5, 8 |
-| P1 | 5, 8, 11, 25, 28 |
-| P2 | 20, 24 |
-| P3 | 18, 24 |
-| P4 | 7, 24 |
-| P5 | 17, 24 |
-| P6 | 8.3 |
-| P7 | 23 |
-| P8 | 22 |
-| P9 | 24.1, 26 |
-| P10 | 1, 26, 28 |
+Deferred does not mean unimportant. It means not required to freeze a trustworthy
+1.0.
+
+### 18.1 Signature
+
+Why deferred:
+
+- crypto correctness requires separate review;
+- trust policy must not be rushed;
+- canonical AST can freeze first.
+
+Earliest release: 1.1.
+
+### 18.2 Agent mutations
+
+Why deferred:
+
+- mutation safety depends on stable validation and hashes;
+- rollback semantics need focused tests;
+- LLM integration must stay outside the core format.
+
+Earliest release: 1.1.
+
+### 18.3 Editor CST
+
+Why deferred:
+
+- byte-preserving CST is a large implementation surface;
+- it must not block readers or validators;
+- source rewrite quality is separable from format stability.
+
+Earliest release: 1.2.
+
+### 18.4 DOCX/PPTX/PDF exporters
+
+Why deferred:
+
+- exporters multiply fidelity questions;
+- output formats are lossy relative to NODX;
+- loss reports and safe HTML must exist first.
+
+Earliest release: 1.2, except PDF via safe HTML host bridge may appear earlier
+as an unstable command.
+
+### 18.5 Full NODS cascade
+
+Why deferred:
+
+- safe acceptance and rejection is the 1.0 security requirement;
+- computed style is useful but not required for the source format to stabilize;
+- cascade correctness needs a dedicated selector and specificity corpus.
+
+Earliest release: 1.1 or 1.2, depending on renderer needs.
 
 ---
 
-## 17. Appendix C — Non-Goals at 1.0
+## 19. Appendix C: Agent Handoff Template
 
-The following are **explicitly out of scope** at 1.0 and tracked for 1.x or later:
+Use this template when assigning a milestone to a coding agent.
 
-1. Inline SVG and inline MathML.
-2. ZIP64 packages.
-3. Encrypted packages.
-4. Network resource loading (no opt-in flag at 1.0).
-5. CSS grid, subgrid, container queries.
-6. CSS animations and transitions of any kind.
-7. WYSIWYG editing surface.
-8. Native PDF renderer (only the HTML-to-PDF bridge ships at 1.0).
-9. DID-based trust frameworks (interface only).
-10. Streaming parser (single-pass byte-oriented at 1.0).
-11. Python bindings (deferred).
-12. Real-time collaboration protocol.
-13. Server-side template inclusion (no `{{ }}` server expansion; variables are document-local).
-14. Macro expansion or any execution model.
+````md
+## Assignment
 
-Anything not listed above either belongs to 1.0 per the phase plan, or requires an RFC to enter scope.
+Milestone:
+Scope:
+Files likely involved:
+Files off-limits:
+
+## Required reading
+
+- NODX_1.0_Evolution_Plan.md
+- NODX_1.0_Working_Draft.md
+- README.md
+- IMPLEMENTATION_PLAN.md
+- Relevant source files
+- Relevant tests/fixtures
+
+## Required behavior
+
+- ...
+
+## Out of scope
+
+- ...
+
+## Required tests/fixtures
+
+- ...
+
+## Verification commands
+
+```sh
+rtk cargo test
+rtk sh scripts/run_conformance.sh
+```
+
+## Final report must include
+
+- Files changed
+- Behavior changed
+- Fixtures added
+- Commands run
+- Canonical AST changed: yes/no
+- Follow-ups
+````
