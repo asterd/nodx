@@ -1,0 +1,63 @@
+---
+schema: nodx/0.1
+type: document
+id: chinese-cjk-example
+title: 中文文档示例
+subtitle: NODX 对中日韩字符的支持
+language: zh-CN
+dir: ltr
+authors: [NODX 工作组]
+keywords: [中文, CJK, 国际化]
+vars:
+  organization: 示例公司
+  release: 0.1
+requires: [rich-tables, math]
+---
+
+# 中文文档示例 {#title}
+
+NODX 完全支持 UTF-8 编码的中日韩文字。本文档由 {{vars.organization}} 发布，
+版本 {{vars.release}}。
+
+::::section {#mixed-cjk}
+## 中日韩混合内容 {#mixed-heading}
+
+简体中文：现代化的语义文档源格式。
+繁體中文：現代化的語意文件原始格式。
+日本語：モダンなセマンティック・ドキュメント・ソース・フォーマット。
+한국어: 현대적인 시맨틱 문서 소스 형식.
+
+:::note {type="info"}
+**全角标点**和半角 ASCII 标点都受支持：「示例」（example）—— 没有歧义。
+::: note
+:::: section
+
+::::section {#vertical-context}
+## 垂直与水平排版
+
+NODX 0.1 不强制要求 `writing-mode` 在 AST 中体现，但允许通过 NODS 和
+渲染提示进行选择。下面的示例使用横向排版（默认）。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| 文档 | 语义树 | 内容与表现分离 |
+| 渲染器 | 输出 | 浏览器、终端、PDF |
+| 代理 | 工具 | 通过稳定 ID 访问 |
+
+:::code {lang="python"}
+def 计算(数值):
+    return 数值 * 2
+
+print(计算(21))  # 42
+::: code
+:::: section
+
+::::section {#math}
+## 公式与符号
+
+行内数学表达式：$$E=mc^2$$ 和 $$\int_0^\infty e^{-x^2}\,dx$$。
+
+:::math {notation="tex" display="block" alt="二次方程的解"}
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+::: math
+:::: section

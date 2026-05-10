@@ -1,0 +1,33 @@
+---
+schema: nodx/0.1
+type: document
+id: rich-demo
+title: Rich Demo
+language: en
+---
+
+# Rich Demo {#rich-title}
+
+This document exercises nested sections, callouts, literal blocks, tables,
+custom components, and media fallbacks.
+
+::::section {#architecture}
+## Architecture
+
+:::figure {#fig-engine}
+:::image {src="assets/reference-engine.svg" alt="Reference engine architecture"}
+:::
+:::caption
+Reference parser pipeline.
+:::
+:::
+
+:::legal-clause {#clause-it jurisdiction="IT"}
+Fallback text remains readable even when the component is unknown.
+:::
+
+:::math {notation="tex" display="block" alt="E equals m c squared"}
+E = mc^2
+:::
+::::
+

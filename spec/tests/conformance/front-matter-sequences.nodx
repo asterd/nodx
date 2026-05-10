@@ -1,0 +1,11 @@
+---
+schema: nodx/0.1
+type: document
+title: Front Matter Sequences
+authors:
+  - name: Alice
+  - name: Bob
+keywords: [a, b, c]
+---
+
+Body with @[front-matter-sequences].

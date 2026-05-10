@@ -1,0 +1,54 @@
+---
+schema: nodx/0.1
+type: document
+id: agent-review-demo
+title: Agent Review Workflow
+language: en
+dir: ltr
+vars:
+  company: Example Corp
+requires: [rich-tables]
+---
+
+# Agent Review Workflow {#title}
+
+Issued by {{vars.company}}. Agents address stable nodes such as @[risk-table]
+instead of byte offsets.
+
+::::section {#policy}
+## Policy Surface
+
+:::note {#guardrail type="warning" approved="true"}
+Approved content requires an explicit policy override before mutation.
+:::
+
+| Capability | Default |
+| --- | --- |
+| Remote fetch | blocked |
+| Source-range edits | blocked |
+| Validate after op | required |
+
+:::table {#risk-table caption="Mutation risk table"}
+:::row
+:::cell {header="true" scope="col"}
+Risk
+:::
+:::cell {header="true" scope="col"}
+Mitigation
+:::
+:::
+:::row
+:::cell
+Invented target ID
+:::
+:::cell
+Fail closed when the ID is missing.
+:::
+:::
+:::
+::::
+
+:::code {lang="json"}
+{"schema":"nodx/change/0.1","op":"replace","target":"#guardrail","requiresApproval":true}
+:::
+

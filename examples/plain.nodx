@@ -1,0 +1,10 @@
+# NODX Plain Example {#plain-title}
+
+This is valid plain-first content with **strong text**, *emphasis*, `code`,
+a [link](https://example.com), a variable {{vars.company}}, inline math $$E=mc^2$$,
+and a reference @[plain-title].
+
+- One
+- Two
+- Three
+

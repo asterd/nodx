@@ -1,0 +1,157 @@
+---
+schema: nodx/0.1
+type: document
+id: print-portrait-report
+title: Quarterly Compliance Report
+subtitle: A print-ready NODX example designed for Cmd+P → Save as PDF
+language: en
+dir: ltr
+authors: [NODX Working Group]
+created: 2026-05-10
+keywords: [print, PDF, report, compliance]
+requires: [rich-tables, style]
+---
+
+:::style
+@page {
+  size: A4 portrait;
+  margin: 24mm 20mm 24mm 20mm;
+}
+@page :first {
+  margin-top: 0mm;
+}
+@page :left {
+  margin-left: 28mm;
+  margin-right: 18mm;
+}
+@page :right {
+  margin-left: 18mm;
+  margin-right: 28mm;
+}
+
+body { font-family: "Source Serif Pro", Georgia, serif; font-size: 10.5pt; line-height: 1.55; color: #1f2937; }
+
+h1, h2, h3 { font-family: "Source Sans Pro", system-ui, sans-serif; color: #0f172a; page-break-after: avoid; }
+h1 { font-size: 22pt; margin: 0 0 8pt; padding-bottom: 4pt; border-bottom: 0.6pt solid #94a3b8; }
+h2 { font-size: 14pt; margin: 18pt 0 6pt; }
+h3 { font-size: 12pt; margin: 12pt 0 4pt; color: #334155; }
+
+p { margin: 0 0 6pt; orphans: 3; widows: 3; }
+ul, ol { margin: 0 0 6pt 18pt; }
+li { margin-bottom: 2pt; }
+
+aside { border-inline-start: 3pt solid #b45309; background-color: #fffbea; padding: 6pt 10pt; margin: 8pt 0; border-radius: 3pt; page-break-inside: avoid; font-size: 10pt; }
+
+table { border-collapse: collapse; width: 100%; margin: 8pt 0 12pt; page-break-inside: avoid; font-size: 9.5pt; }
+th, td { border: 0.4pt solid #475569; padding: 3pt 6pt; vertical-align: top; }
+th { background-color: #e2e8f0; font-weight: 600; text-align: start; }
+td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; }
+
+figure { margin: 10pt 0; padding: 8pt; border: 0.4pt solid #cbd5e1; border-radius: 4pt; page-break-inside: avoid; background-color: #f8fafc; }
+figcaption { font-size: 9pt; color: #475569; margin-top: 4pt; }
+
+.cover { padding: 60mm 0 0; text-align: center; page-break-after: always; }
+.cover h1 { font-size: 36pt; border: 0; margin: 0 0 12pt; }
+.cover .subtitle { font-size: 14pt; color: #475569; margin: 0 0 24pt; }
+.cover .meta { font-size: 11pt; color: #64748b; }
+
+.toc { page-break-after: always; }
+.toc h2 { border-bottom: 0.6pt solid #94a3b8; padding-bottom: 4pt; }
+.toc ol { list-style-position: inside; padding: 0; }
+.toc li { padding: 3pt 0; border-bottom: 0.3pt dotted #cbd5e1; }
+.toc a { color: #0f172a; text-decoration: none; }
+
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; margin: 8pt 0 12pt; }
+.summary-grid > div { border: 0.4pt solid #cbd5e1; border-radius: 4pt; padding: 8pt 10pt; background-color: #f8fafc; }
+.summary-grid h3 { margin: 0 0 4pt; font-size: 10.5pt; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; }
+.summary-grid .value { font-size: 22pt; color: #0f766e; font-weight: 700; }
+
+.signature-block { margin-top: 24pt; padding-top: 8pt; border-top: 0.6pt solid #94a3b8; font-size: 9.5pt; color: #475569; }
+.signature-block .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24pt; margin-top: 12pt; }
+.signature-block .line { border-top: 0.4pt solid #1f2937; padding-top: 4pt; }
+::: style
+
+::::section {#cover .cover}
+# Quarterly Compliance Report {#cover-title}
+
+[Q1 2026 — NODX Working Group]{.subtitle}
+
+[Issued 10 May 2026 · Document ID `print-portrait-report` · Confidential]{.meta}
+:::: section
+
+::::section {#toc .toc}
+## Contents
+
+1. [Executive Summary](#summary)
+2. [Key Indicators](#kpis)
+3. [Risk Register](#risks)
+4. [Approvals](#approvals)
+5. [Appendix: Methodology](#methodology)
+:::: section
+
+::::section {#summary}
+## Executive Summary {#summary-heading}
+
+The first quarter of 2026 closed with all critical controls reviewed and the
+outstanding items from Q4 2025 fully resolved. Two new advisory items have been
+opened against the staging environment.
+
+:::note {type="info"}
+This report is formatted for A4 portrait printing. Open the rendered HTML in a
+browser and use **Cmd+P → Save as PDF** to produce a deterministic PDF file.
+::: note
+:::: section
+
+::::section {#kpis}
+## Key Indicators {#kpis-heading}
+
+[Critical controls passed in Q1]{.lead}
+
+| Indicator | Q4 2025 | Q1 2026 | Δ |
+| --- | --- | --- | --- |
+| Critical controls passed | 18 / 19 | 21 / 21 | +3 |
+| Mean time to remediation | 11.2 days | 6.4 days | -4.8 |
+| Open advisory items | 5 | 2 | -3 |
+| Documents pending review | 3 | 0 | -3 |
+:::: section
+
+::::section {#risks}
+## Risk Register {#risks-heading}
+
+| ID | Risk | Severity | Owner | Status |
+| --- | --- | --- | --- | --- |
+| R-101 | Untrusted SVG ingestion | High | Security | Mitigated |
+| R-102 | Stale signing keys | Medium | Platform | Open |
+| R-103 | Mixed `lang`/`dir` rendering | Low | Localization | Resolved |
+| R-104 | ZIP path traversal | High | Security | Mitigated |
+| R-105 | Agent target hash drift | Medium | Knowledge Systems | Open |
+
+:::note {type="warning"}
+Items marked **Open** carry remediation deadlines tracked in the operational
+ticket system. They do not block this report.
+::: note
+:::: section
+
+::::section {#approvals}
+## Approvals {#approvals-heading}
+
+The signatures below are placeholders for the Signature Profile. In a packaged
+NODX, `signatures/document.jws` covers the canonical AST of this document.
+
+:::quote
+This report has been reviewed and approved by the parties listed below in
+accordance with the Quarterly Compliance Review procedure.
+::: quote
+
+The full signature manifest is available in `signatures/document.jws` of the
+packaged version.
+:::: section
+
+::::section {#methodology}
+## Appendix: Methodology {#methodology-heading}
+
+Sample selection follows ISO 19011:2018 §6.4. Evidence collection used the
+agent-driven workflow described in §22 of the NODX 0.1 Working Draft. Each
+finding was double-validated with a deterministic NCP projection before
+inclusion in the report.
+:::: section

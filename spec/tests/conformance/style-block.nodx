@@ -1,0 +1,18 @@
+---
+schema: nodx/0.1
+type: document
+title: Style Block
+---
+
+# Style Block {#title}
+
+The `:::style` literal block embeds NODS rules. Its content is preserved as
+literal text in the AST and emitted by the HTML renderer inside a `<style>`
+element with break-out characters CSS-escaped.
+
+:::style
+h1 { color: #0f766e; }
+p { line-height: 1.6; }
+::: style
+
+After-style paragraph remains a normal paragraph node.

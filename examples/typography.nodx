@@ -1,0 +1,190 @@
+---
+schema: nodx/0.1
+type: document
+id: typography-demo
+title: Typography, Colour, and Visual Style
+subtitle: A complete walkthrough of the NODS visual primitives
+language: en
+dir: ltr
+authors: [NODX Working Group]
+keywords: [typography, color, design, style]
+requires: [rich-tables, style]
+---
+
+:::style
+:root {
+  --ink: #1f2937;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --bg: #ffffff;
+  --bg-muted: #f8fafc;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --info: #1d4ed8;
+  --info-soft: #dbeafe;
+
+  --font-sans: "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-serif: "Source Serif Pro", "Georgia", serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --scale-xs: 11pt;
+  --scale-sm: 13pt;
+  --scale-md: 15pt;
+  --scale-lg: 19pt;
+  --scale-xl: 24pt;
+  --scale-2xl: 32pt;
+  --scale-3xl: 44pt;
+}
+
+body {
+  font-family: var(--font-serif);
+  font-size: var(--scale-md);
+  line-height: 1.65;
+  color: var(--ink);
+  background-color: var(--bg);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.4em;
+  margin-bottom: 0.4em;
+}
+
+h1 { font-size: var(--scale-3xl); }
+h2 { font-size: var(--scale-2xl); }
+h3 { font-size: var(--scale-xl); }
+h4 { font-size: var(--scale-lg); }
+
+.lead { font-size: var(--scale-lg); color: var(--muted); font-style: italic; }
+.small-caps { font-variant: small-caps; letter-spacing: 0.04em; }
+
+aside[data-type="info"] { border-inline-start: 4pt solid var(--info); background-color: var(--info-soft); padding: 10pt 14pt; border-radius: 6pt; }
+aside[data-type="warning"] { border-inline-start: 4pt solid var(--warn); background-color: var(--warn-soft); padding: 10pt 14pt; border-radius: 6pt; }
+aside[data-type="danger"] { border-inline-start: 4pt solid var(--danger); background-color: var(--danger-soft); padding: 10pt 14pt; border-radius: 6pt; }
+
+code, pre { font-family: var(--font-mono); font-size: 0.92em; }
+pre { background-color: #0f172a; color: #dbeafe; padding: 12pt; border-radius: 6pt; line-height: 1.5; }
+p :not(pre) > code { background-color: var(--bg-muted); border: 0.5pt solid var(--line); padding: 1pt 4pt; border-radius: 3pt; color: var(--accent); }
+
+table { border-collapse: collapse; width: 100%; }
+th { background-color: var(--accent-soft); color: var(--ink); font-weight: 600; }
+td, th { border: 0.5pt solid var(--line); padding: 6pt 8pt; }
+
+.swatch { display: inline-block; width: 18pt; height: 18pt; border: 1pt solid var(--line); vertical-align: middle; margin-inline-end: 6pt; }
+::: style
+
+# Typography, Colour, and Visual Style {#title}
+
+[A complete walkthrough of the NODS visual primitives.]{.lead}
+
+::::section {#scale}
+## Type Scale {#scale-heading}
+
+NODS exposes a constrained but expressive set of typographic properties:
+`font-family`, `font-size`, `font-weight`, `font-style`, `line-height`,
+`letter-spacing`, `text-align`, `text-transform`, `text-decoration`, and
+`font-variant`.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--scale-xs` | 11pt | Captions, footnotes |
+| `--scale-sm` | 13pt | Auxiliary text |
+| `--scale-md` | 15pt | Body |
+| `--scale-lg` | 19pt | Lead paragraphs |
+| `--scale-xl` | 24pt | H3 |
+| `--scale-2xl` | 32pt | H2 |
+| `--scale-3xl` | 44pt | H1 / cover |
+
+[Inline span styled as small caps.]{.small-caps}
+:::: section
+
+::::section {#colour}
+## Colour System {#colour-heading}
+
+Six semantic roles (`ink`, `muted`, `accent`, `info`, `warn`, `danger`) plus a
+neutral palette. Each role pairs with a soft companion for callout backgrounds.
+
+:::note {type="info"}
+**Info callout** — uses `--info` and `--info-soft`. Renderer maps `note` →
+`<aside>` and applies `data-type` so styles target by attribute.
+::: note
+
+:::note {type="warning"}
+**Warning callout** — uses `--warn` / `--warn-soft`. Reserved for advisory
+content that does not block the reader.
+::: note
+
+:::note {type="danger"}
+**Danger callout** — uses `--danger` / `--danger-soft`. Reserved for
+compliance, security, or destructive operations.
+::: note
+:::: section
+
+::::section {#fonts}
+## Font Stacks {#fonts-heading}
+
+| Family | Stack | Used for |
+| --- | --- | --- |
+| Sans | Inter → Segoe UI → Roboto → system-ui | UI, headings |
+| Serif | Source Serif Pro → Georgia → serif | Body |
+| Mono | JetBrains Mono → Fira Code → ui-monospace | Code |
+
+System-ui fallbacks ensure that even without bundled fonts the document
+remains legible. Local font files MAY be packaged inside `fonts/` and loaded
+through `@font-face` entries in NODS.
+
+:::code {lang="nods"}
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+::: code
+:::: section
+
+::::section {#emphasis}
+## Emphasis and Decoration {#emphasis-heading}
+
+Inline emphasis uses **strong** for importance, *em* for emphasis, `code` for
+monospace literals, [marked]{role="term"} for highlighted terms, and span
+attributes for arbitrary semantic class hooks.
+
+Spans that change colour use the same allowlisted properties as block styles:
+
+[Accent term]{.accent} — [Warn term]{.warn} — [Danger term]{.danger}
+
+:::style
+.accent { color: var(--accent); font-weight: 600; }
+.warn { color: var(--warn); font-weight: 600; }
+.danger { color: var(--danger); font-weight: 600; }
+::: style
+:::: section
+
+::::section {#components}
+## Custom Components With Style {#components-heading}
+
+Custom components keep readable fallbacks. With styles applied, they become
+visually distinct without losing semantics.
+
+:::approval-card {#approval-1 status="pending" fallback="children"}
+Pending security review. Do not modify without an explicit override.
+::: approval-card
+
+:::style
+section.custom-component[class~="approval-card"] {
+  border: 0.5pt solid var(--warn);
+  background-color: var(--warn-soft);
+  padding: 12pt 14pt;
+  border-radius: 8pt;
+  margin: 12pt 0;
+}
+::: style
+:::: section

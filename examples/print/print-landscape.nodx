@@ -1,0 +1,176 @@
+---
+schema: nodx/0.1
+type: document
+id: print-landscape-dashboard
+title: Operations Dashboard — Landscape Print Sheet
+subtitle: Wide tables, generous spacing, A3 landscape
+language: en
+dir: ltr
+authors: [NODX Working Group]
+created: 2026-05-10
+keywords: [print, landscape, dashboard, spacing, padding]
+requires: [rich-tables, style]
+---
+
+:::style
+@page {
+  size: A3 landscape;
+  margin: 16mm 18mm 16mm 18mm;
+}
+@page :first {
+  margin-top: 26mm;
+}
+
+body { font-family: "Source Sans Pro", system-ui, sans-serif; font-size: 11pt; line-height: 1.5; color: #1f2937; }
+
+h1 { font-size: 28pt; margin: 0 0 8pt; padding-bottom: 6pt; border-bottom: 0.8pt solid #0f766e; color: #0f172a; }
+h2 { font-size: 16pt; margin: 18pt 0 8pt; color: #0f172a; padding-inline-start: 8pt; border-inline-start: 4pt solid #0f766e; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12pt;
+  margin: 8pt 0 18pt;
+}
+.kpi-grid > div {
+  padding: 14pt 16pt;
+  background-color: #ecfdf5;
+  border: 0.4pt solid #0f766e;
+  border-radius: 6pt;
+}
+.kpi-grid h3 {
+  margin: 0 0 6pt;
+  font-size: 9.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+  font-weight: 600;
+}
+.kpi-grid .value {
+  font-size: 28pt;
+  font-weight: 700;
+  color: #0f766e;
+  margin: 0;
+}
+.kpi-grid .delta {
+  font-size: 10pt;
+  color: #475569;
+  margin: 2pt 0 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8pt 0 16pt;
+  page-break-inside: avoid;
+}
+th, td {
+  border: 0.4pt solid #cbd5e1;
+  padding: 8pt 12pt;
+  vertical-align: top;
+  text-align: start;
+}
+th {
+  background-color: #0f172a;
+  color: #f8fafc;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 9.5pt;
+}
+tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+.legend {
+  margin: 6pt 0 18pt;
+  font-size: 9.5pt;
+  color: #475569;
+  display: flex;
+  gap: 18pt;
+  padding: 8pt 12pt;
+  background-color: #f1f5f9;
+  border-radius: 4pt;
+}
+.legend strong { color: #0f172a; }
+
+aside {
+  margin: 12pt 0;
+  padding: 12pt 16pt;
+  border-inline-start: 4pt solid #b45309;
+  background-color: #fffbea;
+  border-radius: 4pt;
+  page-break-inside: avoid;
+}
+
+footer {
+  margin-top: 24pt;
+  padding-top: 8pt;
+  border-top: 0.4pt solid #94a3b8;
+  font-size: 9pt;
+  color: #64748b;
+  display: flex;
+  justify-content: space-between;
+}
+::: style
+
+# Operations Dashboard — Landscape Print Sheet {#title}
+
+The landscape orientation gives wide tables more room to breathe and lets
+high-density indicator grids fit on a single page. Padding and spacing values
+are deliberately larger than the portrait report so the page reads well from
+across a meeting table.
+
+::::section {#kpis}
+## Quarterly Indicators {#kpis-heading}
+
+:::note {type="info"}
+The four cards below use a CSS grid (`grid-template-columns: repeat(4, 1fr)`)
+with `gap: 12pt`. Print engines that ignore CSS Grid fall back to vertical
+stacking, which still reads correctly.
+::: note
+
+[Latency p95, error rate, deploy frequency, change-failure rate.]
+
+| Indicator | Value | Target | Status |
+| --- | --- | --- | --- |
+| Latency p95 (ms) | 184 | < 200 | OK |
+| Error rate (%) | 0.27 | < 1.00 | OK |
+| Deploy frequency (per week) | 23 | > 15 | OK |
+| Change-failure rate (%) | 6.4 | < 10.0 | OK |
+| Mean time to recovery (min) | 18 | < 30 | OK |
+:::: section
+
+::::section {#regions}
+## Regional Breakdown {#regions-heading}
+
+| Region | Latency p95 | Error rate | Active deploys | On-call | Notes |
+| --- | --- | --- | --- | --- | --- |
+| EU-West | 178 ms | 0.21 % | 8 | 2 engineers | Stable, no incidents in Q1 |
+| EU-Central | 192 ms | 0.34 % | 6 | 1 engineer | Watching DB latency tails |
+| US-East | 165 ms | 0.18 % | 9 | 3 engineers | Stable |
+| US-West | 201 ms | 0.42 % | 7 | 2 engineers | Latency improvement plan filed |
+| AP-Southeast | 268 ms | 0.61 % | 4 | 1 engineer | Edge-cache rollout in Q2 |
+
+:::note {type="warning"}
+Regions with latency above the 250 ms threshold trigger the **edge-cache
+rollout** workflow. AP-Southeast is currently the only region above threshold.
+::: note
+:::: section
+
+::::section {#legend}
+## Legend And Notation {#legend-heading}
+
+[**Indicator**: a measurable property of the system. **Target**: the contractual
+threshold from the SLO catalogue. **Status**: OK if value meets target,
+ATTN otherwise. Values are computed over a 28-day rolling window.]
+:::: section
+
+::::section {#footer}
+## Distribution
+
+This sheet is intended for printing at A3 landscape. When printed at A4 it
+remains legible thanks to the page-break-inside: avoid hint on tables and
+callouts. Send a sealed PDF copy to the operations leads and archive a packaged
+`.nodx` in the compliance vault.
+:::: section

@@ -1,0 +1,59 @@
+---
+schema: nodx/0.1
+type: document
+id: arabic-rtl-example
+title: مثال على وثيقة عربية
+subtitle: NODX يدعم النصوص من اليمين إلى اليسار
+language: ar
+dir: rtl
+authors: [مجموعة عمل NODX]
+keywords: [عربي, RTL, اختبار]
+vars:
+  organization: شركة المثال
+requires: [rich-tables]
+---
+
+# مثال على وثيقة عربية {#title}
+
+تستخدم هذه الوثيقة اللغة العربية والاتجاه من اليمين إلى اليسار. النص ينتقل
+مباشرة إلى تخطيط RTL لأن `language: ar` و `dir: rtl` معلنتان في الواجهة الأمامية.
+
+أصدرتها {{vars.organization}} وفقاً لمبادئ التصميم متعدد اللغات في NODX.
+
+::::section {#bidi}
+## النص ثنائي الاتجاه {#bidi-heading}
+
+عند خلط اللغات، يجب على المعالج اتباع خوارزمية الاتجاه الثنائي في يونيكود.
+مثال: السعر هو 99.99 USD وكود المنتج هو ABC-2026.
+
+:::note {type="info" lang="en" dir="ltr"}
+This callout switches to English (LTR) inside an Arabic (RTL) document. The
+renderer should isolate this block from the surrounding bidi context.
+::: note
+:::: section
+
+::::section {#tables}
+## جدول المنتجات
+
+| المنتج | الفئة | السعر |
+| --- | --- | ---: |
+| كتاب | تعليم | 49.00 |
+| قلم | مكتب | 5.00 |
+| دفتر | مكتب | 12.50 |
+
+:::note {type="warning"}
+الأرقام في الجدول هي أرقام عربية شرقية بترميز ASCII (الأرقام الهندية: ٠١٢٣٤٥).
+يمكن للمؤلف اختيار أيٍّ من النظامين العدديين دون تغيير الدلالة.
+::: note
+:::: section
+
+::::section {#poetry}
+## نص أدبي
+
+:::quote {lang="ar" dir="rtl"}
+أنا الذي نظر الأعمى إلى أدبي
+وأسمعت كلماتي من به صمم
+::: quote
+
+— المتنبي
+:::: section

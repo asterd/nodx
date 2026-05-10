@@ -1,0 +1,38 @@
+# Project archives / previous drafts
+old/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / web tooling
+node_modules/
+dist/
+build/
+coverage/
+.parcel-cache/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Generated outputs
+*.log
+*.tmp
+*.html
+*.pdf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+

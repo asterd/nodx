@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "crates/nodx-core",
+  "crates/nodx-cli",
+]
+resolver = "3"
+

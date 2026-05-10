@@ -1,0 +1,171 @@
+---
+schema: nodx/0.1
+type: document
+id: nodx-enterprise-handbook
+title: NODX Enterprise Handbook
+subtitle: Long-form semantic source document
+language: en
+dir: ltr
+authors: [NODX Working Group, Example Corp]
+keywords: [documents, agents, compliance, rendering]
+vars:
+  company: Example Corp
+  owner: Knowledge Systems
+requires: [rich-tables, math]
+optional: [presentation, package]
+---
+
+# NODX Enterprise Handbook {#handbook}
+
+This long-form document demonstrates a practical NODX source file with semantic
+structure, readable fallbacks, agent-addressable nodes, and mixed rich content.
+It is written for {{vars.company}} by {{vars.owner}}.
+
+:::note {#executive-summary type="info"}
+NODX is used here as an authoritative source format. Renderers may target web,
+terminal, desktop, PDF, DOCX, or compact projections for agents without changing
+the source document.
+:::
+
+::::section {#operating-model}
+## Operating Model {#operating-model-heading}
+
+The operating model separates **source**, *validation*, `canonicalization`, and
+rendering. Agents should mutate stable node IDs such as @[decision-policy] and
+must not rely on fragile text offsets.
+
+:::quote {#principle-quote}
+Readable source is the fallback. Semantic structure is the contract.
+:::
+
+### Review Checklist {#review-checklist}
+
+- [x] Parse the source deterministically
+- [x] Preserve unknown attributes and custom components
+- [ ] Add package-level asset validation
+- [ ] Add signature verification
+- [ ] Publish browser and CLI renderers
+
+### Rollout Phases {#rollout-phases}
+
+1. Publish the reference parser and public corpus
+2. Add independent parser parity checks
+3. Add safe package reading
+4. Add loss-aware converters
+
+:::decision {#decision-policy approved="true"}
+Approved policy nodes require an explicit agent policy override before mutation.
+:::
+::::
+
+::::section {#risk}
+## Risk Register {#risk-heading}
+
+| Risk | Impact | Default Control |
+| --- | --- | --- |
+| Remote asset fetch | data exfiltration | offline by default |
+| Unknown component | lost semantics | render fallback children |
+| Ambiguous agent target | incorrect edit | fail closed |
+| Untrusted SVG | active content | sanitize or fallback |
+
+:::table {#control-table caption="Control ownership"}
+:::row
+:::cell {header="true" scope="col"}
+Control
+:::
+:::cell {header="true" scope="col"}
+Owner
+:::
+:::cell {header="true" scope="col"}
+Evidence
+:::
+:::
+:::row
+:::cell
+Canonical AST hash
+:::
+:::cell
+Platform Engineering
+:::
+:::cell
+Byte-identical output across parsers.
+:::
+:::
+:::row
+:::cell
+Agent mutation policy
+:::
+:::cell
+Knowledge Systems
+:::
+:::cell
+Change records include before and after hashes.
+:::
+:::
+:::
+
+:::math {#risk-score notation="tex" display="block" alt="Risk score equals likelihood times impact"}
+risk = likelihood \times impact
+:::
+::::
+
+::::section {#architecture}
+## Architecture {#architecture-heading}
+
+:::figure {#fig-pipeline}
+:::image {src="assets/pipeline.svg" alt="NODX parser pipeline from bytes to renderers"}
+:::
+:::caption
+Pipeline from UTF-8 source to canonical AST and renderer-specific output.
+:::
+:::
+
+:::code {#pipeline-json lang="json"}
+{
+  "bytes": "UTF-8",
+  "parser": "line-oriented",
+  "ast": "canonical semantic tree",
+  "outputs": ["html", "tui", "ncp"]
+}
+:::
+
+:::agent-review {#agent-review-block fallback="children" sensitivity="internal"}
+The custom component keeps its children readable. A renderer that does not know
+`agent-review` can still display this fallback safely.
+:::
+::::
+
+::::section {#forms-and-records}
+## Read-only Records {#records-heading}
+
+:::form {#release-form title="Release readiness"}
+:::field {name="parserParity" label="Parser parity" value="pass"}
+:::
+:::field {name="publicCorpus" label="Public corpus" value="published"}
+:::
+:::field {name="securityReview" label="Security review" value="pending"}
+:::
+:::
+
+:::note {#agent-change type="warning"}
+Example change record:
+:::
+
+:::code {lang="json"}
+{"schema":"nodx/change/0.1","op":"set-attribute","target":"#release-form","author":"agent:release-reviewer","reason":"Mark readiness evidence","requiresApproval":true}
+:::
+::::
+
+::::section {#appendix}
+## Appendix {#appendix-heading}
+
+Inline coverage includes [external links](https://example.com), spans such as
+[semantic term]{role="term"}, references like @[control-table], variables such
+as {{vars.company}}, inline code `nodx ast`, and inline math $$a^2+b^2=c^2$$.
+
+:::pre {#plain-pre}
+NODX keeps preformatted text readable.
+    Indentation is preserved inside literal blocks.
+:::
+::::
+

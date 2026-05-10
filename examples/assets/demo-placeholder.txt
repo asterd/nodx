@@ -1,0 +1,3 @@
+This placeholder stands in for a package-local video or audio asset.
+Renderers that do not enable media playback should show the NODX fallback.
+

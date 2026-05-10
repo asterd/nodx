@@ -1,0 +1,22 @@
+---
+schema: nodx/0.1
+type: document
+title: Labelled Close
+---
+
+# Labelled Close {#title}
+
+Labelled closers are optional sugar. They produce the same canonical AST as
+plain closers.
+
+::::section {#policy}
+## Policy
+
+:::note {type="warning"}
+Body of the note.
+::: note
+
+:::code {lang="rust"}
+fn main() { println!("ok"); }
+::: code
+:::: section

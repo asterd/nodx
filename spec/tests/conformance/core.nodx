@@ -1,0 +1,20 @@
+---
+schema: nodx/0.1
+type: document
+title: Core Fixture
+vars:
+  company: Example Corp
+---
+
+# Core Fixture {#core}
+
+Paragraph with **strong**, *em*, `code`, [link](https://example.com),
+[span]{role="term"}, {{vars.company}}, and @[core].
+
+- [ ] Draft
+- [x] Reviewed
+
+:::note {#n1 type="info"}
+Nested content.
+:::
+

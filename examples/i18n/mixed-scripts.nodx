@@ -1,0 +1,74 @@
+---
+schema: nodx/0.1
+type: document
+id: mixed-scripts-example
+title: Mixed Scripts and Unicode Coverage
+subtitle: Latin, Cyrillic, Greek, Arabic, Hebrew, Devanagari, CJK, and emoji in one source
+language: en
+dir: ltr
+authors: [NODX Working Group]
+keywords: [unicode, i18n, bidi]
+requires: [rich-tables]
+---
+
+# Mixed Scripts and Unicode Coverage {#title}
+
+This document exercises a wide range of Unicode scripts. NODX stores text as
+UTF-8 and does not normalize identifiers; the AST preserves grapheme clusters,
+combining marks, and ZWJ/ZWNJ sequences exactly as authored.
+
+::::section {#scripts}
+## Scripts Side by Side {#scripts-heading}
+
+| Script | Sample | Notes |
+| --- | --- | --- |
+| Latin | Voix ambiguë d'un cœur qui au zéphyr préfère les jattes de kiwi | French, accented |
+| Cyrillic | Съешь же ещё этих мягких французских булок | Russian pangram |
+| Greek | Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία | Greek pangram |
+| Arabic | نص بالعربية مع أرقام ١٢٣ وأرقام ASCII 123 | RTL inside LTR row |
+| Hebrew | דג סקרן שט בים מאוכזב ולפתע מצא חברה | RTL Hebrew pangram |
+| Devanagari | ऋषियों को सताने वाले दुष्ट राक्षसों के राजा रावण | Hindi pangram |
+| Thai | เป็นมนุษย์สุดประเสริฐเลิศคุณค่า | Thai with combining marks |
+| Hiragana | あいうえおかきくけこ | Japanese hiragana |
+| Hanzi | 中文支持是必须的 | Simplified Chinese |
+| Hangul | 한국어 텍스트 | Korean |
+| Emoji | 🎉 🚀 ✨ 👨‍👩‍👧‍👦 🇮🇹 | Including ZWJ family + flag |
+:::: section
+
+::::section {#bidi-mix}
+## Bidi Embedded Examples {#bidi-mix-heading}
+
+Inline RTL inside LTR paragraph: the value is [٩٨ ريال]{lang="ar" dir="rtl"}
+charged to the customer.
+
+:::quote {lang="he" dir="rtl"}
+זוהי שורת ציטוט בעברית בתוך מסמך אנגלי.
+::: quote
+
+:::quote {lang="ru"}
+Это цитата на русском языке внутри английского документа.
+::: quote
+:::: section
+
+::::section {#combining}
+## Combining Marks and Zero-Width Joiners {#combining-heading}
+
+Decomposed: e + combining acute = é (NFC and NFD must round-trip).
+Polytonic Greek: ἀρχή — breath + acute on alpha.
+Vietnamese: Tiếng Việt với dấu thanh đầy đủ.
+ZWJ emoji: 👨‍🚀 (man + ZWJ + rocket).
+ZWNJ in Persian: می‌خواهم (mi + ZWNJ + xāham).
+
+:::note {type="info"}
+Per spec §6.2 NODX does **not** normalize Unicode. Identifiers and text are
+compared byte-wise after UTF-8 decoding. Authors who need NFC SHOULD apply it
+before authoring.
+::: note
+:::: section
+
+::::section {#numerals}
+## Numeral Systems
+
+ASCII digits 0–9, Arabic-Indic ٠–٩, Eastern Arabic-Indic ۰–۹, Devanagari ०–९,
+Bengali ০–৯. Identical semantics; rendering depends on font selection.
+:::: section

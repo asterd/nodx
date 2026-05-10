@@ -1,0 +1,126 @@
+---
+schema: nodx/0.1
+type: document
+id: pagination-demo
+title: Pagination, Page Layout, and Box Model
+subtitle: Print-ready NODX with @page rules, page breaks, and spacing
+language: en
+dir: ltr
+authors: [NODX Working Group]
+keywords: [pagination, print, layout]
+requires: [rich-tables, style]
+---
+
+:::style
+@page { size: A4 portrait; margin: 22mm 18mm 22mm 18mm; }
+@page :first { margin-top: 32mm; }
+@page :left { margin-left: 26mm; margin-right: 18mm; }
+@page :right { margin-left: 18mm; margin-right: 26mm; }
+
+body { font-family: "Source Serif Pro", Georgia, serif; font-size: 11pt; line-height: 1.55; color: #1f2528; }
+h1, h2, h3 { page-break-after: avoid; font-family: "Source Sans Pro", system-ui, sans-serif; color: #0f172a; }
+h1 { font-size: 22pt; margin-top: 0; margin-bottom: 12pt; border-bottom: 1pt solid #cbd5e1; padding-bottom: 6pt; }
+h2 { font-size: 16pt; margin-top: 18pt; margin-bottom: 8pt; }
+
+aside { border-inline-start: 4pt solid #b45309; background-color: #fff7ed; padding: 8pt 10pt; margin: 10pt 0; border-radius: 4pt; page-break-inside: avoid; }
+
+table { border-collapse: collapse; width: 100%; page-break-inside: avoid; margin: 12pt 0; }
+th, td { border: 0.5pt solid #94a3b8; padding: 4pt 8pt; vertical-align: top; }
+th { background-color: #f1f5f9; font-weight: 600; }
+
+figure { margin: 14pt 0; padding: 10pt; border: 0.5pt solid #cbd5e1; border-radius: 6pt; page-break-inside: avoid; }
+figcaption { margin-top: 6pt; font-size: 9.5pt; color: #64748b; }
+
+.pagebreak { page-break-before: always; border: 0; margin: 0; }
+.cover { text-align: center; padding-top: 60mm; page-break-after: always; }
+.cover h1 { font-size: 36pt; border: 0; margin-bottom: 8pt; }
+.cover .subtitle { font-size: 14pt; color: #475569; }
+::: style
+
+::::section {#cover .cover}
+# Pagination, Page Layout, and Box Model {#cover-title}
+
+[A demonstration of NODX print-ready typography]{.subtitle}
+
+:::pagebreak {#after-cover}
+::: pagebreak
+:::: section
+
+::::section {#page-rules}
+## Page Rules {#page-rules-heading}
+
+The block above declares `@page`, `@page :first`, `@page :left`, and
+`@page :right`. The renderer applies them only when the host generates a paged
+output (PDF, print preview). Screens display the block as ordinary content
+since `@page` is ignored outside paged media.
+
+| Rule | Property | Default | Allowed values |
+| --- | --- | --- | --- |
+| Page size | `size` | A4 portrait | A3, A4, A5, B5, Letter, Legal, Tabloid + `portrait` or `landscape` |
+| Margins | `margin` | 18mm | length values: `mm`, `cm`, `in`, `pt`, `px` |
+| Bleed | `bleed` | 0 | length values |
+| Marks | `marks` | none | `crop`, `cross`, `crop cross` |
+
+:::note {type="info"}
+Margins accept the four-value shorthand (`top right bottom left`) or the
+longhand `margin-top`, `margin-right`, `margin-bottom`, `margin-left`. Logical
+properties `margin-block-start` and `margin-inline-start` are RECOMMENDED for
+i18n.
+::: note
+:::: section
+
+::::section {#box-model}
+## Box Model {#box-model-heading}
+
+NODS exposes a constrained box model. Each block can declare:
+
+- `padding` (and per-side longhand)
+- `border` (with `border-radius`, `border-color`, `border-style`)
+- `margin` (and per-side longhand)
+- `width`, `min-width`, `max-width`, `height`, `min-height`, `max-height`
+- `gap` for grid/flex containers (Style Profile only)
+
+:::figure {#fig-box}
+:::image {src="assets/box-model.svg" alt="NODX box model: content, padding, border, margin"}
+::: image
+:::caption
+NODX inherits the CSS box model with logical-direction synonyms.
+::: caption
+::: figure
+:::: section
+
+::::section {#breaks}
+## Page Breaks and Avoidance {#breaks-heading}
+
+Authors control pagination through:
+
+1. `:::pagebreak` to force a break.
+2. CSS `page-break-before: always` on a class or element.
+3. `page-break-inside: avoid` to keep tables, figures, and callouts together.
+4. `orphans` and `widows` to prevent stranded lines.
+
+:::pagebreak
+::: pagebreak
+
+### Even/Odd Pages {#even-odd}
+
+The cover used `page-break-after: always` so the next section begins on a new
+page. With `@page :left` and `@page :right` rules above, even pages get a
+larger left margin and odd pages get a larger right margin, suitable for
+booklet binding.
+:::: section
+
+::::section {#units}
+## Length Units {#units-heading}
+
+| Category | Units | Notes |
+| --- | --- | --- |
+| Absolute | `pt`, `mm`, `cm`, `in`, `pc`, `px` | `1in = 72pt = 25.4mm = 96px` |
+| Relative | `em`, `rem`, `%`, `ex`, `ch` | Resolve against context |
+| Viewport | `vw`, `vh`, `vmin`, `vmax` | Screen-only, ignored on print |
+
+:::note {type="warning"}
+Mixing absolute and relative units in print SHOULD be avoided. Prefer `pt` and
+`mm` for print rules; reserve `rem`/`em` for fluid screen layouts.
+::: note
+:::: section
