@@ -5,7 +5,7 @@ use nodx_core::{canonical_json, is_packaged_nodx, ncp_json, parse_bytes, render_
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("usage: nodx <ast|html|tui|ncp|diagnostics|inspect> <file.nodx>");
+        eprintln!("usage: nodx <ast|html|tui|ncp|diagnostics|validate|inspect> <file.nodx>");
         process::exit(2);
     }
     let bytes = fs::read(&args[2]).unwrap_or_else(|err| {
@@ -53,6 +53,25 @@ fn main() {
                 println!("{} {}{} {}", d.severity, loc, d.code, d.message);
             }
             fatal_exit_code(&doc)
+        }
+        "validate" => {
+            let doc = parse_or_exit(&bytes);
+            for d in &doc.diagnostics {
+                let loc = match (d.line, d.column) {
+                    (Some(l), Some(c)) => format!("{}:{} ", l, c),
+                    _ => String::new(),
+                };
+                println!("{} {}{} {}", d.severity, loc, d.code, d.message);
+            }
+            if doc
+                .diagnostics
+                .iter()
+                .any(|d| d.severity == "fatal" || d.severity == "error")
+            {
+                2
+            } else {
+                0
+            }
         }
         other => {
             eprintln!("unknown command: {other}");

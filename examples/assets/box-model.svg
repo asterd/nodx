@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" role="img" aria-label="NODX box model">
+  <rect width="640" height="360" fill="#ffffff"/>
+  <rect x="70" y="50" width="500" height="260" fill="#fee2e2" stroke="#b91c1c"/>
+  <rect x="120" y="90" width="400" height="180" fill="#fef3c7" stroke="#d97706"/>
+  <rect x="170" y="130" width="300" height="100" fill="#dcfce7" stroke="#16a34a"/>
+  <rect x="220" y="158" width="200" height="44" fill="#dbeafe" stroke="#2563eb"/>
+  <g fill="#0f172a" font-family="system-ui, sans-serif" font-size="18" text-anchor="middle">
+    <text x="320" y="78">margin</text>
+    <text x="320" y="118">border</text>
+    <text x="320" y="150">padding</text>
+    <text x="320" y="187">content</text>
+  </g>
+</svg>

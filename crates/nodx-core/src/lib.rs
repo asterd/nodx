@@ -36,6 +36,9 @@ pub enum Inline {
     Text(String),
     Strong(Vec<Inline>),
     Em(Vec<Inline>),
+    Mark(Vec<Inline>),
+    Sub(Vec<Inline>),
+    Sup(Vec<Inline>),
     Code(String),
     Link { label: Vec<Inline>, target: String },
     Span { children: Vec<Inline>, attrs: Attrs },
@@ -123,12 +126,14 @@ pub fn parse_str(input: &str) -> Document {
     let mut diagnostics = parser.diagnostics;
     audit_nods(&body, &mut diagnostics);
 
-    Document {
+    let mut doc = Document {
         schema: "nodx/0.1".to_string(),
         meta,
         body,
         diagnostics,
-    }
+    };
+    validate_document(&mut doc);
+    doc
 }
 
 pub fn parse_bytes(input: &[u8]) -> Result<Document, Diagnostic> {
@@ -155,6 +160,21 @@ pub fn is_packaged_nodx(input: &[u8]) -> bool {
 
 fn read_packaged_nodx_entry(input: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     let entries = zip_entries(input)?;
+    if entries.len() > 1024 {
+        return Err(package_diag_code(
+            "NODX-E012",
+            "Package file count limit exceeded.",
+        ));
+    }
+    let total_size = entries
+        .iter()
+        .try_fold(0usize, |acc, entry| checked_add(acc, entry.uncompressed_size))?;
+    if total_size > 256 * 1024 * 1024 {
+        return Err(package_diag_code(
+            "NODX-E012",
+            "Package uncompressed size limit exceeded.",
+        ));
+    }
     let first = entries
         .iter()
         .min_by_key(|entry| entry.local_offset)
@@ -173,7 +193,13 @@ fn read_packaged_nodx_entry(input: &[u8]) -> Result<Vec<u8>, Diagnostic> {
         .ok_or_else(|| package_diag("Package is missing manifest.yaml."))?;
     let manifest_text = String::from_utf8(zip_read_stored(input, manifest)?)
         .map_err(|_| package_diag("Package manifest is not UTF-8."))?;
-    let entry_path = manifest_entry_path(&manifest_text)
+    let manifest_data = parse_package_manifest(&manifest_text);
+    if manifest_data.schema.as_deref() != Some("nodx-package/0.1") {
+        return Err(package_diag("Package manifest has an invalid schema."));
+    }
+    verify_manifest_entries(input, &entries, &manifest_data.entries)?;
+    let entry_path = manifest_data
+        .entry
         .ok_or_else(|| package_diag("Package manifest is missing entry."))?;
     let doc_entry = entries
         .iter()
@@ -202,6 +228,7 @@ fn zip_entries(input: &[u8]) -> Result<Vec<ZipEntry>, Diagnostic> {
         if read_u32(input, pos)? != 0x0201_4b50 {
             return Err(package_diag("Invalid ZIP central directory."));
         }
+        let flags = read_u16(input, pos + 8)?;
         let compression = read_u16(input, pos + 10)?;
         let compressed_size = read_u32(input, pos + 20)? as usize;
         let uncompressed_size = read_u32(input, pos + 24)? as usize;
@@ -218,6 +245,14 @@ fn zip_entries(input: &[u8]) -> Result<Vec<ZipEntry>, Diagnostic> {
             .map_err(|_| package_diag("ZIP entry name is not UTF-8."))?
             .to_string();
         validate_package_path(&name)?;
+        if flags & 1 != 0 {
+            return Err(package_diag("Encrypted ZIP entries are not supported."));
+        }
+        if compression != 0 {
+            return Err(package_diag(
+                "This minimal reference reader supports only stored ZIP entries.",
+            ));
+        }
         if !seen_names.insert(name.clone()) {
             return Err(package_diag("Duplicate package entry path."));
         }
@@ -267,13 +302,85 @@ fn find_eocd(input: &[u8]) -> Option<usize> {
         .find(|&pos| input.get(pos..pos + 4) == Some(b"PK\x05\x06"))
 }
 
-fn manifest_entry_path(manifest: &str) -> Option<String> {
-    manifest.lines().find_map(|line| {
+struct PackageManifest {
+    schema: Option<String>,
+    entry: Option<String>,
+    entries: Vec<PackageManifestEntry>,
+}
+
+struct PackageManifestEntry {
+    path: String,
+    size: Option<usize>,
+    sha256: Option<String>,
+}
+
+fn parse_package_manifest(manifest: &str) -> PackageManifest {
+    let mut out = PackageManifest {
+        schema: None,
+        entry: None,
+        entries: Vec::new(),
+    };
+    let mut current: Option<PackageManifestEntry> = None;
+    for line in manifest.lines() {
         let trimmed = line.trim();
-        trimmed
-            .strip_prefix("entry:")
-            .map(|value| value.trim().trim_matches('"').to_string())
-    })
+        if let Some(value) = trimmed.strip_prefix("schema:") {
+            out.schema = Some(unquote(value.trim()));
+        } else if let Some(value) = trimmed.strip_prefix("entry:") {
+            out.entry = Some(unquote(value.trim()));
+        } else if let Some(value) = trimmed.strip_prefix("- path:") {
+            if let Some(entry) = current.take() {
+                out.entries.push(entry);
+            }
+            current = Some(PackageManifestEntry {
+                path: unquote(value.trim()),
+                size: None,
+                sha256: None,
+            });
+        } else if let Some(value) = trimmed.strip_prefix("size:") {
+            if let Some(entry) = current.as_mut() {
+                entry.size = value.trim().parse::<usize>().ok();
+            }
+        } else if let Some(value) = trimmed.strip_prefix("sha256:") {
+            if let Some(entry) = current.as_mut() {
+                entry.sha256 = Some(unquote(value.trim()));
+            }
+        }
+    }
+    if let Some(entry) = current {
+        out.entries.push(entry);
+    }
+    out
+}
+
+fn verify_manifest_entries(
+    input: &[u8],
+    entries: &[ZipEntry],
+    manifest_entries: &[PackageManifestEntry],
+) -> Result<(), Diagnostic> {
+    for manifest_entry in manifest_entries {
+        validate_package_path(&manifest_entry.path)?;
+        let Some(zip_entry) = entries.iter().find(|entry| entry.name == manifest_entry.path) else {
+            return Err(package_diag("Manifest lists a missing package entry."));
+        };
+        let data = zip_read_stored(input, zip_entry)?;
+        if let Some(size) = manifest_entry.size {
+            if size != data.len() {
+                return Err(package_diag_code(
+                    "NODX-E021",
+                    "Package manifest size does not match entry bytes.",
+                ));
+            }
+        }
+        if let Some(expected) = &manifest_entry.sha256 {
+            if expected != &sha256_base64url(&data) {
+                return Err(package_diag_code(
+                    "NODX-E021",
+                    "Package digest mismatch.",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_package_path(path: &str) -> Result<(), Diagnostic> {
@@ -284,8 +391,14 @@ fn validate_package_path(path: &str) -> Result<(), Diagnostic> {
             .split('/')
             .any(|part| part.is_empty() || part == "." || part == "..")
     {
-        Err(package_diag("Unsafe package path."))
+        Err(package_diag_code("NODX-E010", "Unsafe package path."))
     } else {
+        if path.len() > 512 || path.split('/').count() > 8 {
+            return Err(package_diag_code(
+                "NODX-E012",
+                "Package path limit exceeded.",
+            ));
+        }
         Ok(())
     }
 }
@@ -310,13 +423,139 @@ fn checked_add(a: usize, b: usize) -> Result<usize, Diagnostic> {
 }
 
 fn package_diag(message: &str) -> Diagnostic {
+    package_diag_code("NODX-E012", message)
+}
+
+fn package_diag_code(code: &str, message: &str) -> Diagnostic {
     Diagnostic {
-        code: "NODX-E022".to_string(),
+        code: code.to_string(),
         severity: "fatal".to_string(),
         message: message.to_string(),
         line: None,
         column: None,
         target: None,
+    }
+}
+
+fn sha256_base64url(input: &[u8]) -> String {
+    let digest = sha256(input);
+    let mut out = String::from("sha256-");
+    base64url_no_pad(&digest, &mut out);
+    out
+}
+
+fn sha256(input: &[u8]) -> [u8; 32] {
+    const H0: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let bit_len = (input.len() as u64) * 8;
+    let mut msg = input.to_vec();
+    msg.push(0x80);
+    while (msg.len() % 64) != 56 {
+        msg.push(0);
+    }
+    msg.extend_from_slice(&bit_len.to_be_bytes());
+    let mut h = H0;
+    for chunk in msg.chunks_exact(64) {
+        let mut w = [0u32; 64];
+        for (i, word) in w.iter_mut().take(16).enumerate() {
+            let start = i * 4;
+            *word = u32::from_be_bytes([
+                chunk[start],
+                chunk[start + 1],
+                chunk[start + 2],
+                chunk[start + 3],
+            ]);
+        }
+        for i in 16..64 {
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[i - 7])
+                .wrapping_add(s1);
+        }
+        let mut a = h[0];
+        let mut b = h[1];
+        let mut c = h[2];
+        let mut d = h[3];
+        let mut e = h[4];
+        let mut f = h[5];
+        let mut g = h[6];
+        let mut hh = h[7];
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let temp1 = hh
+                .wrapping_add(s1)
+                .wrapping_add(ch)
+                .wrapping_add(K[i])
+                .wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let temp2 = s0.wrapping_add(maj);
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(temp1);
+            d = c;
+            c = b;
+            b = a;
+            a = temp1.wrapping_add(temp2);
+        }
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+        h[5] = h[5].wrapping_add(f);
+        h[6] = h[6].wrapping_add(g);
+        h[7] = h[7].wrapping_add(hh);
+    }
+    let mut out = [0u8; 32];
+    for (i, word) in h.iter().enumerate() {
+        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+    }
+    out
+}
+
+fn base64url_no_pad(input: &[u8], out: &mut String) {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut i = 0;
+    while i + 3 <= input.len() {
+        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | input[i + 2] as u32;
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        out.push(TABLE[((n >> 6) & 63) as usize] as char);
+        out.push(TABLE[(n & 63) as usize] as char);
+        i += 3;
+    }
+    match input.len() - i {
+        1 => {
+            let n = (input[i] as u32) << 16;
+            out.push(TABLE[((n >> 18) & 63) as usize] as char);
+            out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        }
+        2 => {
+            let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8);
+            out.push(TABLE[((n >> 18) & 63) as usize] as char);
+            out.push(TABLE[((n >> 12) & 63) as usize] as char);
+            out.push(TABLE[((n >> 6) & 63) as usize] as char);
+        }
+        _ => {}
     }
 }
 
@@ -621,6 +860,30 @@ fn check_yaml_safety(line: &str, line_no: usize, diagnostics: &mut Vec<Diagnosti
             1,
         ));
     }
+    if trimmed.contains(": &")
+        || trimmed.contains(": *")
+        || trimmed.contains(": !!")
+        || trimmed.contains("<<:")
+        || trimmed.eq("...")
+    {
+        diagnostics.push(diag(
+            "NODX-E019",
+            "fatal",
+            "Forbidden YAML safe-subset construct.",
+            line_no,
+            1,
+        ));
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains(".nan") || lower.contains(".inf") || lower.contains("infinity") {
+        diagnostics.push(diag(
+            "NODX-E019",
+            "fatal",
+            "Forbidden YAML non-finite number.",
+            line_no,
+            1,
+        ));
+    }
 }
 
 fn parse_block_mapping(
@@ -843,6 +1106,30 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                 out.push(Inline::Text(rest[..end + 3].to_string()));
             }
             i += end + 3;
+        } else if rest.starts_with("==") {
+            if let Some(end) = rest[2..].find("==") {
+                out.push(Inline::Mark(parse_inlines(&rest[2..end + 2])));
+                i += end + 4;
+            } else {
+                push_text(&mut out, "=");
+                i += 1;
+            }
+        } else if rest.starts_with('~') {
+            if let Some(end) = rest[1..].find('~') {
+                out.push(Inline::Sub(parse_inlines(&rest[1..end + 1])));
+                i += end + 2;
+            } else {
+                push_text(&mut out, "~");
+                i += 1;
+            }
+        } else if rest.starts_with('^') {
+            if let Some(end) = rest[1..].find('^') {
+                out.push(Inline::Sup(parse_inlines(&rest[1..end + 1])));
+                i += end + 2;
+            } else {
+                push_text(&mut out, "^");
+                i += 1;
+            }
         } else if rest.starts_with("**") {
             if let Some(end) = rest[2..].find("**") {
                 out.push(Inline::Strong(parse_inlines(&rest[2..end + 2])));
@@ -1087,6 +1374,299 @@ fn audit_nods(nodes: &[Node], diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
+fn validate_document(doc: &mut Document) {
+    validate_meta(doc);
+    let declared_components = component_names(doc);
+    let declared_vars = declared_vars(doc);
+    let mut ids = BTreeSet::new();
+    let mut refs = Vec::new();
+    let mut previous_heading = 0usize;
+    validate_nodes(
+        &doc.body,
+        &mut ids,
+        &mut refs,
+        &declared_components,
+        &declared_vars,
+        &mut previous_heading,
+        &mut doc.diagnostics,
+    );
+    for target in refs {
+        if !ids.contains(&target) {
+            doc.diagnostics.push(Diagnostic {
+                code: "NODX-E007".to_string(),
+                severity: "error".to_string(),
+                message: format!("Unresolved reference `#{}`.", target),
+                line: None,
+                column: None,
+                target: Some(format!("#{target}")),
+            });
+        }
+    }
+}
+
+fn validate_meta(doc: &mut Document) {
+    match doc.meta.get("schema") {
+        Some(Value::String(schema)) if schema == "nodx/0.1" => {}
+        _ => doc.diagnostics.push(Diagnostic {
+            code: "NODX-E004".to_string(),
+            severity: "error".to_string(),
+            message: "Missing or invalid schema for NODX 0.1.".to_string(),
+            line: None,
+            column: None,
+            target: None,
+        }),
+    }
+    if let Some(Value::List(required)) = doc.meta.get("requires") {
+        for item in required {
+            if let Value::String(feature) = item {
+                if !supported_feature(feature) {
+                    doc.diagnostics.push(Diagnostic {
+                        code: "NODX-E024".to_string(),
+                        severity: "error".to_string(),
+                        message: format!("Required feature `{}` is unsupported.", feature),
+                        line: None,
+                        column: None,
+                        target: None,
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn supported_feature(feature: &str) -> bool {
+    matches!(
+        feature,
+        "rich-tables" | "math" | "media" | "custom-components" | "style"
+    )
+}
+
+fn component_names(doc: &Document) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    if let Some(Value::List(items)) = doc.meta.get("components") {
+        for item in items {
+            if let Value::Map(map) = item {
+                if let Some(Value::String(name)) = map.get("name") {
+                    out.insert(name.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+fn declared_vars(doc: &Document) -> BTreeSet<String> {
+    match doc.meta.get("vars") {
+        Some(Value::Map(vars)) => vars.keys().cloned().collect(),
+        _ => BTreeSet::new(),
+    }
+}
+
+fn validate_nodes(
+    nodes: &[Node],
+    ids: &mut BTreeSet<String>,
+    refs: &mut Vec<String>,
+    components: &BTreeSet<String>,
+    vars: &BTreeSet<String>,
+    previous_heading: &mut usize,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for node in nodes {
+        if let Some(id) = &node.id {
+            if !valid_name(id, true) || id.len() > 256 {
+                diagnostics.push(validation_diag("NODX-E004", "error", "Invalid node id.", id));
+            }
+            if !ids.insert(id.clone()) {
+                diagnostics.push(validation_diag("NODX-E006", "error", "Duplicate node id.", id));
+            }
+        }
+        validate_common_attrs(node, diagnostics);
+        if node.node_type.contains('-')
+            && !is_standard_node(&node.node_type)
+            && !components.contains(&node.node_type)
+            && !node.attrs.contains_key("fallback")
+        {
+            diagnostics.push(validation_diag(
+                "NODX-E014",
+                "warning",
+                "Custom component is not declared and has no explicit fallback.",
+                &node.node_type,
+            ));
+        }
+        match node.node_type.as_str() {
+            "heading" => validate_heading(node, previous_heading, diagnostics),
+            "image" => validate_image(node, diagnostics),
+            "media" | "embed" | "include" => validate_asset_node(node, diagnostics),
+            "table" => validate_table(node, diagnostics),
+            _ => {}
+        }
+        collect_inline_refs(&node.inlines, refs, vars, diagnostics);
+        validate_nodes(
+            &node.children,
+            ids,
+            refs,
+            components,
+            vars,
+            previous_heading,
+            diagnostics,
+        );
+    }
+}
+
+fn validate_common_attrs(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if let Some(dir) = node.attrs.get("dir") {
+        if !matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
+            diagnostics.push(validation_diag("NODX-E004", "error", "Invalid dir attribute.", dir));
+        }
+    }
+}
+
+fn is_standard_node(node_type: &str) -> bool {
+    matches!(node_type, "citation-entry" | "pagebreak" | "speaker-notes")
+}
+
+fn validate_heading(node: &Node, previous_heading: &mut usize, diagnostics: &mut Vec<Diagnostic>) {
+    let level = node
+        .attrs
+        .get("level")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1);
+    if !(1..=6).contains(&level) {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Heading level must be 1 through 6.",
+            &level.to_string(),
+        ));
+    }
+    if *previous_heading > 0 && level > *previous_heading + 1 {
+        diagnostics.push(validation_diag(
+            "NODX-E022",
+            "warning",
+            "Heading level jumps over an intermediate level.",
+            &level.to_string(),
+        ));
+    }
+    *previous_heading = level;
+}
+
+fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    let decorative = node.attrs.get("decorative").map(String::as_str) == Some("true");
+    let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
+    if !decorative && alt.trim().is_empty() {
+        diagnostics.push(validation_diag(
+            "NODX-E009",
+            "error",
+            "Informative image requires non-empty alt text.",
+            node.id.as_deref().unwrap_or("image"),
+        ));
+    }
+    validate_asset_node(node, diagnostics);
+}
+
+fn validate_asset_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if let Some(src) = node.attrs.get("src") {
+        if !is_safe_asset_ref(src) {
+            diagnostics.push(validation_diag(
+                "NODX-E010",
+                "error",
+                "Unsafe asset path.",
+                src,
+            ));
+        }
+    }
+}
+
+fn validate_table(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    let mut width = None;
+    for row in &node.children {
+        if row.node_type != "row" {
+            continue;
+        }
+        let cells = row
+            .children
+            .iter()
+            .filter(|child| child.node_type == "cell")
+            .count();
+        match width {
+            Some(expected) if expected != cells => diagnostics.push(validation_diag(
+                "NODX-E025",
+                "error",
+                "Table rows must have the same number of cells.",
+                node.id.as_deref().unwrap_or("table"),
+            )),
+            None => width = Some(cells),
+            _ => {}
+        }
+    }
+}
+
+fn collect_inline_refs(
+    inlines: &[Inline],
+    refs: &mut Vec<String>,
+    vars: &BTreeSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for item in inlines {
+        match item {
+            Inline::Strong(children)
+            | Inline::Em(children)
+            | Inline::Mark(children)
+            | Inline::Sub(children)
+            | Inline::Sup(children) => collect_inline_refs(children, refs, vars, diagnostics),
+            Inline::Link { label, target } => {
+                if safe_link_url(target).is_none() {
+                    diagnostics.push(validation_diag(
+                        "NODX-E020",
+                        "error",
+                        "Unsafe URL or scheme.",
+                        target,
+                    ));
+                }
+                collect_inline_refs(label, refs, vars, diagnostics);
+            }
+            Inline::Span { children, attrs } => {
+                if let Some(dir) = &attrs.attrs.get("dir") {
+                    if !matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
+                        diagnostics.push(validation_diag(
+                            "NODX-E004",
+                            "error",
+                            "Invalid inline dir attribute.",
+                            dir,
+                        ));
+                    }
+                }
+                collect_inline_refs(children, refs, vars, diagnostics);
+            }
+            Inline::Var { namespace, name } => {
+                if namespace == "vars" && !vars.contains(name) {
+                    diagnostics.push(validation_diag(
+                        "NODX-E013",
+                        "warning",
+                        "Variable referenced but not declared.",
+                        name,
+                    ));
+                }
+            }
+            Inline::Ref { target } | Inline::FootnoteRef { target } | Inline::CitationRef { target } => {
+                refs.push(target.clone());
+            }
+            Inline::Text(_) | Inline::Code(_) | Inline::Mention { .. } | Inline::MathInline { .. } => {}
+        }
+    }
+}
+
+fn validation_diag(code: &str, severity: &str, message: &str, target: &str) -> Diagnostic {
+    Diagnostic {
+        code: code.to_string(),
+        severity: severity.to_string(),
+        message: message.to_string(),
+        line: None,
+        column: None,
+        target: Some(target.to_string()),
+    }
+}
+
 fn first_heading_text(nodes: &[Node]) -> Option<String> {
     for node in nodes {
         if node.node_type == "heading" {
@@ -1175,6 +1755,9 @@ fn write_inlines(out: &mut String, inlines: &[Inline]) {
             }
             Inline::Strong(children) => inline_children(out, "strong", children),
             Inline::Em(children) => inline_children(out, "em", children),
+            Inline::Mark(children) => inline_children(out, "mark", children),
+            Inline::Sub(children) => inline_children(out, "sub", children),
+            Inline::Sup(children) => inline_children(out, "sup", children),
             Inline::Code(text) => {
                 out.push_str("{\"text\":");
                 write_json_string(out, text);
@@ -1607,10 +2190,58 @@ fn render_inlines(out: &mut String, inlines: &[Inline]) {
                     out.push_str("</a>");
                 }
             },
-            Inline::Span { children, .. } => {
-                out.push_str("<span>");
+            Inline::Span { children, attrs } => {
+                out.push_str("<span");
+                if !attrs.classes.is_empty() {
+                    out.push_str(" class=\"");
+                    for (i, class) in attrs.classes.iter().enumerate() {
+                        if i > 0 {
+                            out.push(' ');
+                        }
+                        escape_attr(out, class);
+                    }
+                    out.push('"');
+                }
+                if let Some(id) = &attrs.id {
+                    out.push_str(" id=\"");
+                    escape_attr(out, id);
+                    out.push('"');
+                }
+                if let Some(lang) = attrs.attrs.get("lang") {
+                    out.push_str(" lang=\"");
+                    escape_attr(out, lang);
+                    out.push('"');
+                }
+                if let Some(dir) = attrs.attrs.get("dir") {
+                    if matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
+                        out.push_str(" dir=\"");
+                        escape_attr(out, dir);
+                        out.push('"');
+                    }
+                }
+                if let Some(title) = attrs.attrs.get("title") {
+                    out.push_str(" title=\"");
+                    escape_attr(out, title);
+                    out.push('"');
+                }
+                out.push('>');
                 render_inlines(out, children);
                 out.push_str("</span>");
+            }
+            Inline::Mark(children) => {
+                out.push_str("<mark>");
+                render_inlines(out, children);
+                out.push_str("</mark>");
+            }
+            Inline::Sub(children) => {
+                out.push_str("<sub>");
+                render_inlines(out, children);
+                out.push_str("</sub>");
+            }
+            Inline::Sup(children) => {
+                out.push_str("<sup>");
+                render_inlines(out, children);
+                out.push_str("</sup>");
             }
             Inline::Var { namespace, name } => {
                 out.push_str("<var>");
@@ -1678,12 +2309,30 @@ pub fn safe_image_url(raw: &str) -> Option<String> {
 }
 
 fn is_relative_asset(raw: &str) -> bool {
+    is_safe_asset_ref(raw)
+}
+
+fn is_safe_asset_ref(raw: &str) -> bool {
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.starts_with('/') || trimmed.starts_with('#') {
+    if trimmed.is_empty()
+        || trimmed.starts_with('/')
+        || trimmed.contains('\\')
+        || trimmed
+            .chars()
+            .any(|c| (c as u32) < 0x20 || c == '\u{007f}')
+    {
         return false;
     }
+    if trimmed.starts_with('#') {
+        return true;
+    }
     let scheme_end = trimmed.find(|c: char| !is_scheme_char(c));
-    !matches!(scheme_end, Some(i) if i > 0 && trimmed[i..].starts_with(':'))
+    if matches!(scheme_end, Some(i) if i > 0 && trimmed[i..].starts_with(':')) {
+        return false;
+    }
+    trimmed
+        .split('/')
+        .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 fn classify_url(raw: &str, schemes: &[&str], data_prefixes: &[&str]) -> Option<String> {
@@ -2094,7 +2743,11 @@ fn plain_inlines(inlines: &[Inline]) -> String {
     for item in inlines {
         match item {
             Inline::Text(s) | Inline::Code(s) => out.push_str(s),
-            Inline::Strong(c) | Inline::Em(c) => out.push_str(&plain_inlines(c)),
+            Inline::Strong(c)
+            | Inline::Em(c)
+            | Inline::Mark(c)
+            | Inline::Sub(c)
+            | Inline::Sup(c) => out.push_str(&plain_inlines(c)),
             Inline::Link { label, target } => {
                 out.push_str(&plain_inlines(label));
                 out.push_str(" <");
@@ -2116,50 +2769,99 @@ fn plain_inlines(inlines: &[Inline]) -> String {
 }
 
 pub fn ncp_json(doc: &Document) -> String {
-    let mut out = String::from("{\"chunks\":[{\"id\":\"chunk-1\",\"nodes\":[");
+    let canonical = canonical_json(doc);
     let ids = collect_node_ids(&doc.body);
+    let chunk_hash = sha256_base64url(ids.join("\n").as_bytes());
+    let mut out = String::from("{\"chunks\":[{\"id\":\"chunk-1\",\"nodes\":[");
     for (i, id) in ids.iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
         write_json_string(&mut out, id);
     }
-    out.push_str("]}],\"loss\":[],\"mode\":\"semantic\",\"nodes\":");
-    write_ncp_nodes(&mut out, &doc.body);
-    out.push_str(",\"schema\":\"nodx-ncp/0.1\"}");
+    out.push_str("],\"sha256\":");
+    write_json_string(&mut out, &chunk_hash);
+    out.push_str("}],\"loss\":[],\"mode\":\"semantic\",\"nodes\":");
+    write_ncp_nodes(&mut out, &doc.body, "");
+    out.push_str(",\"schema\":\"nodx-ncp/0.1\",\"sourceHash\":");
+    write_json_string(&mut out, &sha256_base64url(canonical.as_bytes()));
+    out.push('}');
     out
 }
 
 fn collect_node_ids(nodes: &[Node]) -> Vec<String> {
     let mut out = Vec::new();
-    for (i, node) in nodes.iter().enumerate() {
-        out.push(node.id.clone().unwrap_or_else(|| format!("n{}", i + 1)));
-    }
+    collect_node_ids_at(nodes, "", &mut out);
     out
 }
 
-fn write_ncp_nodes(out: &mut String, nodes: &[Node]) {
+fn collect_node_ids_at(nodes: &[Node], prefix: &str, out: &mut Vec<String>) {
+    for (i, node) in nodes.iter().enumerate() {
+        let path = if prefix.is_empty() {
+            i.to_string()
+        } else {
+            format!("{}.{}", prefix, i)
+        };
+        out.push(node.id.clone().unwrap_or_else(|| format!("path:{path}")));
+        collect_node_ids_at(&node.children, &path, out);
+    }
+}
+
+fn write_ncp_nodes(out: &mut String, nodes: &[Node], prefix: &str) {
     out.push('[');
     for (i, node) in nodes.iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
-        out.push('[');
-        write_json_string(out, &node.node_type);
-        out.push(',');
-        write_json_string(out, node.id.as_deref().unwrap_or(""));
-        out.push(',');
-        write_str_map(out, &node.attrs);
-        out.push(',');
-        write_json_string(
-            out,
-            node.text
-                .as_deref()
-                .unwrap_or(&plain_inlines(&node.inlines)),
-        );
-        out.push(']');
+        let path = if prefix.is_empty() {
+            i.to_string()
+        } else {
+            format!("{}.{}", prefix, i)
+        };
+        write_ncp_node(out, node, &path);
     }
     out.push(']');
+}
+
+fn write_ncp_node(out: &mut String, node: &Node, path: &str) {
+    out.push_str("{\"attrs\":");
+    write_str_map(out, &node.attrs);
+    out.push_str(",\"children\":");
+    write_ncp_nodes(out, &node.children, path);
+    out.push_str(",\"id\":");
+    write_json_string(out, node.id.as_deref().unwrap_or(""));
+    out.push_str(",\"path\":");
+    write_json_string(out, path);
+    out.push_str(",\"sha256\":");
+    write_json_string(out, &sha256_base64url(ncp_node_hash_input(node).as_bytes()));
+    out.push_str(",\"text\":");
+    let text = node
+        .text
+        .clone()
+        .unwrap_or_else(|| plain_inlines(&node.inlines));
+    write_json_string(out, &text);
+    out.push_str(",\"type\":");
+    write_json_string(out, &node.node_type);
+    out.push('}');
+}
+
+fn ncp_node_hash_input(node: &Node) -> String {
+    let mut out = String::new();
+    out.push_str(&node.node_type);
+    out.push('\n');
+    if let Some(id) = &node.id {
+        out.push_str(id);
+    }
+    out.push('\n');
+    write_str_map(&mut out, &node.attrs);
+    out.push('\n');
+    out.push_str(node.text.as_deref().unwrap_or(""));
+    out.push_str(&plain_inlines(&node.inlines));
+    for child in &node.children {
+        out.push('\n');
+        out.push_str(&ncp_node_hash_input(child));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -2325,6 +3027,53 @@ mod tests {
         let bytes = build_zip_with_duplicate_path();
         let err = parse_bytes(&bytes).expect_err("should reject duplicate ZIP paths");
         assert!(err.message.contains("Duplicate"));
+    }
+
+    #[test]
+    fn validator_reports_core_semantic_issues() {
+        let doc = parse_str(
+            "# A {#x}\n\n## B {#x}\n\n@[missing]\n\n:::image {src=\"../secret.png\"}\n:::\n\n| A | B |\n| - | - |\n| 1 |\n",
+        );
+        let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
+        assert!(codes.contains(&"NODX-E006"));
+        assert!(codes.contains(&"NODX-E007"));
+        assert!(codes.contains(&"NODX-E009"));
+        assert!(codes.contains(&"NODX-E010"));
+        assert!(codes.contains(&"NODX-E025"));
+    }
+
+    #[test]
+    fn inline_i18n_attrs_render_to_html() {
+        let doc = parse_str("[٩٨ ريال]{lang=\"ar\" dir=\"rtl\" title=\"price\"}\n");
+        let html = render_html(&doc);
+        assert!(html.contains("<span lang=\"ar\" dir=\"rtl\" title=\"price\">"));
+    }
+
+    #[test]
+    fn parses_mark_sub_and_sup() {
+        let doc = parse_str("==mark== ~sub~ ^sup^\n");
+        let json = canonical_json(&doc);
+        assert!(json.contains("\"type\":\"mark\""));
+        assert!(json.contains("\"type\":\"sub\""));
+        assert!(json.contains("\"type\":\"sup\""));
+    }
+
+    #[test]
+    fn ncp_is_recursive_and_hashes_source() {
+        let doc = parse_str(":::section {#s}\n# Title {#t}\n:::\n");
+        let ncp = ncp_json(&doc);
+        assert!(ncp.contains("\"sourceHash\":\"sha256-"));
+        assert!(ncp.contains("\"sha256\":\"sha256-"));
+        assert!(ncp.contains("\"path\":\"0.0\""));
+        assert!(ncp.contains("\"id\":\"t\""));
+    }
+
+    #[test]
+    fn sha256_matches_known_vector() {
+        assert_eq!(
+            sha256_base64url(b"abc"),
+            "sha256-ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0"
+        );
     }
 
     fn build_zip_with_duplicate_path() -> Vec<u8> {

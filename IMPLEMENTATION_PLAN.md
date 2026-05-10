@@ -12,7 +12,6 @@
 - `crates/nodx-core`: Rust reference parser, canonical AST serializer, HTML renderer, TUI renderer, and NCP projection.
 - `crates/nodx-cli`: command line entrypoint: `ast`, `html`, `tui`, `ncp`, `diagnostics`.
 - `packages/nodx-js`: independent JavaScript parser and canonical serializer.
-- `apps/web`: browser renderer that parses NODX in JS and renders with DOM APIs.
 - `apps/desktop`: standard-library local browser viewer backed by the Rust CLI.
 - `scripts/build_package.py`: deterministic builder for a Packaged `.nodx` example.
 - `spec/tests/conformance`: public fixture corpus.
@@ -28,13 +27,14 @@ Implemented now:
 - Attribute blocks with IDs, classes, and quoted named attributes.
 - Inline text, strong, emphasis, code spans, links, spans, refs, variables, inline math.
 - Deterministic canonical JSON with sorted object keys.
-- Safe HTML escaping and DOM-based web rendering.
-- NCP semantic projection skeleton for LLM/agent context.
-- Packaged `.nodx` sniffing and a minimal stored-ZIP package reader for generated examples.
+- Focused semantic validation for common Core/Rich correctness and safety issues.
+- Safe HTML escaping and context-aware URL/asset checks.
+- Recursive NCP semantic projection with deterministic SHA-256 hashes for LLM/agent context.
+- Packaged `.nodx` sniffing and a minimal stored-ZIP package reader with manifest digest verification for generated examples.
 
 Deferred deliberately:
 
-- Compressed ZIP entries, signature verification, full NODS cascade, PDF/DOCX/PPTX exporters, lossless CST, full YAML 1.2 parser, complete URL policy resolver.
+- Compressed ZIP entries, signature verification, full NODS cascade, PDF/DOCX/PPTX exporters, lossless CST, full YAML 1.2 parser, complete URL policy resolver, full agent mutation SDK.
 - These are larger security-sensitive surfaces and should be added only with focused tests and threat models.
 
 ## Verification
@@ -50,18 +50,11 @@ Manual rendering:
 
 ```sh
 target/debug/nodx tui examples/agent-workflow.nodx
+target/debug/nodx validate examples/extended-showcase.nodx
 target/debug/nodx html examples/rich-demo.nodx > /tmp/rich-demo.html
 target/debug/nodx ncp examples/agent-workflow.nodx
 python3 apps/desktop/nodx_viewer.py examples/agent-workflow.nodx
 ```
-
-Web renderer:
-
-```sh
-python3 -m http.server 8000
-```
-
-Open `http://localhost:8000/apps/web/`.
 
 ## Performance Notes
 

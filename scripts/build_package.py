@@ -127,10 +127,18 @@ def build(out_path: Path) -> None:
     manifest = ("\n".join(manifest_lines) + "\n").encode()
 
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_STORED) as zf:
-        zf.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
-        zf.writestr("manifest.yaml", manifest, compress_type=zipfile.ZIP_STORED)
+        write_stored(zf, "mimetype", MIMETYPE)
+        write_stored(zf, "manifest.yaml", manifest)
         for path, data in entries:
-            zf.writestr(path, data, compress_type=zipfile.ZIP_STORED)
+            write_stored(zf, path, data)
+
+
+def write_stored(zf: zipfile.ZipFile, path: str, data: bytes) -> None:
+    info = zipfile.ZipInfo(path)
+    info.date_time = (2026, 5, 10, 0, 0, 0)
+    info.compress_type = zipfile.ZIP_STORED
+    info.external_attr = 0o100644 << 16
+    zf.writestr(info, data)
 
 
 def main() -> int:

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" role="img" aria-label="NODX parser pipeline">
+  <rect width="640" height="180" fill="#f8fafc"/>
+  <g fill="#0f172a" font-family="system-ui, sans-serif" font-size="18" text-anchor="middle">
+    <rect x="28" y="62" width="120" height="56" rx="6" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="88" y="96">Bytes</text>
+    <rect x="190" y="62" width="120" height="56" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="250" y="96">Parser</text>
+    <rect x="352" y="62" width="120" height="56" rx="6" fill="#fef3c7" stroke="#d97706"/>
+    <text x="412" y="96">AST</text>
+    <rect x="514" y="62" width="98" height="56" rx="6" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="563" y="96">Render</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M148 90h42"/>
+    <path d="M310 90h42"/>
+    <path d="M472 90h42"/>
+  </g>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0l8 4-8 4z" fill="#334155"/>
+    </marker>
+  </defs>
+</svg>

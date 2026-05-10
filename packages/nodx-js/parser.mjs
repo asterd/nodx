@@ -343,6 +343,18 @@ export function parseInlines(input) {
       const [kind, target] = rest.slice(2, end).split(":");
       out.push(target ? { kind, target, type: "mention" } : { text: rest.slice(0, end + 1), type: "text" });
       i += end + 1;
+    } else if (rest.startsWith("==") && rest.slice(2).includes("==")) {
+      const end = rest.slice(2).indexOf("==") + 2;
+      out.push({ children: parseInlines(rest.slice(2, end)), type: "mark" });
+      i += end + 2;
+    } else if (rest.startsWith("~") && rest.slice(1).includes("~")) {
+      const end = rest.slice(1).indexOf("~") + 1;
+      out.push({ children: parseInlines(rest.slice(1, end)), type: "sub" });
+      i += end + 1;
+    } else if (rest.startsWith("^") && rest.slice(1).includes("^")) {
+      const end = rest.slice(1).indexOf("^") + 1;
+      out.push({ children: parseInlines(rest.slice(1, end)), type: "sup" });
+      i += end + 1;
     } else if (rest.startsWith("**") && rest.slice(2).includes("**")) {
       const end = rest.slice(2).indexOf("**") + 2;
       out.push({ children: parseInlines(rest.slice(2, end)), type: "strong" });

@@ -1,0 +1,6 @@
+---
+schema: nodx/0.1
+title: Extended inline syntax
+---
+
+Inline ==mark==, ~subscript~, ^superscript^, and [RTL span]{lang="ar" dir="rtl"}.

@@ -13,12 +13,10 @@ NODX uses `.nodx` as a hybrid extension: a file can be UTF-8 Text NODX or a ZIP 
 - Independent JavaScript parser: `packages/nodx-js`
 - Public conformance fixtures: `spec/tests/conformance`
 - Example documents, including long-form, extended Rich/Style/Media/Component samples, three i18n examples (Arabic/RTL, Chinese/CJK, mixed Unicode scripts), pagination & print, and end-to-end typography: `examples`
-- Web renderer with live source, render, AST, diagnostics, and sample loader: `apps/web/index.html`
-- **Web playground** with NODX + NODS live editors and stylable custom-component previews: `apps/web/playground.html`
 - Desktop-style local viewer: `apps/desktop/nodx_viewer.py`
 - Packaged NODX builder: `scripts/build_package.py`
 
-The implemented surface covers Plain/Core plus a practical Rich subset (headings, paragraphs, delimited blocks, literal blocks including `:::style`, compact lists, pipe tables, canonical tables, attributes, common inline nodes, lang/dir propagation, safe HTML, TUI output, and a semantic NCP projection) and demonstrates Style Profile features through inline `:::style` blocks with sanitized CSS embedding.
+The implemented surface covers Plain/Core plus a practical Rich subset (headings, paragraphs, delimited blocks, literal blocks including `:::style`, compact lists, pipe tables, canonical tables, attributes, common inline nodes, lang/dir propagation, focused semantic validation, safe HTML, TUI output, and a semantic NCP projection) and demonstrates Style Profile features through inline `:::style` blocks with sanitized CSS embedding.
 
 ## Verify
 
@@ -36,6 +34,7 @@ cargo build -p nodx
 target/debug/nodx ast examples/agent-workflow.nodx
 target/debug/nodx html examples/rich-demo.nodx > /tmp/rich-demo.html
 target/debug/nodx tui examples/complex-long-form.nodx
+target/debug/nodx validate examples/extended-showcase.nodx
 target/debug/nodx html examples/extended-showcase.nodx > /tmp/extended-showcase.html
 target/debug/nodx html examples/typography.nodx > /tmp/typography.html
 target/debug/nodx html examples/pagination.nodx > /tmp/pagination.html
@@ -54,16 +53,9 @@ Build the bundled `.nodx` ZIP package example:
 python3 scripts/build_package.py
 ```
 
-## Web
+## Media Types
 
-```sh
-python3 -m http.server 8000
-```
-
-- **Renderer**: `http://localhost:8000/apps/web/index.html` — read-only NODX rendering with editor, AST inspector, and diagnostics tab.
-- **Playground**: `http://localhost:8000/apps/web/playground.html` — three-pane live editor (NODX source, NODS overrides, rendered preview) with a custom-component palette (`legal-clause`, `agent-review`, `approval-card`), light/dark theme, and `localStorage` persistence.
-
-Both pages load samples from `examples/` directly via `fetch()`; the i18n samples and the new `typography.nodx` / `pagination.nodx` documents are included in the sample dropdowns.
+The draft proposes `text/nodx; charset=utf-8` for Text NODX and `application/nodx+zip` for Packaged NODX. Until registration, integrations should use documented experimental names such as `text/x-nodx` and `application/x-nodx+zip`.
 
 ## Desktop
 
@@ -113,6 +105,8 @@ rendered output, with a `NODX-E027` warning in the diagnostics stream.
 ## Intentional Gaps
 
 The full NODS cascade, signatures, lossless CST, complete URL resolver, native PDF/DOCX/PPTX exporters, and a complete YAML 1.2 safe-subset validator are not implemented in this minimal pass. The package reader handles only stored entries (no `deflate`). These are security-sensitive and should be added as separately tested modules.
+
+The validator currently covers schema, required feature support, duplicate IDs, references, variables, safe asset paths, image alt text, simple table shape, custom-component fallback hints, direction attributes, and heading-level jumps. It is intentionally not a full Rich/Profile validator yet.
 
 Inline `:::style` blocks are processed by a textual lexer that detects forbidden NODS constructs (animations, interactive selectors, layout escapes, `attr()`, `expression()`, `</style>` breakout, etc.) and:
 
