@@ -1,0 +1,2 @@
+{"afterHash":"sha256-pcaCDe--e93W_XnlB1B-tjdJKojU-qJabiGP-Ej0Gck","author":"agent:test","beforeHash":"sha256-MCssPUYzhZQUlFi1HaE-r-NCBlncksjtTtUF914xzNA","op":"set-attribute","path":"1","reason":"fixture","schema":"nodx/change/1.1","target":"#note","time":"2026-05-11T00:00:00Z"}
+{"afterHash":"sha256-8EvdraRSo7Tj14lQUEbOFCH3JOjkX51x9OIBr4C1HX0","author":"agent:test","beforeHash":"sha256-pcaCDe--e93W_XnlB1B-tjdJKojU-qJabiGP-Ej0Gck","op":"add-comment","path":"1","reason":"fixture","schema":"nodx/change/1.1","target":"#note","time":"2026-05-11T00:00:00Z"}

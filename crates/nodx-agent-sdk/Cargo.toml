@@ -1,0 +1,15 @@
+[package]
+name = "nodx-agent-sdk"
+version = "0.1.0"
+edition = "2024"
+description = "NODX Agent Mutate 1.1 validated mutation SDK"
+license = "MIT"
+
+[lib]
+name = "nodx_agent_sdk"
+path = "src/lib.rs"
+
+[dependencies]
+nodx-core = { path = "../nodx-core" }
+nodx-package = { path = "../nodx-package" }
+nodx-validate = { path = "../nodx-validate" }

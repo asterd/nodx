@@ -20,6 +20,7 @@ crates/
   nodx-style/
   nodx-render-html/
   nodx-sign/
+  nodx-agent-sdk/
   nodx-cli/
 packages/
   nodx-js/
@@ -43,6 +44,8 @@ Current crates and packages:
 - `crates/nodx-render-html`: safe standalone HTML renderer.
 - `crates/nodx-sign`: NODX Signature 1.1 digest and ES256 compact JWS
   verification.
+- `crates/nodx-agent-sdk`: NODX Agent Mutate 1.1 local validated mutation SDK,
+  including atomic batches and JSONL change records.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
 - `packages/nodx-js`: independent JavaScript parser, canonical serializer,
@@ -79,6 +82,9 @@ Implemented now:
   checks, package path validation, ZIP bomb controls, and read-only virtual FS.
 - Signature profile verification over frozen 1.0 canonical AST digests,
   including detached and packaged compact JWS with ES256.
+- Local validated agent mutations over parsed AST documents, with target
+  resolution by ID/path/hash, required `beforeHash`, per-operation validation,
+  atomic rollback, and deterministic `nodx/change/1.1` records.
 
 ## Known Gaps Against 1.0
 
@@ -88,8 +94,8 @@ Not implemented yet:
 - Separate NCP crate.
 - Deflated ZIP entries and advanced package policy.
 - Full NODS cascade and computed style.
-- Lossless CST, source maps, signature trust store UX, mutation SDK, and native
-  PDF/DOCX/PPTX exporters.
+- Lossless CST, source maps, signature trust store UX, LLM mutation integration,
+  and native PDF/DOCX/PPTX exporters.
 - Full security corpus and fuzz targets.
 
 ## Wave 00 Contract Cleanup
@@ -131,8 +137,7 @@ changes canonical AST output, NCP output, diagnostics, or CLI exit codes.
 
 Follow `NODX_1.0_Evolution_Plan.md`:
 
-1. M9: agent mutate profile.
-2. M10 and later: continue post-1.1 profile work as scoped by the evolution
+1. M10 and later: continue post-1.1 profile work as scoped by the evolution
    plan.
 
 ## Wave 06 JavaScript Parity
@@ -182,3 +187,22 @@ Completed by this wave:
 
 No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
 is changed by Wave 08.
+
+## Wave 09 Agent Mutate Profile
+
+Completed by this wave:
+
+1. Added `crates/nodx-agent-sdk`.
+2. Added validated operations for insert, replace, delete, add-attribute,
+   set-attribute, remove-attribute, add-comment, approve, and reject.
+3. Added target resolution by ID, path, and node hash.
+4. Required `beforeHash` for every mutation operation and computed `afterHash`
+   in each emitted change record.
+5. Validated after every operation with `nodx-validate`.
+6. Kept failed batches atomic by applying to a cloned document until the full
+   batch succeeds.
+7. Added deterministic `nodx/change/1.1` JSONL change records and fixture-backed
+   tests.
+
+No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
+is changed by Wave 09.
