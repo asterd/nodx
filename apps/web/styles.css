@@ -416,6 +416,43 @@ textarea.no-wrap {
   overflow: auto;
 }
 
+.variables-panel {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  white-space: normal;
+}
+
+.variables-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.variables-table th,
+.variables-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.variables-table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.variables-table input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.variables-actions {
+  margin-top: 12px;
+}
+
 .component-summary {
   border: 1px solid var(--line);
   border-radius: 6px;

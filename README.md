@@ -299,6 +299,7 @@ Root documentation is intentionally small:
 - [NODX-RFC-0001.md](./NODX-RFC-0001.md): final 1.0 specification.
 - [README.md](./README.md): project entry point.
 - [SECURITY.md](./SECURITY.md): security policy.
+- [docs/THEMING.md](./docs/THEMING.md): theme sources and CSS extension points.
 
 Historical planning, migration, conformance snapshot, threat-model, and wave
 prompt documents are archived under `docs/archive/` to keep the project root

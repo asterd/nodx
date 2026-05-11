@@ -17,6 +17,7 @@ const textEncoder = new TextEncoder();
 
 const src = document.getElementById("src");
 const out = document.getElementById("render");
+const variablesPane = document.getElementById("variables");
 const outline = document.getElementById("outline");
 const ast = document.getElementById("ast");
 const ncp = document.getElementById("ncp");
@@ -32,9 +33,11 @@ const wrap = document.getElementById("wrap");
 const themeView = document.getElementById("theme-view");
 
 let currentDoc = null;
+let currentPreviewDoc = null;
 let currentHeadings = [];
 let packageState = emptyPackageState();
 let themeStyleEl = null;
+let variableValues = new Map();
 
 populateExamples();
 populateThemes();
@@ -132,20 +135,24 @@ function render() {
   const started = performance.now();
   try {
     currentDoc = parse(src.value);
-    const validation = validate(currentDoc);
-    currentHeadings = collectHeadings(currentDoc.body);
-    renderDocument(currentDoc);
+    currentPreviewDoc = applyVariables(currentDoc);
+    const validation = validate(currentPreviewDoc);
+    currentHeadings = collectHeadings(currentPreviewDoc.body);
+    renderDocument(currentPreviewDoc);
+    renderVariablesPanel(currentDoc);
     renderOutline();
     renderDiagnostics(validation);
     renderPackagePanel();
     ast.textContent = JSON.stringify(JSON.parse(canonicalJson(currentDoc)), null, 2);
     ncp.textContent = JSON.stringify(JSON.parse(ncpJson(currentDoc)), null, 2);
-    semantic.textContent = renderSemanticText(currentDoc);
-    updateMeta(currentDoc, validation, performance.now() - started);
+    semantic.textContent = renderSemanticText(currentPreviewDoc);
+    updateMeta(currentPreviewDoc, validation, performance.now() - started);
   } catch (error) {
     currentDoc = null;
+    currentPreviewDoc = null;
     currentHeadings = [];
     out.replaceChildren();
+    variablesPane.textContent = "No variables.";
     outline.textContent = "No outline.";
     diagnostics.textContent = String(error.stack ?? error);
     ast.textContent = "";
@@ -173,6 +180,142 @@ function renderDocument(doc) {
   const nodes = nodesFromHtml(html);
   out.replaceChildren(...paginate(nodes));
   wireInternalLinks(out);
+}
+
+function renderVariablesPanel(doc) {
+  const refs = collectVariableRefs(doc.body);
+  const keys = [...new Set([
+    ...Object.keys(doc.meta.vars && typeof doc.meta.vars === "object" && !Array.isArray(doc.meta.vars) ? doc.meta.vars : {}).map((name) => `vars.${name}`),
+    ...refs.map((item) => variableKey(item)),
+  ])].sort();
+  if (!keys.length) {
+    variablesPane.textContent = "No variables in this document.";
+    return;
+  }
+  const root = document.createElement("div");
+  root.className = "variables-panel";
+  const table = document.createElement("table");
+  table.className = "variables-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of ["Variable", "Value", "Source"]) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.append(th);
+  }
+  thead.append(headRow);
+  table.append(thead);
+  const tbody = document.createElement("tbody");
+  for (const key of keys) {
+    const [namespace, name] = splitVariableKey(key);
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    nameCell.textContent = key;
+    const valueCell = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = variableValues.has(key) ? variableValues.get(key) : String(defaultVariableValue(doc.meta, namespace, name) ?? "");
+    input.dataset.variable = key;
+    input.addEventListener("input", () => {
+      variableValues.set(key, input.value);
+      const applied = applyVariables(currentDoc);
+      currentPreviewDoc = applied;
+      currentHeadings = collectHeadings(applied.body);
+      renderDocument(applied);
+      renderOutline();
+      semantic.textContent = renderSemanticText(applied);
+      const validation = validate(applied);
+      renderDiagnostics(validation);
+      updateMeta(applied, validation, 0);
+    });
+    valueCell.append(input);
+    const sourceCell = document.createElement("td");
+    sourceCell.textContent = variableValues.has(key) ? "playground" : defaultVariableValue(doc.meta, namespace, name) === undefined ? "empty" : "front matter";
+    row.append(nameCell, valueCell, sourceCell);
+    tbody.append(row);
+  }
+  table.append(tbody);
+  const actions = document.createElement("div");
+  actions.className = "variables-actions";
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.textContent = "Reset overrides";
+  clear.addEventListener("click", () => {
+    for (const key of keys) variableValues.delete(key);
+    render();
+  });
+  actions.append(clear);
+  root.append(table, actions);
+  variablesPane.replaceChildren(root);
+}
+
+function applyVariables(doc) {
+  const clone = structuredClone(doc);
+  const metaVars = clone.meta.vars && typeof clone.meta.vars === "object" && !Array.isArray(clone.meta.vars) ? clone.meta.vars : {};
+  clone.meta.vars = { ...metaVars };
+  for (const [key, value] of variableValues.entries()) {
+    const [namespace, name] = splitVariableKey(key);
+    if (namespace === "vars") clone.meta.vars[name] = value;
+  }
+  clone.body = resolveVariableNodes(clone.body, clone.meta);
+  return clone;
+}
+
+function resolveVariableNodes(nodes, meta) {
+  return nodes.map((node) => ({
+    ...node,
+    children: resolveVariableNodes(node.children ?? [], meta),
+    inlines: resolveVariableInlines(node.inlines ?? [], meta),
+  }));
+}
+
+function resolveVariableInlines(inlines, meta) {
+  return inlines.map((inline) => {
+    if (inline.type === "var") {
+      const value = resolveVariableValue(meta, inline.namespace, inline.name);
+      return value === undefined ? inline : { text: String(value), type: "text" };
+    }
+    if (inline.children) return { ...inline, children: resolveVariableInlines(inline.children, meta) };
+    if (inline.label) return { ...inline, label: resolveVariableInlines(inline.label, meta) };
+    return inline;
+  });
+}
+
+function resolveVariableValue(meta, namespace, name) {
+  const key = `${namespace}.${name}`;
+  if (variableValues.has(key)) return variableValues.get(key);
+  return defaultVariableValue(meta, namespace, name);
+}
+
+function defaultVariableValue(meta, namespace, name) {
+  if (namespace === "vars" && meta.vars && typeof meta.vars === "object" && !Array.isArray(meta.vars)) return meta.vars[name];
+  if (namespace === "meta") return meta[name];
+  return undefined;
+}
+
+function collectVariableRefs(nodes, outItems = []) {
+  for (const node of nodes) {
+    collectVariableInlineRefs(node.inlines ?? [], outItems);
+    collectVariableRefs(node.children ?? [], outItems);
+  }
+  return outItems;
+}
+
+function collectVariableInlineRefs(inlines, outItems) {
+  for (const inline of inlines) {
+    if (inline.type === "var") outItems.push(inline);
+    if (inline.children) collectVariableInlineRefs(inline.children, outItems);
+    if (inline.label) collectVariableInlineRefs(inline.label, outItems);
+  }
+}
+
+function variableKey(item) {
+  return `${item.namespace}.${item.name}`;
+}
+
+function splitVariableKey(key) {
+  const dot = key.indexOf(".");
+  return dot < 0 ? ["vars", key] : [key.slice(0, dot), key.slice(dot + 1)];
 }
 
 function applyTheme(doc) {
@@ -555,7 +698,7 @@ function activateTab(id) {
   document.querySelectorAll("button[data-tab]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.tab === id));
   });
-  for (const pane of [out, outline, diagnostics, ast, ncp, semantic, packagePane]) {
+  for (const pane of [out, variablesPane, outline, diagnostics, ast, ncp, semantic, packagePane]) {
     pane.classList.toggle("hidden", pane.id !== id);
   }
 }
@@ -574,10 +717,11 @@ function updateWrap() {
 }
 
 function exportHtml() {
-  if (!currentDoc) return;
-  const selected = themeView.value === "auto" ? currentDoc.meta.theme : themeView.value;
+  const doc = currentPreviewDoc ?? currentDoc;
+  if (!doc) return;
+  const selected = themeView.value === "auto" ? doc.meta.theme : themeView.value;
   const theme = THEME_NAMES.includes(selected) ? selected : "base";
-  const html = `<!doctype html><meta charset="utf-8"><style>${themeStylesheet(theme)}</style>${renderFragment(currentDoc, {
+  const html = `<!doctype html><meta charset="utf-8"><style>${themeStylesheet(theme)}</style>${renderFragment(doc, {
     assetResolver: resolveAsset,
     textAssetResolver: resolveTextAsset,
     componentRenderers: packageState.components,

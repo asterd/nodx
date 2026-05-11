@@ -134,6 +134,27 @@ NODX RFC 0001.
 Footnote target represented as a normal block for preview purposes.
 ::note`;
 
+const variablesSample = `---
+schema: nodx/1.0
+title: Variables preview
+theme: web
+vars:
+  reviewer: Ada
+  status: approved
+  amount: 120K
+profiles:
+  requires:
+    - core
+---
+# Variables preview #variables
+
+Reviewer: {{reviewer}}.
+Status: {{status}}.
+Amount: {{amount}}.
+Title from metadata: {{meta.title}}.
+
+Edit the Variables tab to apply different runtime values without changing the source.`;
+
 const longDocument = `---
 schema: nodx/1.0
 title: Long document stress sample
@@ -218,6 +239,13 @@ export const examples = [
     label: "Inline coverage",
     kind: "inline",
     text: inlineCoverage,
+  },
+  {
+    group: "Inline",
+    id: "variables-preview",
+    label: "Variables preview",
+    kind: "inline",
+    text: variablesSample,
   },
   {
     group: "Inline",
