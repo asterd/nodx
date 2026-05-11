@@ -154,6 +154,9 @@ schema: nodx/1.0
 type: document
 dir: auto
 language: und
+profiles:
+  requires:
+    - core
 ```
 
 A validator that sees an explicit non-1.0 schema MUST report `NODX-E004`.
@@ -344,6 +347,7 @@ The following constructs MUST produce `NODX-E019`:
 | `vars` | mapping | Named variables referenced as `{{vars.name}}`. |
 | `components` | list of mappings | Custom component declarations. |
 | `keywords` | list of strings | Informative indexing metadata. |
+| `theme` | string | Optional standard theme name or package-local `.nodt` path. |
 
 Processors MUST preserve unknown metadata fields in the Canonical AST unless the
 field itself violates the front matter safe subset.
@@ -364,6 +368,28 @@ profiles:
 Unsupported required profiles produce `NODX-E024` with severity `error`.
 Unsupported optional profiles produce `NODX-E023` with severity `warning`.
 
+### 7.5 Themes
+
+The optional `theme` field selects a safe default style package for renderers:
+
+```yaml
+theme: web
+```
+
+NODX 1.0 reserves these standard theme names:
+
+| Theme | Purpose |
+|---|---|
+| `none` | No visual styling beyond semantic renderer minimum. |
+| `base` | Neutral readable typography. |
+| `web` | Responsive browser-oriented defaults. |
+| `print` | Print/PDF-oriented defaults, including page margins and page breaks. |
+| `presentation` | Large-type defaults for slide-like previews. |
+
+A package-local `.nodt` path MAY be used by renderers that implement the theme
+format. Theme files are declarative resources, not executable code. Remote theme
+fetching is outside baseline NODX 1.0.
+
 ---
 
 ## 8. Attributes
@@ -372,6 +398,7 @@ Blocks, headings, and spans MAY carry attributes in braces:
 
 ```nodx
 # Title {#intro .lead role="doc-introduction"}
+# Short title #intro
 
 :::note {#risk .warning fallback="children"}
 Fallback content.
@@ -388,6 +415,17 @@ Attribute syntax consists of space-separated tokens:
 | `.class` | CSS-like class. Multiple classes are allowed. |
 | `key="value"` | String attribute. |
 | `key=value` | Unquoted string attribute. |
+
+Headings MAY use a light ID form at the end of the heading line:
+
+```nodx
+# Introduction #intro
+```
+
+The light form is valid only on headings, only at the end of the line, and only
+for a single ID token matching `#` followed by an ASCII identifier. Classes and
+key/value attributes still require the braced form. A literal trailing token can
+be escaped, for example `# Introduction \#intro`.
 
 IDs and names MUST begin with an ASCII letter and then contain ASCII letters,
 ASCII digits, and, where allowed, hyphens. Duplicate classes are deduplicated
@@ -493,6 +531,10 @@ Pipe table syntax:
 | AST | canonical |
 ```
 
+Markdown-compatible separator rows such as `|---|---|` and alignment markers
+such as `|---:|:---|` are accepted and map to the same table AST. Alignment
+markers are authoring sugar unless a renderer/profile explicitly consumes them.
+
 Canonical nodes:
 
 1. `table`;
@@ -505,24 +547,27 @@ All table rows MUST have the same number of cells. Violations produce
 
 ### 10.5 Delimited Blocks
 
-Delimited blocks use three or more colons, a node name, optional attributes, and
-a matching close fence with the same colon count:
+Delimited blocks use two or more colons, a node name, optional attributes, and a
+matching close fence with the same colon count:
 
 ```nodx
-:::section {#overview}
+::section {#overview}
 ## Overview
 
 Text inside the section.
-:::
+::
 ```
 
 A close fence MAY carry a label:
 
 ```nodx
-::::figure {#pipeline}
-:::image {src="assets/pipeline.png" alt="Pipeline diagram"}
-:::
-:::: figure
+::figure {#pipeline}
+::image {src="assets/pipeline.png" alt="Pipeline diagram"}
+::
+::caption
+Pipeline diagram.
+::
+::figure
 ```
 
 The close label, when present, MUST match the opening node name. Unmatched,
@@ -531,6 +576,10 @@ mismatched, or unclosed blocks produce `NODX-E005`.
 Node names MUST begin with an ASCII letter and may contain ASCII letters,
 digits, and hyphens.
 
+The three-colon form remains valid. Authors MAY use three or more colons as an
+escape when literal content or deep nesting would make the two-colon form less
+readable.
+
 ### 10.6 Literal Blocks
 
 The block names `code`, `pre`, `math`, and `style` are literal blocks. Their
@@ -538,9 +587,9 @@ source content is preserved as `text` and is not parsed as child blocks or
 inlines.
 
 ```nodx
-:::code {lang="rust"}
+::code {lang="rust"}
 fn main() {}
-:::
+::
 ```
 
 ---
@@ -606,8 +655,10 @@ other textual nodes.
 | `~sub~` | `sub` | `children` |
 | `^sup^` | `sup` | `children` |
 | `[label](target)` | `link` | `label`, `target` |
+| `[label](target){attrs}` | `link` | `label`, `target`, `attrs` |
 | `[label]{attrs}` | `span` | `children`, `attrs` |
 | `{{namespace.name}}` | `var` | `namespace`, `name` |
+| `{{name}}` | `var` | `namespace: "vars"`, `name` |
 | `@[target]` | `ref` | `target` |
 | `@{kind:target}` | `mention` | `kind`, `target` |
 | `[^target]` | `footnote-ref` | `target` |
@@ -620,13 +671,17 @@ Backslash escapes the following characters in inline text:
 ` * [ ] ( ) { } # @ ~ ^ = : |
 ```
 
-Inline links MUST pass the URL policy in Section 19. References, footnote
-references, and citation references are validated against known node IDs.
-Unresolved references produce `NODX-E007`.
+Inline links MUST pass the URL policy in Section 19. Link attributes use the
+same attribute grammar as spans. Portable renderers SHOULD support `title`,
+`rel`, and `download`; unsupported link attributes MUST be preserved in the
+Semantic AST and ignored safely by renderers that cannot use them. References,
+footnote references, and citation references are validated against known node
+IDs. Unresolved references produce `NODX-E007`.
 
-Variables in the `vars` namespace SHOULD be declared in front matter. An
-undeclared `{{vars.name}}` reference produces `NODX-E013` with severity
-`warning`.
+Variables without an explicit namespace are canonicalized to the `vars`
+namespace. Variables in the `vars` namespace SHOULD be declared in front matter.
+An undeclared `{{vars.name}}` or `{{name}}` reference produces `NODX-E013` with
+severity `warning`.
 
 ---
 
@@ -657,6 +712,7 @@ Attributes:
 | `min-level` | integer `1` through `6` | first heading level in scope |
 | `max-level` | integer `1` through `6` | `min-level + depth - 1`, capped at 6 |
 | `title` | string | deterministic role label |
+| `mode` | `auto`, `manual` | `auto` |
 
 Invalid attributes produce `NODX-E004`. An unresolved `scope` produces
 `NODX-E007`. If `title` is omitted, processors use a deterministic accessible
@@ -664,6 +720,26 @@ label and MAY emit `NODX-E016` with severity `info`.
 
 Resolved `toc` entries contain heading ID, heading level, plain-text title, and
 node path. NCP exposes resolved entries as `navigationEntries` on `toc` nodes.
+
+Heading attributes MAY tune generated TOC rows:
+
+```nodx
+# Chapter 1: System architecture {#arch toc="Architecture"}
+## Internal implementation detail {#impl toc-hidden="true"}
+```
+
+`toc` overrides the generated row title, `toc-hidden="true"` excludes the
+heading, and `toc-level` MAY override the navigation level without changing the
+visible heading level.
+
+A manual TOC uses normal list/link content:
+
+```nodx
+::toc {title="Recommended path" mode="manual"}
+- [Overview](#overview)
+- [API essentials](#api)
+::
+```
 
 ---
 
@@ -777,12 +853,32 @@ cascade, layout interoperability, and computed style are not mandatory NODX 1.0
 features.
 
 ```nodx
-:::style
+::style
 h1, .lead { color: #0f766e; font-size: 24pt; }
 @media print { p { color: black; } }
 @page { size: A4 portrait; margin: 22mm; }
-:::
+::
 ```
+
+Authors and generators MAY also use YAML style authoring syntax:
+
+```nodx
+::style {format="yaml"}
+h1:
+  color: "#0f766e"
+  font-size: 24pt
+print:
+  p:
+    color: black
+page:
+  margin: 22mm
+::
+```
+
+YAML style blocks are converted to the same audited NODS/CSS subset before
+rendering. Top-level pseudo-keys are limited to `print`, `screen`, `dark`, and
+`page`; all other top-level keys are treated as selectors. Invalid YAML style
+structure produces `NODX-E027`.
 
 ### 18.1 Required Safety Behavior
 
@@ -824,6 +920,25 @@ properties MAY produce `NODX-E027` with severity `warning`. Executable or
 breakout properties MUST produce `NODX-E027` with severity `error`.
 
 Style URLs use the Style reference policy: package-relative paths only.
+
+### 18.5 Standard Design Tokens
+
+Standard themes expose these custom properties for safe overrides:
+
+```css
+--nodx-color-text
+--nodx-color-muted
+--nodx-color-primary
+--nodx-color-accent
+--nodx-font-body
+--nodx-font-heading
+--nodx-font-mono
+--nodx-page-margin
+--nodx-line-height
+--nodx-block-gap
+```
+
+Renderers MAY add additional tokens, but these names are reserved and stable.
 
 ---
 
@@ -1213,6 +1328,10 @@ Recommended importers:
 3. DOCX/ODT structural import with loss report;
 4. CSV/TSV to table nodes.
 
+Typed table schemas and CSV/TSV import/export are ecosystem tooling
+recommendations, not mandatory NODX 1.0 conformance requirements. Parquet/Arrow
+portability is reserved for a future RFC.
+
 Lossy conversion SHOULD emit machine-readable reports using stable diagnostics,
 including `NODX-E026` for known export loss.
 
@@ -1357,6 +1476,11 @@ The reference repository contains:
    presentation fixtures;
 4. starter editor integrations for VSCode, Sublime Text, and Notepad++;
 5. showcase documents for web and TUI/desktop rendering.
+
+The reference parser and validator include the Lite authoring forms described
+above: two-colon blocks, heading light IDs, short variables, link attributes,
+Markdown-compatible table separators, manual TOC entries, standard themes, and
+YAML style authoring.
 
 Only the stable behavior defined by this RFC is required for NODX 1.0
 conformance. Experimental crates and preview commands do not extend the

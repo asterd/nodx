@@ -6,7 +6,7 @@ use nodx_core::{
     Diagnostic, Document, Inline, Node, ResourceLimits, Value, default_navigation_label,
     resolve_navigation, valid_name,
 };
-use nodx_style::audit_stylesheet;
+use nodx_style::{audit_stylesheet, yaml_style_to_css};
 use nodx_url::{ReferenceKind, ResourcePolicy};
 
 pub const SCHEMA_1_0: &str = "nodx/1.0";
@@ -188,6 +188,19 @@ fn validate_meta(
         validate_required_profile(profile, profiles, diagnostics);
     }
 
+    if let Some(Value::String(theme)) = doc.meta.get("theme")
+        && !is_valid_theme(theme)
+    {
+        diagnostics.push(Diagnostic {
+            code: "NODX-E004".to_string(),
+            severity: "error".to_string(),
+            message: "Invalid theme name or path.".to_string(),
+            line: None,
+            column: None,
+            target: Some("theme".to_string()),
+        });
+    }
+
     if let Some(Value::Map(map)) = doc.meta.get("profiles") {
         if let Some(Value::List(required)) = map.get("requires") {
             for item in required {
@@ -213,6 +226,14 @@ fn validate_meta(
             }
         }
     }
+}
+
+fn is_valid_theme(theme: &str) -> bool {
+    matches!(theme, "none" | "plain" | "base" | "web" | "print" | "presentation")
+        || (theme.ends_with(".nodt")
+            && !theme.starts_with('/')
+            && !theme.contains("..")
+            && !theme.contains('\\'))
 }
 
 fn validate_required_profile(
@@ -437,6 +458,11 @@ fn validate_toc(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             source,
         ));
     }
+    if let Some(mode) = node.attrs.get("mode")
+        && !matches!(mode.as_str(), "auto" | "manual")
+    {
+        diagnostics.push(validation_diag("NODX-E004", "error", "Invalid toc mode.", mode));
+    }
     if let Some(scope) = node.attrs.get("scope")
         && (!scope.starts_with('#') || scope.len() == 1)
     {
@@ -491,7 +517,29 @@ fn validate_style_block(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: 
     let Some(text) = &node.text else {
         return;
     };
-    let audit = audit_stylesheet(text, limits);
+    let style_source;
+    let source = if node.attrs.get("format").map(String::as_str) == Some("yaml") {
+        match yaml_style_to_css(text) {
+            Ok(css) => {
+                style_source = css;
+                style_source.as_str()
+            }
+            Err(message) => {
+                diagnostics.push(Diagnostic {
+                    code: "NODX-E027".to_string(),
+                    severity: "error".to_string(),
+                    message,
+                    line: None,
+                    column: None,
+                    target: node.id.clone(),
+                });
+                return;
+            }
+        }
+    } else {
+        text.as_str()
+    };
+    let audit = audit_stylesheet(source, limits);
     for violation in audit.violations {
         diagnostics.push(Diagnostic {
             code: "NODX-E027".to_string(),
@@ -553,7 +601,11 @@ fn collect_inline_refs(
             | Inline::Sup(children) => {
                 collect_inline_refs(children, refs, vars, diagnostics, limits)
             }
-            Inline::Link { label, target } => {
+            Inline::Link {
+                label,
+                target,
+                attrs,
+            } => {
                 if ResourcePolicy::new(limits)
                     .classify_uri(ReferenceKind::Link, target)
                     .is_err()
@@ -565,19 +617,11 @@ fn collect_inline_refs(
                         target,
                     ));
                 }
+                validate_inline_attrs(attrs, diagnostics);
                 collect_inline_refs(label, refs, vars, diagnostics, limits);
             }
             Inline::Span { children, attrs } => {
-                if let Some(dir) = attrs.attrs.get("dir")
-                    && !matches!(dir.as_str(), "ltr" | "rtl" | "auto")
-                {
-                    diagnostics.push(validation_diag(
-                        "NODX-E004",
-                        "error",
-                        "Invalid inline dir attribute.",
-                        dir,
-                    ));
-                }
+                validate_inline_attrs(attrs, diagnostics);
                 collect_inline_refs(children, refs, vars, diagnostics, limits);
             }
             Inline::Var { namespace, name } => {
@@ -600,6 +644,19 @@ fn collect_inline_refs(
             | Inline::Mention { .. }
             | Inline::MathInline { .. } => {}
         }
+    }
+}
+
+fn validate_inline_attrs(attrs: &nodx_core::Attrs, diagnostics: &mut Vec<Diagnostic>) {
+    if let Some(dir) = attrs.attrs.get("dir")
+        && !matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid inline dir attribute.",
+            dir,
+        ));
     }
 }
 

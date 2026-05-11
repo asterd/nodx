@@ -5,7 +5,7 @@ use crate::front_matter::unquote;
 
 pub(crate) fn parse_opener(line: &str) -> Option<(usize, String, Attrs)> {
     let colons = line.chars().take_while(|c| *c == ':').count();
-    if colons < 3 {
+    if colons < 2 {
         return None;
     }
     let rest = &line[colons..];
@@ -28,6 +28,19 @@ pub(crate) fn parse_heading(line: &str) -> Option<(usize, &str, Option<Attrs>)> 
         && raw.ends_with('}')
     {
         return Some((level, raw[..pos].trim_end(), parse_attrs(&raw[pos + 1..])));
+    }
+    if let Some(pos) = raw.rfind(' ') {
+        let candidate = &raw[pos + 1..];
+        if let Some(id) = candidate.strip_prefix('#')
+            && valid_name(id, true)
+            && !raw[..pos].ends_with('\\')
+        {
+            let attrs = Attrs {
+                id: Some(id.to_string()),
+                ..Attrs::default()
+            };
+            return Some((level, raw[..pos].trim_end(), Some(attrs)));
+        }
     }
     Some((level, raw, None))
 }
@@ -97,6 +110,17 @@ pub(crate) fn parse_close(line: &str, n: usize) -> Option<Option<String>> {
         if valid_name(trimmed, true) {
             return Some(Some(trimmed.to_string()));
         }
+    }
+    None
+}
+
+pub(crate) fn parse_matching_close(line: &str, n: usize, expected_name: &str) -> Option<Option<String>> {
+    if let Some(close) = parse_close(line, n) {
+        return Some(close);
+    }
+    let after = line.strip_prefix(&":".repeat(n))?;
+    if after == expected_name {
+        return Some(Some(expected_name.to_string()));
     }
     None
 }

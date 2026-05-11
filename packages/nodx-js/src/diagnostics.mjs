@@ -93,6 +93,11 @@ function validateMeta(doc, requestedProfile, diagnostics) {
       ),
     );
   }
+  if (typeof doc.meta.theme === "string" && !isValidTheme(doc.meta.theme)) {
+    diagnostics.push(
+      validationDiag("NODX-E004", "error", "Invalid theme name or path.", "theme"),
+    );
+  }
   if (requestedProfile) validateRequiredProfile(requestedProfile, diagnostics);
   const profiles = doc.meta.profiles;
   if (profiles && typeof profiles === "object" && !Array.isArray(profiles)) {
@@ -116,6 +121,11 @@ function validateMeta(doc, requestedProfile, diagnostics) {
       }
     }
   }
+}
+
+function isValidTheme(theme) {
+  return ["none", "plain", "base", "web", "print", "presentation"].includes(theme)
+    || (theme.endsWith(".nodt") && !theme.startsWith("/") && !theme.includes("..") && !theme.includes("\\"));
 }
 
 function validateRequiredProfile(profile, diagnostics) {
@@ -277,6 +287,11 @@ function validateToc(item, diagnostics) {
       validationDiag("NODX-E004", "error", "Invalid toc source.", item.attrs.source),
     );
   }
+  if ("mode" in item.attrs && !["auto", "manual"].includes(item.attrs.mode)) {
+    diagnostics.push(
+      validationDiag("NODX-E004", "error", "Invalid toc mode.", item.attrs.mode),
+    );
+  }
   if (
     "scope" in item.attrs &&
     (!item.attrs.scope.startsWith("#") || item.attrs.scope.length === 1)
@@ -323,7 +338,9 @@ function validateToc(item, diagnostics) {
 
 function validateStyleBlock(item, diagnostics) {
   if (typeof item.text !== "string") return;
-  for (const violation of auditStylesheet(item.text)) {
+  const source = item.attrs.format === "yaml" ? yamlStyleToCss(item.text, diagnostics, item.id) : item.text;
+  if (source === null) return;
+  for (const violation of auditStylesheet(source)) {
     diagnostics.push({
       code: "NODX-E027",
       severity: violation.severity,
@@ -333,6 +350,63 @@ function validateStyleBlock(item, diagnostics) {
       target: item.id ?? null,
     });
   }
+}
+
+function yamlStyleToCss(input, diagnostics, target) {
+  let out = "";
+  let context = null;
+  for (const raw of input.split("\n")) {
+    if (raw.trim() === "" || raw.trimStart().startsWith("#")) continue;
+    const indent = raw.length - raw.trimStart().length;
+    const line = raw.trim();
+    if (indent === 0) {
+      if (!line.endsWith(":")) return yamlStyleError(diagnostics, target, "YAML style top-level entries must end with `:`.");
+      const name = line.slice(0, -1);
+      context = ["print", "screen", "dark", "page"].includes(name)
+        ? { key: name, selector: null, type: "pseudo" }
+        : { selector: name, type: "selector" };
+      continue;
+    }
+    if (context?.type === "selector" && indent >= 2) {
+      const decl = splitYamlDeclaration(line, diagnostics, target);
+      if (!decl) return null;
+      out += (out ? "\n" : "") + context.selector + "{" + decl.property + ":" + decl.value + ";}";
+    } else if (context?.type === "pseudo" && indent === 2 && line.endsWith(":")) {
+      context.selector = line.slice(0, -1);
+    } else if (context?.type === "pseudo" && context.selector && indent >= 4) {
+      const decl = splitYamlDeclaration(line, diagnostics, target);
+      if (!decl) return null;
+      out += (out ? "\n" : "") + pseudoOpen(context.key) + context.selector + "{" + decl.property + ":" + decl.value + ";}}";
+    } else if (context?.type === "pseudo" && context.key === "page" && indent >= 2) {
+      const decl = splitYamlDeclaration(line, diagnostics, target);
+      if (!decl) return null;
+      out += (out ? "\n" : "") + "@page{" + decl.property + ":" + decl.value + ";}";
+    } else {
+      return yamlStyleError(diagnostics, target, "Invalid YAML style structure.");
+    }
+  }
+  return out;
+}
+
+function splitYamlDeclaration(line, diagnostics, target) {
+  const i = line.indexOf(":");
+  if (i <= 0 || i === line.length - 1) {
+    yamlStyleError(diagnostics, target, "YAML style declaration must use `property: value`.");
+    return null;
+  }
+  return { property: line.slice(0, i).trim(), value: line.slice(i + 1).trim().replace(/^"|"$/g, "") };
+}
+
+function pseudoOpen(key) {
+  if (key === "print") return "@media print{";
+  if (key === "screen") return "@media screen{";
+  if (key === "dark") return "@media (prefers-color-scheme: dark){";
+  return "@page{";
+}
+
+function yamlStyleError(diagnostics, target, message) {
+  diagnostics.push({ code: "NODX-E027", severity: "error", message, line: null, column: null, target: target ?? null });
+  return null;
 }
 
 function validateTocScopes(nodes, ids, diagnostics) {

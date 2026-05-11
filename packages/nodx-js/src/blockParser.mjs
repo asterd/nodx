@@ -11,10 +11,12 @@ export function parse(input) {
   const lines = input.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
   const meta = {};
   let start = 0;
+  let hadFrontMatter = false;
   if (lines[0] === "---") {
     const end = lines.indexOf("---", 1);
     if (end < 0) diagnostics.push(diag("NODX-E003", "fatal", "Unclosed front matter.", 1, 1));
     else {
+      hadFrontMatter = true;
       Object.assign(meta, parseMeta(lines.slice(1, end), diagnostics));
       start = end + 1;
     }
@@ -23,6 +25,7 @@ export function parse(input) {
   meta.type ??= "document";
   meta.dir ??= "auto";
   meta.language ??= "und";
+  if (!hadFrontMatter) meta.profiles ??= { requires: ["core"] };
   const state = { lines, pos: start, diagnostics };
   const body = parseUntil(state, null);
   // Title inference is the renderer/agent's responsibility (see nodx-render-html
@@ -37,7 +40,7 @@ function parseUntil(state, closeFrame) {
   while (state.pos < state.lines.length) {
     const line = state.lines[state.pos];
     if (closeFrame !== null) {
-      const close = parseClose(line, closeFrame.colons);
+      const close = parseMatchingClose(line, closeFrame.colons, closeFrame.name);
       if (close) {
         if (close.name !== null && close.name !== closeFrame.name) {
           state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + closeFrame.name + "`.", state.pos + 1, 1));
@@ -85,10 +88,10 @@ function parseDelimited(state, opener) {
   state.pos++;
   if (["code", "pre", "math", "style"].includes(opener.name)) {
     const start = state.pos;
-    while (state.pos < state.lines.length && parseClose(state.lines[state.pos], opener.colons) === null) state.pos++;
+    while (state.pos < state.lines.length && parseMatchingClose(state.lines[state.pos], opener.colons, opener.name) === null) state.pos++;
     const text = state.lines.slice(start, state.pos).join("\n");
     if (state.pos < state.lines.length) {
-      const close = parseClose(state.lines[state.pos], opener.colons);
+      const close = parseMatchingClose(state.lines[state.pos], opener.colons, opener.name);
       if (close && close.name !== null && close.name !== opener.name) {
         state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + opener.name + "`.", state.pos + 1, 1));
       }
@@ -148,8 +151,8 @@ function parseParagraph(state) {
 }
 
 function parseOpener(line) {
-  const m = /^(:::+)([A-Za-z][A-Za-z0-9-]*)(?:\s+(\{.*\}))?$/.exec(line);
-  if (!m || m[1].length < 3) return null;
+  const m = /^(::+)([A-Za-z][A-Za-z0-9-]*)(?:\s+(\{.*\}))?$/.exec(line);
+  if (!m || m[1].length < 2) return null;
   return { colons: m[1].length, name: m[2], attrs: parseAttrs(m[3] ?? "") };
 }
 
@@ -162,6 +165,12 @@ function parseHeading(line) {
   if (attrStart >= 0 && content.endsWith("}")) {
     attrs = parseAttrs(content.slice(attrStart + 1));
     content = content.slice(0, attrStart).trimEnd();
+  } else {
+    const lightId = /^(.*) (#([A-Za-z][A-Za-z0-9-]*))$/.exec(content);
+    if (lightId) {
+      content = lightId[1].trimEnd();
+      attrs.id = lightId[3];
+    }
   }
   return { level: m[1].length, content, attrs };
 }
@@ -178,9 +187,15 @@ function parseClose(line, n) {
   return null;
 }
 
+function parseMatchingClose(line, n, expectedName) {
+  const close = parseClose(line, n);
+  if (close) return close;
+  return line === ":".repeat(n) + expectedName ? { name: expectedName } : null;
+}
+
 function isAnyClose(line) {
   const colons = line.length - line.replace(/^:+/, "").length;
-  if (colons < 3) return false;
+  if (colons < 2) return false;
   const after = line.slice(colons);
   if (after.trim() === "") return true;
   if (after.startsWith(" ")) {

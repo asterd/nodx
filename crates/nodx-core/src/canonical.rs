@@ -75,8 +75,18 @@ fn write_inlines(out: &mut String, inlines: &[Inline]) {
                 write_json_string(out, text);
                 out.push_str(",\"type\":\"code\"}");
             }
-            Inline::Link { label, target } => {
-                out.push_str("{\"label\":");
+            Inline::Link {
+                label,
+                target,
+                attrs,
+            } => {
+                out.push('{');
+                if attrs != &Attrs::default() {
+                    out.push_str("\"attrs\":");
+                    write_attrs(out, attrs);
+                    out.push(',');
+                }
+                out.push_str("\"label\":");
                 write_inlines(out, label);
                 out.push_str(",\"target\":");
                 write_json_string(out, target);

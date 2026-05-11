@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::ResourceLimits;
 use crate::ast::{Attrs, Document, Node, Value};
-use crate::attrs::{parse_close, parse_heading, parse_opener, valid_name};
+use crate::attrs::{parse_heading, parse_matching_close, parse_opener, valid_name};
 use crate::diagnostic::{Diagnostic, diag};
 use crate::front_matter::parse_front_matter;
 use crate::inline_parser::parse_inlines;
@@ -43,9 +43,11 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
 
     let mut meta = BTreeMap::new();
     let mut start = 0;
+    let mut had_front_matter = false;
     if lines.first() == Some(&"---") {
         match lines.iter().skip(1).position(|line| *line == "---") {
             Some(end_rel) => {
+                had_front_matter = true;
                 let end = end_rel + 1;
                 let front_matter_bytes = lines[1..end].iter().map(|line| line.len()).sum::<usize>();
                 if front_matter_bytes > limits.front_matter_bytes {
@@ -71,6 +73,15 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         .or_insert(Value::String("auto".to_string()));
     meta.entry("language".to_string())
         .or_insert(Value::String("und".to_string()));
+    if !had_front_matter {
+        let mut profiles = BTreeMap::new();
+        profiles.insert(
+            "requires".to_string(),
+            Value::List(vec![Value::String("core".to_string())]),
+        );
+        meta.entry("profiles".to_string())
+            .or_insert(Value::Map(profiles));
+    }
 
     let mut parser = Parser {
         lines: &lines,
@@ -112,7 +123,7 @@ impl Parser<'_> {
                 ));
             }
             if let Some((n, expected_name)) = close_frame {
-                if let Some(label) = parse_close(line, n) {
+                if let Some(label) = parse_matching_close(line, n, expected_name) {
                     if let Some(name) = label
                         && name != expected_name
                     {
@@ -188,13 +199,14 @@ impl Parser<'_> {
         self.pos += 1;
         if matches!(name.as_str(), "code" | "pre" | "math" | "style") {
             let start = self.pos;
-            while self.pos < self.lines.len() && parse_close(self.lines[self.pos], colons).is_none()
+            while self.pos < self.lines.len()
+                && parse_matching_close(self.lines[self.pos], colons, &name).is_none()
             {
                 self.pos += 1;
             }
             let text = self.lines[start..self.pos].join("\n");
             if self.pos < self.lines.len() {
-                if let Some(Some(label)) = parse_close(self.lines[self.pos], colons)
+                if let Some(Some(label)) = parse_matching_close(self.lines[self.pos], colons, &name)
                     && label != name
                 {
                     self.diagnostics.push(diag(
@@ -295,7 +307,7 @@ impl Parser<'_> {
 }
 fn is_any_close(line: &str) -> bool {
     let n = line.chars().take_while(|c| *c == ':').count();
-    if n < 3 {
+    if n < 2 {
         return false;
     }
     let after = &line[n..];

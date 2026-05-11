@@ -10,28 +10,11 @@ contexts:
     - match: '^---$'
       scope: punctuation.definition.front-matter.nodx
       push: front-matter
-    - match: '^(#{1,6})\s+(.+)$'
-      captures:
-        1: punctuation.definition.heading.nodx
-        2: markup.heading.nodx
-    - match: '^:{3,}[A-Za-z][A-Za-z0-9-]*(?:\s+\{[^}]*\})?$'
-      scope: entity.name.tag.block.nodx
-    - match: '^:{3,}(?:\s+[A-Za-z][A-Za-z0-9-]*)?$'
-      scope: punctuation.definition.block.end.nodx
-    - match: '\|'
-      scope: punctuation.separator.table.nodx
-    - match: '`[^`]+`'
-      scope: markup.inline.raw.nodx
-    - match: '\*\*[^*]+\*\*'
-      scope: markup.bold.nodx
-    - match: '\*[^*]+\*'
-      scope: markup.italic.nodx
-    - match: '\[[^\]]+\]\([^\)]+\)'
-      scope: markup.underline.link.nodx
-    - match: '@\[[A-Za-z][A-Za-z0-9-]*\]'
-      scope: variable.other.reference.nodx
-    - match: '\{\{[A-Za-z][A-Za-z0-9_-]*\.[A-Za-z][A-Za-z0-9_-]*\}\}'
-      scope: variable.other.nodx
+    - include: blocks
+    - include: headings
+    - include: lists
+    - include: tables
+    - include: inline
 
   front-matter:
     - match: '^---$'
@@ -39,5 +22,78 @@ contexts:
       pop: true
     - match: '^\s*[A-Za-z][A-Za-z0-9_-]*:'
       scope: support.type.property-name.nodx
-    - match: '\b(nodx/1\.0|document)\b'
+    - match: '^\s*-\s+'
+      scope: punctuation.definition.list.begin.nodx
+    - match: '\b(nodx/1\.0|nodx-package/1\.0|document|plain|core|rich|style|package|agent-read|web|print|presentation|ltr|rtl|auto|und)\b'
       scope: constant.language.nodx
+    - match: '"[^"]*"|''[^'']*'''
+      scope: string.quoted.nodx
+
+  blocks:
+    - match: '^(::+)([A-Za-z][A-Za-z0-9-]*)(?:\s+(\{[^}]*\}))?$'
+      captures:
+        1: punctuation.definition.block.begin.nodx
+        2: entity.name.tag.block.nodx
+        3: meta.attributes.nodx
+    - match: '^(::+)(?:\s+([A-Za-z][A-Za-z0-9-]*))?$'
+      captures:
+        1: punctuation.definition.block.end.nodx
+        2: entity.name.tag.block.nodx
+    - match: '\{#[A-Za-z][A-Za-z0-9-]*\}'
+      scope: entity.name.tag.id.nodx
+    - match: '\.[A-Za-z][A-Za-z0-9-]*'
+      scope: entity.other.attribute-name.class.nodx
+    - match: '[A-Za-z][A-Za-z0-9_-]*='
+      scope: support.type.property-name.nodx
+
+  headings:
+    - match: '^(#{1,6})\s+(.+?)(?:\s+(#([A-Za-z][A-Za-z0-9-]*))|\s+(\{[^}]*\}))?$'
+      captures:
+        1: punctuation.definition.heading.nodx
+        2: markup.heading.nodx
+        3: entity.name.tag.id.nodx
+        5: meta.attributes.nodx
+
+  lists:
+    - match: '^\s*-\s+\[[ xX]\]\s+'
+      scope: punctuation.definition.list.task.nodx
+    - match: '^\s*(?:-|\d+\.)\s+'
+      scope: punctuation.definition.list.begin.nodx
+
+  tables:
+    - match: '^\|.*\|$'
+      scope: markup.table.row.nodx
+    - match: '^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$'
+      scope: punctuation.separator.table.nodx
+
+  inline:
+    - match: '\\[`*\[\](){}#@~^=:|]'
+      scope: constant.character.escape.nodx
+    - match: '`[^`]+`'
+      scope: markup.inline.raw.nodx
+    - match: '\$\$[^$]+\$\$'
+      scope: markup.inline.math.nodx
+    - match: '\*\*[^*]+\*\*'
+      scope: markup.bold.nodx
+    - match: '\*[^*]+\*'
+      scope: markup.italic.nodx
+    - match: '==[^=]+=='
+      scope: markup.highlight.nodx
+    - match: '~[^~]+~'
+      scope: markup.subscript.nodx
+    - match: '\^[^^]+\^'
+      scope: markup.superscript.nodx
+    - match: '\[[^\]]+\]\([^\)]+\)(?:\{[^}]*\})?'
+      scope: markup.underline.link.nodx
+    - match: '\[[^\]]+\]\{[^}]*\}'
+      scope: meta.span.nodx
+    - match: '@\[[A-Za-z][A-Za-z0-9-]*\]'
+      scope: variable.other.reference.nodx
+    - match: '\[@[A-Za-z][A-Za-z0-9-]*\]'
+      scope: variable.other.citation.nodx
+    - match: '\[\^[A-Za-z][A-Za-z0-9-]*\]'
+      scope: variable.other.footnote.nodx
+    - match: '@\{[A-Za-z][A-Za-z0-9_-]*:[^}]+\}'
+      scope: variable.other.mention.nodx
+    - match: '\{\{(?:[A-Za-z][A-Za-z0-9_-]*\.)?[A-Za-z][A-Za-z0-9_-]*\}\}'
+      scope: variable.other.nodx

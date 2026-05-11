@@ -5,6 +5,7 @@
     { "include": "#front-matter" },
     { "include": "#blocks" },
     { "include": "#headings" },
+    { "include": "#lists" },
     { "include": "#tables" },
     { "include": "#inline" }
   ],
@@ -15,19 +16,50 @@
       "name": "meta.front-matter.nodx",
       "patterns": [
         { "match": "^\\s*[A-Za-z][A-Za-z0-9_-]*:", "name": "support.type.property-name.nodx" },
-        { "match": "\\b(nodx/1\\.0|document)\\b", "name": "constant.language.nodx" }
+        { "match": "^\\s*-\\s+", "name": "punctuation.definition.list.begin.nodx" },
+        { "match": "\\b(nodx/1\\.0|nodx-package/1\\.0|document|plain|core|rich|style|package|agent-read|web|print|presentation|ltr|rtl|auto|und)\\b", "name": "constant.language.nodx" },
+        { "match": "\"[^\"]*\"|'[^']*'", "name": "string.quoted.nodx" }
       ]
     },
     "blocks": {
       "patterns": [
-        { "match": "^:{3,}[A-Za-z][A-Za-z0-9-]*(?:\\s+\\{[^}]*\\})?$", "name": "entity.name.tag.block.nodx" },
-        { "match": "^:{3,}(?:\\s+[A-Za-z][A-Za-z0-9-]*)?$", "name": "punctuation.definition.block.end.nodx" },
-        { "match": "\\{#[A-Za-z][A-Za-z0-9-]*\\}", "name": "entity.name.tag.id.nodx" }
+        {
+          "match": "^(::+)([A-Za-z][A-Za-z0-9-]*)(?:\\s+(\\{[^}]*\\}))?$",
+          "captures": {
+            "1": { "name": "punctuation.definition.block.begin.nodx" },
+            "2": { "name": "entity.name.tag.block.nodx" },
+            "3": { "name": "meta.attributes.nodx" }
+          }
+        },
+        {
+          "match": "^(::+)(?:\\s+([A-Za-z][A-Za-z0-9-]*))?$",
+          "captures": {
+            "1": { "name": "punctuation.definition.block.end.nodx" },
+            "2": { "name": "entity.name.tag.block.nodx" }
+          }
+        },
+        { "match": "\\{#[A-Za-z][A-Za-z0-9-]*\\}", "name": "entity.name.tag.id.nodx" },
+        { "match": "\\.[A-Za-z][A-Za-z0-9-]*", "name": "entity.other.attribute-name.class.nodx" },
+        { "match": "[A-Za-z][A-Za-z0-9_-]*=", "name": "support.type.property-name.nodx" }
       ]
     },
     "headings": {
       "patterns": [
-        { "match": "^(#{1,6})\\s+(.+)$", "captures": { "1": { "name": "punctuation.definition.heading.nodx" }, "2": { "name": "markup.heading.nodx" } } }
+        {
+          "match": "^(#{1,6})\\s+(.+?)(?:\\s+(#([A-Za-z][A-Za-z0-9-]*))|\\s+(\\{[^}]*\\}))?$",
+          "captures": {
+            "1": { "name": "punctuation.definition.heading.nodx" },
+            "2": { "name": "markup.heading.nodx" },
+            "3": { "name": "entity.name.tag.id.nodx" },
+            "5": { "name": "meta.attributes.nodx" }
+          }
+        }
+      ]
+    },
+    "lists": {
+      "patterns": [
+        { "match": "^\\s*-\\s+\\[[ xX]\\]\\s+", "name": "punctuation.definition.list.task.nodx" },
+        { "match": "^\\s*(?:-|\\d+\\.)\\s+", "name": "punctuation.definition.list.begin.nodx" }
       ]
     },
     "tables": {
@@ -38,12 +70,21 @@
     },
     "inline": {
       "patterns": [
+        { "match": "\\\\[`*\\[\\](){}#@~^=:|]", "name": "constant.character.escape.nodx" },
         { "match": "`[^`]+`", "name": "markup.inline.raw.nodx" },
+        { "match": "\\$\\$[^$]+\\$\\$", "name": "markup.inline.math.nodx" },
         { "match": "\\*\\*[^*]+\\*\\*", "name": "markup.bold.nodx" },
         { "match": "\\*[^*]+\\*", "name": "markup.italic.nodx" },
-        { "match": "\\[[^\\]]+\\]\\([^\\)]+\\)", "name": "markup.underline.link.nodx" },
+        { "match": "==[^=]+==", "name": "markup.highlight.nodx" },
+        { "match": "~[^~]+~", "name": "markup.subscript.nodx" },
+        { "match": "\\^[^^]+\\^", "name": "markup.superscript.nodx" },
+        { "match": "\\[[^\\]]+\\]\\([^\\)]+\\)(?:\\{[^}]*\\})?", "name": "markup.underline.link.nodx" },
+        { "match": "\\[[^\\]]+\\]\\{[^}]*\\}", "name": "meta.span.nodx" },
         { "match": "@\\[[A-Za-z][A-Za-z0-9-]*\\]", "name": "variable.other.reference.nodx" },
-        { "match": "\\{\\{[A-Za-z][A-Za-z0-9_-]*\\.[A-Za-z][A-Za-z0-9_-]*\\}\\}", "name": "variable.other.nodx" }
+        { "match": "\\[@[A-Za-z][A-Za-z0-9-]*\\]", "name": "variable.other.citation.nodx" },
+        { "match": "\\[\\^[A-Za-z][A-Za-z0-9-]*\\]", "name": "variable.other.footnote.nodx" },
+        { "match": "@\\{[A-Za-z][A-Za-z0-9_-]*:[^}]+\\}", "name": "variable.other.mention.nodx" },
+        { "match": "\\{\\{(?:[A-Za-z][A-Za-z0-9_-]*\\.)?[A-Za-z][A-Za-z0-9_-]*\\}\\}", "name": "variable.other.nodx" }
       ]
     }
   }

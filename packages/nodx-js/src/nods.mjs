@@ -62,6 +62,60 @@ export function auditStylesheet(input, limits = DEFAULT_LIMITS) {
   return dedupe(violations);
 }
 
+export function sanitizeStylesheet(input, limits = DEFAULT_LIMITS) {
+  const audit = auditStylesheet(input, limits);
+  if (audit.length === 0) return escapeStyleText(input);
+  if (audit.some((violation) => violation.message === "Forbidden executable or breakout content in NODS.")) {
+    return "/* NODX-E027: blocked unsafe style content */";
+  }
+  const out = [];
+  for (const rule of parseRules(input)) {
+    const ruleAudit = [];
+    auditRule(rule, limits, ruleAudit);
+    if (ruleAudit.some((violation) => violation.severity === "error")) {
+      out.push("/* NODX-E027: forbidden NODS rule omitted */");
+    } else {
+      out.push(escapeStyleText(rule.source));
+    }
+  }
+  return out.length ? out.join("") : "/* NODX-E027: blocked unsafe style content */";
+}
+
+export function yamlStyleToCss(input) {
+  const rules = [];
+  let selector = "";
+  let declarations = [];
+  for (const raw of input.split(/\r?\n/)) {
+    if (!raw.trim() || raw.trimStart().startsWith("#")) continue;
+    if (/^\t/.test(raw)) throw new Error("YAML style indentation must use spaces.");
+    const indent = raw.length - raw.trimStart().length;
+    const line = raw.trimEnd();
+    if (indent === 0) {
+      flushRule();
+      if (!line.endsWith(":")) throw new Error("YAML style top-level entries must end with `:`.");
+      selector = line.slice(0, -1).trim();
+      if (!selector) throw new Error("Invalid YAML style selector.");
+    } else if (selector) {
+      const i = line.indexOf(":");
+      if (i <= 0) throw new Error("YAML style declaration must use `property: value`.");
+      const property = line.slice(0, i).trim();
+      const value = line.slice(i + 1).trim();
+      if (!property || !value) throw new Error("YAML style declarations require a property and value.");
+      declarations.push(`${property}: ${value};`);
+    } else {
+      throw new Error("Invalid YAML style structure.");
+    }
+  }
+  flushRule();
+  return rules.join("\n");
+
+  function flushRule() {
+    if (selector && declarations.length) rules.push(`${selector} { ${declarations.join(" ")} }`);
+    selector = "";
+    declarations = [];
+  }
+}
+
 function parseRules(input) {
   const rules = [];
   let start = 0;
@@ -360,6 +414,10 @@ function decodeCssEscapes(input) {
     i += 1;
   }
   return out;
+}
+
+function escapeStyleText(input) {
+  return input.replace(/</g, "\\3C ").replace(/>/g, "\\3E ");
 }
 
 function dedupe(list) {

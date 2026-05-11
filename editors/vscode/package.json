@@ -23,6 +23,12 @@
         "scopeName": "source.nodx",
         "path": "./syntaxes/nodx.tmLanguage.json"
       }
+    ],
+    "snippets": [
+      {
+        "language": "nodx",
+        "path": "./snippets/nodx.code-snippets"
+      }
     ]
   }
 }

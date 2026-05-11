@@ -1,5 +1,5 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 title: Core Fixture
 vars:
@@ -17,4 +17,3 @@ Paragraph with **strong**, *em*, `code`, [link](https://example.com),
 :::note {#n1 type="info"}
 Nested content.
 :::
-

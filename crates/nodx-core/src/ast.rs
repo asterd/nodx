@@ -30,7 +30,11 @@ pub enum Inline {
     Sub(Vec<Inline>),
     Sup(Vec<Inline>),
     Code(String),
-    Link { label: Vec<Inline>, target: String },
+    Link {
+        label: Vec<Inline>,
+        target: String,
+        attrs: Attrs,
+    },
     Span { children: Vec<Inline>, attrs: Attrs },
     Var { namespace: String, name: String },
     Ref { target: String },

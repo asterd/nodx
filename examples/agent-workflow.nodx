@@ -108,6 +108,6 @@ Validation breakage after edit
 ## Sample change record
 
 :::code {lang="jsonl"}
-{"schema":"nodx/change/1.0","op":"set-attribute","target":"#guardrail","beforeHash":"sha256-…","afterHash":"sha256-…","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Approve content","path":"1"}
+{"schema":"nodx/change/1.1","op":"set-attribute","target":"#guardrail","beforeHash":"sha256-...","afterHash":"sha256-...","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Approve content","path":"1"}
 :::
 ::::

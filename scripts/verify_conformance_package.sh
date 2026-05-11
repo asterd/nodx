@@ -26,6 +26,11 @@ check_output rich-web.ncp "target/debug/nodx ncp $root/fixtures/rich-web.nodx" e
 check_output rich-web.diagnostics "target/debug/nodx diagnostics $root/fixtures/rich-web.nodx --format json" expected/rich-web.diagnostics.json
 check_output rich-web.html "target/debug/nodx html $root/fixtures/rich-web.nodx" expected/rich-web.html
 
+check_output lite-syntax.ast "target/debug/nodx ast $root/fixtures/lite-syntax.nodx" expected/lite-syntax.ast.json
+check_output lite-syntax.ncp "target/debug/nodx ncp $root/fixtures/lite-syntax.nodx" expected/lite-syntax.ncp.json
+check_output lite-syntax.diagnostics "target/debug/nodx diagnostics $root/fixtures/lite-syntax.nodx --format json" expected/lite-syntax.diagnostics.json
+check_output lite-syntax.html "target/debug/nodx html $root/fixtures/lite-syntax.nodx" expected/lite-syntax.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Document, Node};
-use crate::inline_parser::plain_node_text;
+use crate::ast::{Document, Inline, Node};
+use crate::inline_parser::{plain_inlines, plain_node_text};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NavigationGraph {
@@ -87,6 +87,19 @@ fn resolve_toc(
         .cloned()
         .unwrap_or_else(|| default_navigation_label(&role).to_string());
     let scope = toc.attrs.get("scope").cloned();
+    if toc.attrs.get("mode").map(String::as_str) == Some("manual") {
+        let mut entries = Vec::new();
+        collect_manual_entries(&toc.children, ids, &mut entries);
+        return ResolvedNavigation {
+            toc_path: path.to_string(),
+            toc_id: toc.id.clone(),
+            role,
+            label,
+            scope,
+            entries,
+        };
+    }
+
     let source_nodes = scope
         .as_deref()
         .and_then(|raw| raw.strip_prefix('#'))
@@ -130,15 +143,71 @@ fn collect_entries(
         if node.node_type == "heading"
             && let (Some(id), Some(level)) = (&node.id, heading_level(node))
             && (min_level..=max_level).contains(&level)
+            && node.attrs.get("toc-hidden").map(String::as_str) != Some("true")
         {
             out.push(NavigationEntry {
                 id: id.clone(),
-                level,
-                title: plain_node_text(node),
+                level: node
+                    .attrs
+                    .get("toc-level")
+                    .and_then(|v| parse_level(v))
+                    .unwrap_or(level),
+                title: node
+                    .attrs
+                    .get("toc")
+                    .cloned()
+                    .unwrap_or_else(|| plain_node_text(node)),
                 path: path.clone(),
             });
         }
         collect_entries(&node.children, &path, min_level, max_level, out);
+    }
+}
+
+fn collect_manual_entries(
+    nodes: &[Node],
+    ids: &BTreeMap<String, String>,
+    out: &mut Vec<NavigationEntry>,
+) {
+    for node in nodes {
+        collect_manual_inline_entries(&node.inlines, ids, out);
+        collect_manual_entries(&node.children, ids, out);
+    }
+}
+
+fn collect_manual_inline_entries(
+    inlines: &[Inline],
+    ids: &BTreeMap<String, String>,
+    out: &mut Vec<NavigationEntry>,
+) {
+    for inline in inlines {
+        match inline {
+            Inline::Link { label, target, .. } => {
+                if let Some(id) = target.strip_prefix('#') {
+                    out.push(NavigationEntry {
+                        id: id.to_string(),
+                        level: 1,
+                        title: plain_inlines(label),
+                        path: ids.get(id).cloned().unwrap_or_default(),
+                    });
+                }
+                collect_manual_inline_entries(label, ids, out);
+            }
+            Inline::Strong(children)
+            | Inline::Em(children)
+            | Inline::Mark(children)
+            | Inline::Sub(children)
+            | Inline::Sup(children) => collect_manual_inline_entries(children, ids, out),
+            Inline::Span { children, .. } => collect_manual_inline_entries(children, ids, out),
+            Inline::Text(_)
+            | Inline::Code(_)
+            | Inline::Var { .. }
+            | Inline::Ref { .. }
+            | Inline::Mention { .. }
+            | Inline::FootnoteRef { .. }
+            | Inline::CitationRef { .. }
+            | Inline::MathInline { .. } => {}
+        }
     }
 }
 

@@ -96,6 +96,115 @@ pub fn sanitize_stylesheet(input: &str, limits: ResourceLimits) -> String {
     }
 }
 
+pub fn yaml_style_to_css(input: &str) -> Result<String, String> {
+    #[derive(Clone)]
+    enum Context {
+        Selector(String),
+        Pseudo { key: String, selector: Option<String> },
+    }
+
+    let mut out = String::new();
+    let mut context: Option<Context> = None;
+    for raw in input.lines() {
+        if raw.trim().is_empty() || raw.trim_start().starts_with('#') {
+            continue;
+        }
+        let indent = raw.chars().take_while(|ch| *ch == ' ').count();
+        if indent != raw.len() - raw.trim_start().len() {
+            return Err("YAML style indentation must use spaces.".to_string());
+        }
+        let line = raw.trim();
+        if indent == 0 {
+            let Some(name) = line.strip_suffix(':') else {
+                return Err("YAML style top-level entries must end with `:`.".to_string());
+            };
+            context = Some(match name {
+                "print" | "screen" | "dark" | "page" => Context::Pseudo {
+                    key: name.to_string(),
+                    selector: None,
+                },
+                selector => Context::Selector(selector.to_string()),
+            });
+            continue;
+        }
+
+        match &mut context {
+            Some(Context::Selector(selector)) if indent >= 2 => {
+                let (property, value) = split_yaml_declaration(line)?;
+                push_css_rule(&mut out, selector, property, value);
+            }
+            Some(Context::Pseudo { key, selector }) if indent == 2 && line.ends_with(':') => {
+                *selector = Some(line.trim_end_matches(':').to_string());
+            }
+            Some(Context::Pseudo {
+                key,
+                selector: Some(selector),
+            }) if indent >= 4 => {
+                let (property, value) = split_yaml_declaration(line)?;
+                push_pseudo_rule(&mut out, key, selector, property, value);
+            }
+            Some(Context::Pseudo {
+                key,
+                selector: None,
+            }) if *key == "page" && indent >= 2 => {
+                let (property, value) = split_yaml_declaration(line)?;
+                push_pseudo_rule(&mut out, key, "", property, value);
+            }
+            _ => return Err("Invalid YAML style structure.".to_string()),
+        }
+    }
+    Ok(out)
+}
+
+fn split_yaml_declaration(line: &str) -> Result<(&str, &str), String> {
+    let Some((property, value)) = line.split_once(':') else {
+        return Err("YAML style declaration must use `property: value`.".to_string());
+    };
+    let property = property.trim();
+    let value = value.trim().trim_matches('"');
+    if property.is_empty() || value.is_empty() {
+        return Err("YAML style declarations require a property and value.".to_string());
+    }
+    Ok((property, value))
+}
+
+fn push_css_rule(out: &mut String, selector: &str, property: &str, value: &str) {
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(selector);
+    out.push('{');
+    out.push_str(property);
+    out.push(':');
+    out.push_str(value);
+    out.push_str(";}");
+}
+
+fn push_pseudo_rule(out: &mut String, key: &str, selector: &str, property: &str, value: &str) {
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    match key {
+        "print" => out.push_str("@media print{"),
+        "screen" => out.push_str("@media screen{"),
+        "dark" => out.push_str("@media (prefers-color-scheme: dark){"),
+        "page" => out.push_str("@page{"),
+        _ => return,
+    }
+    if !selector.is_empty() {
+        out.push_str(selector);
+        out.push('{');
+    }
+    out.push_str(property);
+    out.push(':');
+    out.push_str(value);
+    out.push(';');
+    if !selector.is_empty() {
+        out.push('}');
+    }
+    out.push('}');
+}
+
 pub fn style_urls(input: &str) -> Vec<&str> {
     let mut urls = Vec::new();
     let mut offset = 0;

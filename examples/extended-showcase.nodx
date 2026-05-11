@@ -168,7 +168,7 @@ requires `beforeHash`, validates after every operation, and rolls back failed
 batches atomically.
 
 :::code {#sample-change-record lang="jsonl"}
-{"schema":"nodx/change/1.0","op":"set-attribute","target":"#approval","beforeHash":"sha256-…","afterHash":"sha256-…","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Mark approval state","path":"3.2"}
+{"schema":"nodx/change/1.1","op":"set-attribute","target":"#approval","beforeHash":"sha256-...","afterHash":"sha256-...","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Mark approval state","path":"3.2"}
 :::
 ::::
 

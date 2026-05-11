@@ -5,6 +5,10 @@ not a replacement for the larger repository corpus under `spec/tests`; it is a
 stable starter set for external parser, validator, renderer, and NCP
 implementations.
 
+It includes both classic 1.0 syntax and NODX-Lite authoring forms: two-colon
+blocks, heading light IDs, short variables, link attributes, manual TOC, and
+Markdown-compatible table separators.
+
 ## Contents
 
 - `fixtures/`: source `.nodx` inputs.

@@ -4,7 +4,7 @@ use nodx_core::{
     Document, Inline, NavigationGraph, Node, ResourceLimits, Value, default_navigation_label,
     resolve_navigation, sha256_bytes,
 };
-use nodx_style::sanitize_stylesheet;
+use nodx_style::{sanitize_stylesheet, yaml_style_to_css};
 use nodx_url::{ReferenceKind, ResourcePolicy};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -135,9 +135,46 @@ fn derive_title(nodes: &[Node]) -> Option<String> {
     None
 }
 
-fn base_stylesheet(_doc: &Document) -> String {
-    // Static base stylesheet — fixed bytes so its CSP sha256 hash is deterministic
-    String::from("html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}body{font:16px/1.6 system-ui;max-width:920px;margin:32px auto;padding:0 16px;color:#1f2937}h1,h2,h3,h4,h5,h6{line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:#4b5563}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-blocked-link,.nodx-blocked-image{color:#b91c1c;text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}")
+fn base_stylesheet(doc: &Document) -> String {
+    let theme = match doc.meta.get("theme") {
+        Some(Value::String(theme)) => theme.as_str(),
+        _ => "base",
+    };
+    match theme {
+        "none" | "plain" => String::from("html[dir=\"rtl\"]{direction:rtl}"),
+        "print" => {
+            let mut css = String::from(standard_tokens());
+            css.push_str("body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}");
+            css.push_str(common_styles());
+            css
+        }
+        "presentation" => {
+            let mut css = String::from(standard_tokens());
+            css.push_str("body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text)}h1{font-size:2.4em}h2{font-size:1.8em}");
+            css.push_str(common_styles());
+            css
+        }
+        "web" => {
+            let mut css = String::from(standard_tokens());
+            css.push_str("body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}");
+            css.push_str(common_styles());
+            css
+        }
+        _ => {
+            let mut css = String::from(standard_tokens());
+            css.push_str("body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}");
+            css.push_str(common_styles());
+            css
+        }
+    }
+}
+
+fn standard_tokens() -> &'static str {
+    "html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}"
+}
+
+fn common_styles() -> &'static str {
+    "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
 }
 
 fn sha256_base64_for_csp(input: &[u8]) -> String {
@@ -232,9 +269,18 @@ fn render_node(
             out.push_str("</pre>");
         }
         "style" => {
+            let style_source;
+            let raw_style = node.text.as_deref().unwrap_or("");
+            let source = if node.attrs.get("format").map(String::as_str) == Some("yaml") {
+                style_source = yaml_style_to_css(raw_style)
+                    .unwrap_or_else(|_| "/* NODX-E027: invalid YAML style block */".to_string());
+                style_source.as_str()
+            } else {
+                raw_style
+            };
             out.push_str("<style>");
             out.push_str(&sanitize_stylesheet(
-                node.text.as_deref().unwrap_or(""),
+                source,
                 policy.limits(),
             ));
             out.push_str("</style>");
@@ -491,11 +537,33 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 escape_html(out, text);
                 out.push_str("</code>");
             }
-            Inline::Link { label, target } => match safe_link_url_with_policy(policy, target) {
+            Inline::Link {
+                label,
+                target,
+                attrs,
+            } => match safe_link_url_with_policy(policy, target) {
                 Some(safe) => {
                     out.push_str("<a href=\"");
                     escape_attr(out, &safe);
-                    out.push_str("\" rel=\"noopener noreferrer\">");
+                    out.push('"');
+                    if let Some(title) = attrs.attrs.get("title") {
+                        out.push_str(" title=\"");
+                        escape_attr(out, title);
+                        out.push('"');
+                    }
+                    if let Some(download) = attrs.attrs.get("download") {
+                        out.push_str(" download=\"");
+                        escape_attr(out, download);
+                        out.push('"');
+                    }
+                    let rel = attrs
+                        .attrs
+                        .get("rel")
+                        .map(String::as_str)
+                        .unwrap_or("noopener noreferrer");
+                    out.push_str(" rel=\"");
+                    escape_attr(out, rel);
+                    out.push_str("\">");
                     render_inlines(out, label, policy);
                     out.push_str("</a>");
                 }

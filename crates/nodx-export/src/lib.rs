@@ -455,7 +455,7 @@ fn inline_text(inlines: &[Inline]) -> String {
             | Inline::Mark(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => out.push_str(&inline_text(children)),
-            Inline::Link { label, target } => {
+            Inline::Link { label, target, .. } => {
                 out.push_str(&inline_text(label));
                 out.push_str(" (");
                 out.push_str(target);

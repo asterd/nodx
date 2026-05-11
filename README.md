@@ -1,10 +1,94 @@
 # NODX
 
-NODX is a UTF-8, text-first document format for structured, portable source
-documents. A `.nodx` file can be plain text or a packaged ZIP; readers detect
-the representation from the first bytes.
+NODX is a text-first document format for people, tools, and AI agents. It keeps
+the easy parts of Markdown, then adds the pieces Markdown cannot guarantee:
+semantic structure, deterministic JSON output, safe rendering, packaged local
+assets, stable navigation, and an agent-readable projection.
 
-The normative specification is [NODX-RFC-0001](./NODX-RFC-0001.md).
+Use NODX when a document must be readable as plain text, rendered safely, checked
+by CI, converted to HTML/PDF-style outputs, and consumed by software without
+guessing what the author meant.
+
+The normative specification is [NODX-RFC-0001](./NODX-RFC-0001.md). For a quick
+local preview, build the CLI and render one of the committed examples to HTML.
+
+## NODX In 5 Minutes
+
+Start with a document that looks almost like Markdown:
+
+```nodx
+---
+title: My first NODX document
+theme: web
+---
+
+# Hello NODX #intro
+
+This is **structured text** with a safe [link](https://example.com).
+Reviewer: {{reviewer}}.
+```
+
+Add structure when the document needs meaning, navigation, or richer output:
+
+```nodx
+::toc {title="Contents" depth="2"}
+::
+
+# Quarterly report #q1
+
+| Metric | Value |
+|---|---:|
+| Revenue | 120K |
+| Costs | 80K |
+
+::note {type="info"}
+Unknown renderers keep this fallback content readable.
+::
+```
+
+Use the full form only when you need explicit metadata:
+
+```nodx
+---
+schema: nodx/1.0
+type: document
+title: Advanced NODX document
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - agent-read
+---
+```
+
+### Cheat Sheet
+
+| Need | Write |
+|---|---|
+| Heading with stable ID | `# Introduction #intro` |
+| Paragraph emphasis | `**strong**`, `*emphasis*`, `` `code` `` |
+| Variable | `{{reviewer}}` or `{{meta.title}}` |
+| Safe link with metadata | `[guide](docs/guide.nodx){title="Open guide" rel="help"}` |
+| Note/callout | `::note ... ::` |
+| Image | `::image {src="assets/photo.png" alt="Photo description"}` then `::` |
+| Table | `| A | B |` then `|---|---|` |
+| Table of contents | `::toc {title="Contents"}` then `::` |
+| Manual page break | `::pagebreak` then `::` |
+| Style block | `::style`, style rules, then `::` |
+
+### Why Not Just Markdown?
+
+| Capability | Markdown | AsciiDoc | LaTeX | NODX |
+|---|---:|---:|---:|---:|
+| Readable as text | yes | yes | partial | yes |
+| Canonical AST | no | partial | no | yes |
+| Safe for untrusted input | no | no | no | yes |
+| Built-in semantic navigation | partial | yes | partial | yes |
+| Packaged ZIP with local assets | no | no | no | yes |
+| Agent-readable projection | no | no | no | yes |
+| Conformance profiles | no | partial | no | yes |
 
 ## What This Repo Contains
 
@@ -18,7 +102,37 @@ The normative specification is [NODX-RFC-0001](./NODX-RFC-0001.md).
 - Showcase documents under `examples`.
 - Editor starter integrations under `editors`.
 
-## Example
+## Progressive Examples
+
+Minimal:
+
+```nodx
+---
+title: My first document
+---
+
+# Hello NODX #hello
+
+This is **structured text** with a safe [link](https://example.com).
+```
+
+Intermediate:
+
+```nodx
+---
+title: Report Q1
+theme: print
+---
+
+# Report Q1 #q1
+
+| Metric | Value |
+|---|---:|
+| Revenue | 120K |
+| Costs | 80K |
+```
+
+Advanced:
 
 ```nodx
 ---
@@ -34,10 +148,10 @@ profiles:
     - agent-read
 ---
 
-:::toc {#contents role="primary" depth="2" title="Contents"}
-:::
+::toc {#contents role="primary" depth="2" title="Contents"}
+::
 
-# Hello NODX {#hello}
+# Hello NODX #hello
 
 This is **structured text** with a safe [link](https://example.com).
 
@@ -46,9 +160,9 @@ This is **structured text** with a safe [link](https://example.com).
 | Canonical AST | stable |
 | NCP semantic projection | stable |
 
-:::note {#safe-note type="info"}
+::note {#safe-note type="info"}
 Unknown renderers keep fallback children as ordinary document content.
-:::
+::
 ```
 
 ## Build And Verify
@@ -97,30 +211,7 @@ Validate a single example before rendering it:
 target/debug/nodx validate examples/showcase-web.nodx --format json
 ```
 
-Start the interactive web app from the repository root:
-
-```sh
-python3 -m http.server 8080
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8080/apps/web/
-```
-
-The web app lets you select committed examples, including the packaged ZIP
-showcase, edit the NODX source on the left, inspect the rendered document,
-Canonical AST, and diagnostics on the right, toggle page simulation for
-`:::pagebreak`, follow clickable TOC anchors, and export the current HTML
-preview. The playground variant is available at:
-
-```text
-http://127.0.0.1:8080/apps/web/playground.html
-```
-
-Generate one static HTML file when you want a renderer artifact without the
-interactive app:
+Generate one static HTML file when you want a browser artifact:
 
 ```sh
 mkdir -p target/examples

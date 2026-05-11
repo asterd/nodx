@@ -1,4 +1,4 @@
-import { plainNodeText } from "./ast.mjs";
+import { plainInlines, plainNodeText } from "./ast.mjs";
 
 export function resolveNavigation(doc) {
   const ids = new Map();
@@ -28,6 +28,11 @@ function resolveToc(toc, path, doc, ids) {
   const role = toc.attrs.role ?? "primary";
   const label = toc.attrs.title ?? defaultNavigationLabel(role);
   const scope = toc.attrs.scope ?? null;
+  if (toc.attrs.mode === "manual") {
+    const entries = [];
+    collectManualEntries(toc.children, ids, entries);
+    return { entries, label, role, scope, tocId: toc.id, tocPath: path };
+  }
   const sourcePath = scope?.startsWith("#") ? ids.get(scope.slice(1)) : null;
   const scopedNode = sourcePath ? nodeAtPath(doc.body, sourcePath) : null;
   const sourceNodes = scopedNode ? [scopedNode] : doc.body;
@@ -47,12 +52,40 @@ function collectEntries(nodes, prefix, minLevel, maxLevel, out) {
     const path = childPath(prefix, i);
     if (item.type === "heading" && item.id !== null) {
       const level = headingLevel(item);
-      if (level !== null && level >= minLevel && level <= maxLevel) {
-        out.push({ id: item.id, level, path, title: plainNodeText(item) });
+      if (level !== null && level >= minLevel && level <= maxLevel && item.attrs["toc-hidden"] !== "true") {
+        out.push({
+          id: item.id,
+          level: parseLevel(item.attrs["toc-level"]) ?? level,
+          path,
+          title: item.attrs.toc ?? plainNodeText(item),
+        });
       }
     }
     collectEntries(item.children, path, minLevel, maxLevel, out);
   });
+}
+
+function collectManualEntries(nodes, ids, out) {
+  for (const item of nodes) {
+    collectManualInlineEntries(item.inlines, ids, out);
+    collectManualEntries(item.children, ids, out);
+  }
+}
+
+function collectManualInlineEntries(inlines, ids, out) {
+  for (const item of inlines) {
+    if (item.type === "link") {
+      if (item.target.startsWith("#")) {
+        const id = item.target.slice(1);
+        out.push({ id, level: 1, path: ids.get(id) ?? "", title: plainInlines(item.label) });
+      }
+      collectManualInlineEntries(item.label, ids, out);
+    } else if (["strong", "em", "mark", "sub", "sup"].includes(item.type)) {
+      collectManualInlineEntries(item.children, ids, out);
+    } else if (item.type === "span") {
+      collectManualInlineEntries(item.children, ids, out);
+    }
+  }
 }
 
 function firstHeadingLevel(nodes) {

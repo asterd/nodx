@@ -13,20 +13,20 @@
       <Keywords name="Numbers, suffix1"></Keywords>
       <Keywords name="Numbers, suffix2"></Keywords>
       <Keywords name="Numbers, range"></Keywords>
-      <Keywords name="Operators1">--- ::: :::: ::::: { } [ ] ( ) | # @</Keywords>
-      <Keywords name="Operators2">** * ` == ~ ^</Keywords>
-      <Keywords name="Folders in code1, open">:::note :::section :::figure :::table :::code :::style :::toc</Keywords>
+      <Keywords name="Operators1">--- :: ::: :::: ::::: { } [ ] ( ) | # @</Keywords>
+      <Keywords name="Operators2">** * ` == ~ ^ $$ [] () {}</Keywords>
+      <Keywords name="Folders in code1, open">::note ::section ::figure ::table ::code ::pre ::math ::style ::toc ::breadcrumb ::form ::field ::image ::caption ::quote ::bibliography ::citation-entry ::pagebreak ::include :::note :::section :::figure :::table :::code :::pre :::math :::style :::toc :::breadcrumb :::form :::field :::image :::caption :::quote :::bibliography :::citation-entry :::pagebreak :::include</Keywords>
       <Keywords name="Folders in code1, middle"></Keywords>
-      <Keywords name="Folders in code1, close">::: :::: :::::</Keywords>
+      <Keywords name="Folders in code1, close">:: ::: :::: :::::</Keywords>
       <Keywords name="Folders in code2, open"></Keywords>
       <Keywords name="Folders in code2, middle"></Keywords>
       <Keywords name="Folders in code2, close"></Keywords>
       <Keywords name="Folders in comment, open"></Keywords>
       <Keywords name="Folders in comment, middle"></Keywords>
       <Keywords name="Folders in comment, close"></Keywords>
-      <Keywords name="Keywords1">schema type title language dir profiles requires optional core rich style package agent-read</Keywords>
-      <Keywords name="Keywords2">document nodx/1.0</Keywords>
-      <Keywords name="Keywords3">toc note section figure image caption table row cell code style quote bibliography citation-entry form field pagebreak</Keywords>
+      <Keywords name="Keywords1">schema type title theme language dir profiles requires optional vars components core rich style package agent-read plain</Keywords>
+      <Keywords name="Keywords2">document nodx/1.0 nodx-package/1.0 web print presentation ltr rtl auto und</Keywords>
+      <Keywords name="Keywords3">toc breadcrumb note section figure image caption table row cell code pre math style quote bibliography citation-entry form field pagebreak include media embed</Keywords>
       <Keywords name="Keywords4"></Keywords>
       <Keywords name="Keywords5"></Keywords>
       <Keywords name="Keywords6"></Keywords>

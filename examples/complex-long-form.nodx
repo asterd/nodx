@@ -164,7 +164,7 @@ Example change record:
 :::
 
 :::code {lang="json"}
-{"schema":"nodx/change/0.1","op":"set-attribute","target":"#release-form","author":"agent:release-reviewer","reason":"Mark readiness evidence","requiresApproval":true}
+{"schema":"nodx/change/1.1","op":"set-attribute","target":"#release-form","author":"agent:release-reviewer","reason":"Mark readiness evidence","requiresApproval":true}
 :::
 ::::
 
@@ -180,4 +180,3 @@ NODX keeps preformatted text readable.
     Indentation is preserved inside literal blocks.
 :::
 ::::
-

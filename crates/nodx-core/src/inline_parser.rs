@@ -21,6 +21,11 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                     namespace: ns.to_string(),
                     name: n.to_string(),
                 });
+            } else if !name.is_empty() {
+                out.push(Inline::Var {
+                    namespace: "vars".to_string(),
+                    name: name.to_string(),
+                });
             } else {
                 out.push(Inline::Text(rest[..end + 4].to_string()));
             }
@@ -97,11 +102,25 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                 let after = &rest[close + 1..];
                 if let Some(stripped) = after.strip_prefix('(') {
                     if let Some(end) = stripped.find(')') {
+                        let after_link = &stripped[end + 1..];
+                        let (attrs, consumed_attrs) = if after_link.starts_with('{') {
+                            if let Some(attr_end) = after_link.find('}') {
+                                (
+                                    parse_attrs(&after_link[..=attr_end]).unwrap_or_default(),
+                                    attr_end + 1,
+                                )
+                            } else {
+                                (Default::default(), 0)
+                            }
+                        } else {
+                            (Default::default(), 0)
+                        };
                         out.push(Inline::Link {
                             label: parse_inlines(label),
                             target: stripped[..end].to_string(),
+                            attrs,
                         });
-                        i += close + 1 + end + 2;
+                        i += close + 1 + end + 2 + consumed_attrs;
                         continue;
                     }
                 } else if after.starts_with('{')

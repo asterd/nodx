@@ -14,7 +14,7 @@ keywords:
   - 国际化
 vars:
   organization: 示例公司
-  release: 0.1
+  release: 1.0
 profiles:
   requires:
     - core
@@ -42,7 +42,7 @@ NODX 完全支持 UTF-8 编码的中日韩文字。本文档由 {{vars.organizat
 ::::section {#vertical-context}
 ## 垂直与水平排版
 
-NODX 0.1 不强制要求 `writing-mode` 在 AST 中体现，但允许通过 NODS 和
+NODX 1.0 不强制要求 `writing-mode` 在 AST 中体现，但允许通过 NODS 和
 渲染提示进行选择。下面的示例使用横向排版（默认）。
 
 | 字段 | 类型 | 说明 |

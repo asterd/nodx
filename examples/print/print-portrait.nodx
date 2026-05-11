@@ -160,7 +160,7 @@ packaged version.
 ## Appendix: Methodology {#methodology-heading}
 
 Sample selection follows ISO 19011:2018 §6.4. Evidence collection used the
-agent-driven workflow described in §22 of the NODX 0.1 Working Draft. Each
+agent-driven workflow described by the reserved NODX Agent-Mutate profile. Each
 finding was double-validated with a deterministic NCP projection before
 inclusion in the report.
 :::: section

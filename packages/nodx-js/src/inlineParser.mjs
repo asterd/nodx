@@ -15,8 +15,9 @@ export function parseInlines(input) {
       i += end + 2;
     } else if (rest.startsWith("{{") && rest.includes("}}")) {
       const end = rest.indexOf("}}");
-      const [namespace, name] = rest.slice(2, end).split(".");
-      out.push(name ? { name, namespace, type: "var" } : { text: rest.slice(0, end + 2), type: "text" });
+      const raw = rest.slice(2, end);
+      const [namespace, name] = raw.split(".");
+      out.push(name ? { name, namespace, type: "var" } : raw ? { name: raw, namespace: "vars", type: "var" } : { text: rest.slice(0, end + 2), type: "text" });
       i += end + 2;
     } else if (rest.startsWith("[^") && rest.includes("]")) {
       const end = rest.indexOf("]");
@@ -61,8 +62,18 @@ export function parseInlines(input) {
       const after = rest.slice(close + 1);
       if (after.startsWith("(") && after.includes(")")) {
         const end = after.indexOf(")");
-        out.push({ label: parseInlines(label), target: after.slice(1, end), type: "link" });
-        i += close + 1 + end + 1;
+        const afterLink = after.slice(end + 1);
+        let attrs = parseAttrs("");
+        let consumedAttrs = 0;
+        if (afterLink.startsWith("{") && afterLink.includes("}")) {
+          const attrEnd = afterLink.indexOf("}");
+          attrs = parseAttrs(afterLink.slice(0, attrEnd + 1));
+          consumedAttrs = attrEnd + 1;
+        }
+        const link = { label: parseInlines(label), target: after.slice(1, end), type: "link" };
+        if (consumedAttrs > 0) link.attrs = attrs;
+        out.push(link);
+        i += close + 1 + end + 1 + consumedAttrs;
       } else if (after.startsWith("{") && after.includes("}")) {
         const end = after.indexOf("}");
         out.push({ attrs: parseAttrs(after.slice(0, end + 1)), children: parseInlines(label), type: "span" });

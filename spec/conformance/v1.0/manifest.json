@@ -1,6 +1,6 @@
 {
   "schema": "nodx-conformance/1.0",
-  "spec": "../../NODX-RFC-0001.md",
+  "spec": "../../../NODX-RFC-0001.md",
   "fixtures": [
     {
       "name": "minimal",
@@ -21,6 +21,17 @@
         "ncp": "expected/rich-web.ncp.json",
         "diagnostics": "expected/rich-web.diagnostics.json",
         "html": "expected/rich-web.html"
+      },
+      "exitCode": 0
+    },
+    {
+      "name": "lite-syntax",
+      "source": "fixtures/lite-syntax.nodx",
+      "expected": {
+        "ast": "expected/lite-syntax.ast.json",
+        "ncp": "expected/lite-syntax.ncp.json",
+        "diagnostics": "expected/lite-syntax.diagnostics.json",
+        "html": "expected/lite-syntax.html"
       },
       "exitCode": 0
     },

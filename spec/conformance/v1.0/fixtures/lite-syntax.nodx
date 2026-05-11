@@ -1,0 +1,38 @@
+---
+schema: nodx/1.0
+type: document
+title: Lite Syntax
+profiles:
+  requires:
+    - core
+    - rich
+---
+
+::toc {title="Auto path" depth="2"}
+::
+
+# Lite Syntax #lite
+
+Reviewer: {{reviewer}}.
+
+[Guide](docs/guide.nodx){title="Open guide" rel="help"}
+
+| Name | Value |
+|---|---|
+| Blocks | short |
+
+## Detailed implementation heading {#impl toc="Implementation"}
+
+This heading uses a shorter TOC label.
+
+## Hidden implementation note {#hidden toc-hidden="true"}
+
+This heading is intentionally omitted from automatic navigation.
+
+::toc {title="Manual path" mode="manual"}
+- [Lite](#lite)
+::
+
+::note {type="info"}
+Short fences are valid.
+::note

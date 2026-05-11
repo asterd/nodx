@@ -5,14 +5,17 @@ highlighting.
 
 ## VSCode
 
-`editors/vscode` is a minimal extension skeleton:
+`editors/vscode` is a lightweight extension skeleton with TextMate highlighting,
+language configuration, folding markers, and authoring snippets:
 
 ```sh
 cd editors/vscode
 vsce package
 ```
 
-It contributes the `.nodx` language and a TextMate grammar.
+It contributes the `.nodx` language, a TextMate grammar, bracket/indentation
+rules, and snippets for documents, blocks, TOCs, YAML style blocks, figures, and
+tables.
 
 ## Sublime Text
 

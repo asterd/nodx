@@ -9,8 +9,15 @@ This guide is non-normative. The normative contract is `NODX-RFC-0001.md`.
    - Otherwise parse as UTF-8 text NODX.
 2. Enforce resource limits before expensive work.
 3. Validate UTF-8, BOM policy, and U+0000.
-4. Parse front matter using the NODX YAML safe subset.
+4. Parse front matter using the NODX YAML safe subset. If it is absent, apply
+   the 1.0 defaults (`schema`, `type`, `language`, `dir`, and implicit `core`).
 5. Parse blocks, headings, lists, tables, attributes, and inline syntax.
+   Implement both full and Lite authoring forms:
+   - `::note ... ::` as well as `:::note ... :::`;
+   - heading IDs written as `# Title #intro`;
+   - variables written as `{{name}}`, canonicalized to `{{vars.name}}`;
+   - links written as `[label](target){attrs}`;
+   - table separators written as `| - |` or `|---|`.
 6. Produce canonical Semantic AST JSON with sorted object keys.
 7. Run semantic validation and emit diagnostics.
 8. Implement URL/path policy.
@@ -23,8 +30,10 @@ A minimal useful reader should support:
 
 - paragraphs and headings;
 - front matter `schema: nodx/1.0`;
-- delimited blocks with fallback children;
+- delimited blocks with fallback children, including the two-colon Lite form;
 - safe inline text/code/link parsing;
+- `{{name}}` variables as aliases for `{{vars.name}}`;
+- link attributes on `[label](target){attrs}`;
 - diagnostics JSON;
 - unsupported required profiles as `NODX-E024` and exit code `3`.
 

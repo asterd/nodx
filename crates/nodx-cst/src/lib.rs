@@ -514,7 +514,7 @@ fn serialize_inlines(inlines: &[nodx_core::Inline], out: &mut String) {
                 serialize_inlines(children, out);
                 out.push('^');
             }
-            Inline::Link { label, target } => {
+            Inline::Link { label, target, .. } => {
                 out.push('[');
                 serialize_inlines(label, out);
                 out.push_str("](");
@@ -653,7 +653,7 @@ fn scan_blocks(
     while index < end {
         let line = line_text(text, &lines[index]);
         if let Some((colons, name)) = close {
-            if let Some(label) = parse_close(line, colons) {
+            if let Some(label) = parse_matching_close(line, colons, name) {
                 if let Some(label) = label
                     && label != name
                 {
@@ -692,7 +692,12 @@ fn scan_blocks(
             if matches!(open.name.as_str(), "code" | "pre" | "math" | "style") {
                 let mut cursor = index + 1;
                 while cursor < end
-                    && parse_close(line_text(text, &lines[cursor]), open.colons).is_none()
+                    && parse_matching_close(
+                        line_text(text, &lines[cursor]),
+                        open.colons,
+                        &open.name,
+                    )
+                    .is_none()
                 {
                     cursor += 1;
                 }
@@ -847,7 +852,7 @@ fn line_text<'a>(text: &'a str, line: &Line) -> &'a str {
 
 fn parse_opener(line: &str, span: &Line) -> Option<Opener> {
     let colons = line.chars().take_while(|ch| *ch == ':').count();
-    if colons < 3 {
+    if colons < 2 {
         return None;
     }
     let rest = &line[colons..];
@@ -911,13 +916,24 @@ fn parse_close(line: &str, n: usize) -> Option<Option<&str>> {
         .map(Some)
 }
 
+fn parse_matching_close<'a>(line: &'a str, n: usize, expected: &str) -> Option<Option<&'a str>> {
+    if let Some(close) = parse_close(line, n) {
+        return Some(close);
+    }
+    let after = line.strip_prefix(&":".repeat(n))?;
+    if after == expected {
+        return Some(Some(after));
+    }
+    None
+}
+
 fn is_mismatched_close(line: &str, n: usize) -> bool {
     line.chars().take_while(|ch| *ch == ':').count() == n && parse_close(line, n).is_none()
 }
 
 fn is_any_close(line: &str) -> bool {
     let colons = line.chars().take_while(|ch| *ch == ':').count();
-    colons >= 3 && line[colons..].trim().is_empty()
+    colons >= 2 && line[colons..].trim().is_empty()
 }
 
 fn is_list_start(line: &str) -> bool {

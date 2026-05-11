@@ -1,12 +1,7 @@
 ---
-schema: nodx/1.0
-type: document
 title: Minimal NODX
-profiles:
-  requires:
-    - core
 ---
 
-# Minimal NODX {#minimal}
+# Minimal NODX #minimal
 
 A minimal NODX 1.0 document.

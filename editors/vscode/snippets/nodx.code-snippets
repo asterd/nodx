@@ -1,0 +1,68 @@
+{
+  "NODX document": {
+    "prefix": "doc",
+    "body": [
+      "---",
+      "schema: nodx/1.0",
+      "title: ${1:Title}",
+      "theme: ${2:web}",
+      "profiles:",
+      "  requires:",
+      "    - core",
+      "---",
+      "# ${1:Title} #${3:id}",
+      "",
+      "$0"
+    ],
+    "description": "Create a NODX document with safe front matter"
+  },
+  "Block": {
+    "prefix": "block",
+    "body": [
+      "::${1:note} ${2:{type=\"tip\"}}",
+      "$0",
+      ":: ${1:note}"
+    ],
+    "description": "Create a labelled delimited block"
+  },
+  "TOC": {
+    "prefix": "toc",
+    "body": [
+      "::toc {title=\"${1:Contents}\" depth=\"${2:3}\"}",
+      ":: toc"
+    ],
+    "description": "Insert a table of contents block"
+  },
+  "YAML style": {
+    "prefix": "styleyaml",
+    "body": [
+      ":::style {format=\"yaml\"}",
+      "${1:h1}:",
+      "  color: ${2:var(--nodx-color-primary)}",
+      "::: style"
+    ],
+    "description": "Insert a NODX YAML style block"
+  },
+  "Figure image": {
+    "prefix": "figure",
+    "body": [
+      "::figure",
+      ":::image {src=\"${1:assets/image.svg}\" alt=\"${2:Description}\"}",
+      "::: image",
+      "::: caption",
+      "${3:Caption}",
+      ":::caption",
+      ":: figure"
+    ],
+    "description": "Insert an accessible image figure"
+  },
+  "Table": {
+    "prefix": "table",
+    "body": [
+      "| ${1:Column} | ${2:Column} |",
+      "| --- | --- |",
+      "| ${3:Value} | ${4:Value} |"
+    ],
+    "description": "Insert a NODX pipe table"
+  }
+}

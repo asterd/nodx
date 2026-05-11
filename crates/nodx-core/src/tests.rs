@@ -10,6 +10,26 @@ fn parses_core_blocks() {
 }
 
 #[test]
+fn parses_lite_blocks_heading_ids_vars_and_link_attrs() {
+    let doc = parse_str(
+        "# Title #intro\n\n::note {type=\"info\"}\nHello {{reviewer}} and [guide](docs/guide.nodx){title=\"Open guide\" rel=\"help\"}.\n::note\n",
+    );
+    assert_eq!(doc.body[0].id.as_deref(), Some("intro"));
+    assert_eq!(doc.body[1].node_type, "note");
+    let json = canonical_json(&doc);
+    assert!(json.contains("\"namespace\":\"vars\""));
+    assert!(json.contains("\"title\":\"Open guide\""));
+    assert!(json.contains("\"rel\":\"help\""));
+}
+
+#[test]
+fn escaped_heading_light_id_stays_literal_text() {
+    let doc = parse_str("# Title \\#intro\n");
+    assert_eq!(doc.body[0].id, None);
+    assert!(canonical_json(&doc).contains("Title #intro"));
+}
+
+#[test]
 fn parses_tables_and_lists() {
     let doc = parse_str("- [ ] Todo\n- [x] Done\n\n| A | B |\n| - | - |\n| 1 | 2 |\n");
     assert_eq!(
