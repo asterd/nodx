@@ -20,7 +20,7 @@ pub fn ncp_json(doc: &Document) -> String {
     out.push_str("}],\"loss\":[],\"mode\":\"semantic\",\"nodes\":");
     let navigation = resolve_navigation(doc);
     write_ncp_nodes(&mut out, &doc.body, "", &navigation);
-    out.push_str(",\"schema\":\"nodx-ncp/0.1\",\"sourceHash\":");
+    out.push_str(",\"schema\":\"nodx-ncp/1.0\",\"sourceHash\":");
     write_json_string(&mut out, &sha256_base64url(canonical.as_bytes()));
     out.push('}');
     out

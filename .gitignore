@@ -3,6 +3,7 @@ old/
 
 # Rust
 /target/
+target/
 **/*.rs.bk
 
 # Node / web tooling

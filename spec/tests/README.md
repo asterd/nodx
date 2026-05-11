@@ -9,9 +9,13 @@ Current invariant:
 rtk sh scripts/run_conformance.sh
 ```
 
-For every positive `.nodx` fixture and example, the Rust reference parser and
-the independent JavaScript parser must emit byte-identical canonical Semantic
-AST JSON. NCP fixtures also require byte-identical Rust and JavaScript semantic
-NCP JSON.
+For every positive text `.nodx` fixture and example, the Rust reference parser
+and the independent JavaScript parser must emit byte-identical canonical
+Semantic AST JSON and byte-identical semantic NCP JSON.
+
+Negative fixtures pair with exact diagnostic JSON goldens under
+`spec/tests/golden`. Security-focused inputs live under `spec/tests/security`.
+The full release-gate status for the current corpus is documented in
+`CONFORMANCE.md`.
 
 Add new fixtures when adding syntax. Prefer small documents that isolate one behavior, plus one realistic mixed document.

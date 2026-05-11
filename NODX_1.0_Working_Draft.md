@@ -1,13 +1,13 @@
 # NODX-WD-0002: NODX 1.0 Working Draft
 
 **Title:** NODX 1.0 - Node-Oriented Document eXchange  
-**Document type:** Working Draft / standards-track technical proposal  
-**Version:** 1.0 pre-release contract  
+**Document type:** Frozen Working Draft / standards-track technical proposal
+**Version:** 1.0 frozen release contract
 **Date:** 11 May 2026  
 **Derived from:** `NODX_0.1_Working_Draft.md`  
 **Primary extension:** `.nodx`  
 **Container model:** UTF-8 text or packaged ZIP, detected by bytes  
-**Status:** Contract cleanup draft for NODX 1.0; implementation is still pre-1.0
+**Status:** Frozen for NODX 1.0 release-gate verification.
 
 ---
 
@@ -29,9 +29,10 @@ resource loading.
 
 ## 1. Status and Scope
 
-This draft promotes only the intentional 1.0 contract from the 0.1 working
-draft. `NODX_0.1_Working_Draft.md` remains historical input and must not be
-rewritten as part of 1.0 cleanup work.
+This frozen draft promotes only the intentional 1.0 contract from the 0.1
+working draft. `NODX_0.1_Working_Draft.md` remains historical input and must
+not be rewritten as part of 1.0 cleanup work. Changes to the frozen surfaces in
+Section 3 require a future major version update.
 
 Required 1.0 behavior:
 
@@ -457,15 +458,14 @@ behavior instead of actual signature verification.
 
 ## 15. Current Reference Implementation Status
 
-The repository is currently a pre-1.0 reference implementation. It has two Rust
-crates, `nodx-core` and `nodx-cli`, plus an independent JavaScript parser. It
-does not yet have separate `nodx-validate`, `nodx-url`, `nodx-package`,
-`nodx-style`, `nodx-ncp`, or `nodx-render-html` crates.
+The repository contains the NODX 1.0 release-gate reference implementation. It
+has Rust crates for core parsing, package reading, URL/resource policy,
+validation, style safety, HTML rendering, and the CLI, plus an independent
+JavaScript parser and semantic NCP projector.
 
-Implemented behavior is the public 0.1 reference surface: UTF-8 parsing, a
-practical Plain/Core/Rich subset, canonical JSON, diagnostics, safe HTML and
-TUI rendering, semantic NCP projection, a minimal stored-ZIP package reader, and
-Rust/JS conformance over current fixtures.
+Implemented behavior includes UTF-8 parsing, Plain/Core/Rich syntax, canonical
+JSON, diagnostics, safe HTML and TUI rendering, semantic NCP projection, safe
+stored-ZIP package reading, URL/resource policy, safe NODS subset validation,
+and Rust/JS conformance over the committed fixture corpus.
 
-1.0 contract text in this draft describes the target. Implementation gaps are
-tracked in `NODX_1.0_Evolution_Plan.md` and `IMPLEMENTATION_PLAN.md`.
+The known release limitations are tracked in `RELEASE_NOTES-1.0.md`.

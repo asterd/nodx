@@ -46,8 +46,9 @@ Current crates and packages:
   semantic NCP projector, and shared diagnostics subset used for conformance
   parity.
 
-The repository does not yet have a separate `nodx-ncp` crate, fuzz targets, or
-complete golden corpus directories. Those are 1.0 roadmap work items.
+The repository does not yet have a separate `nodx-ncp` crate. It has Wave 07
+fuzz target entry points under `fuzz/`, but the full release-candidate fuzz
+budget and larger numeric corpus targets remain documented release limitations.
 
 ## Implemented Behavior
 
@@ -145,3 +146,20 @@ Completed by this wave:
 4. Expanded conformance, NCP, navigation, negative, and security fixtures.
 5. Expanded `scripts/run_conformance.sh` to compare Rust/JS canonical AST and
    Rust/JS semantic NCP output and write `target/conformance-report.json`.
+
+## Wave 07 Release Gate
+
+Completed by this wave:
+
+1. Marked `NODX_1.0_Working_Draft.md` as the frozen 1.0 release contract.
+2. Published `CONFORMANCE.md`, `INTEROP.md`, `MIGRATION-0.1-TO-1.0.md`, and
+   `RELEASE_NOTES-1.0.md`.
+3. Expanded `SECURITY.md` and `THREAT_MODEL.md` from skeletons into release
+   gate documents.
+4. Added `fuzz/README.md` and fuzz target entry points for parser, front
+   matter, block parsing, inline parsing, attributes, URL policy, package
+   reading, NODS validation, NCP serialization, and navigation resolution.
+5. Documented the media type registration plan in `INTEROP.md`.
+
+No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
+is changed by Wave 07.

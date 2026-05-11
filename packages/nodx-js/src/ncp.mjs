@@ -10,7 +10,7 @@ export function ncpJson(doc) {
   return "{\"chunks\":[{\"id\":\"chunk-1\",\"nodes\":" + JSON.stringify(ids) +
     ",\"sha256\":" + JSON.stringify(sha256Base64Url(ids.join("\n"))) +
     "}],\"loss\":[],\"mode\":\"semantic\",\"nodes\":" + ncpNodesJson(doc.body, "", navigation) +
-    ",\"schema\":\"nodx-ncp/0.1\",\"sourceHash\":" + JSON.stringify(sha256Base64Url(canonical)) + "}";
+    ",\"schema\":\"nodx-ncp/1.0\",\"sourceHash\":" + JSON.stringify(sha256Base64Url(canonical)) + "}";
 }
 
 function collectNodeIds(nodes, prefix) {

@@ -1,7 +1,7 @@
 # NODX Threat Model
 
-This is the initial threat-model skeleton for NODX 1.0. It records the security
-assumptions that future implementation waves must satisfy and test.
+This threat model records the NODX 1.0 security assumptions, trust boundaries,
+and release-gate mitigations for the reference implementation.
 
 ## Assets
 
@@ -47,6 +47,46 @@ assumptions that future implementation waves must satisfy and test.
 | Misleading agent context | Deterministic NCP hashes and explicit loss diagnostics. |
 | Unsupported required capability | Fail closed with `NODX-E024` and CLI exit `3`. |
 
+## Boundary-Specific Notes
+
+### Text Parser
+
+Untrusted bytes enter through `parse_bytes`. The parser must validate UTF-8,
+reject U+0000, bound source size, and produce deterministic diagnostics instead
+of panicking on malformed input.
+
+### Front Matter
+
+Front matter is treated as data, not executable YAML. The safe subset forbids
+references, tags, object construction, duplicate keys, multiple documents, and
+non-finite numeric values.
+
+### URLs and Assets
+
+Resource references cross from document text into host or package resource
+policy. The default policy permits safe fragments and package-relative paths,
+allows only documented link schemes, rejects dangerous schemes, and does not
+fetch remote resources.
+
+### Packages
+
+ZIP package bytes cross a filesystem-like boundary. The reader must validate
+central directory metadata, reject traversal and special files, enforce limits,
+verify manifest metadata, and expose only read-only in-memory access.
+
+### Rendering
+
+HTML rendering crosses into browser interpretation. Renderers must escape by
+context, omit unsafe style rules, reject active content, and include restrictive
+browser policy where possible.
+
+### Agent Consumption
+
+NCP output crosses into retrieval and agent contexts. Canonical AST and NCP
+hashes must be deterministic, unsupported capabilities must be visible through
+diagnostics, and lossy projections must not pretend to preserve unsupported
+semantics.
+
 ## Non-Goals for 1.0
 
 - Trust establishment for signatures.
@@ -55,13 +95,13 @@ assumptions that future implementation waves must satisfy and test.
 - Sandboxed active widgets or plugins.
 - Native PDF/DOCX/PPTX exporter threat modeling.
 
-## Required Future Work
+## Residual Risks and Future Work
 
-Before NODX 1.0 release:
-
-1. Add security corpus fixtures for every error code that guards a boundary.
-2. Add fuzz targets for text parsing, front matter, attributes, package parsing,
-   URL policy, style validation, and canonical serialization.
-3. Add package bomb and traversal fixtures.
-4. Add renderer escaping fixtures by output context.
+1. Grow the committed security corpus to the numeric targets in
+   `NODX_1.0_Evolution_Plan.md`.
+2. Complete and record the release-candidate fuzz budget from `fuzz/README.md`.
+3. Add broader package bomb archives and traversal variants.
+4. Expand renderer escaping fixtures by output context.
 5. Document host policy override rules and their tests.
+6. Threat-model signatures, agent mutation, lossless editing, and native export
+   profiles when those future profiles enter scope.

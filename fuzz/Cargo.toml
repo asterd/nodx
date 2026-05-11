@@ -1,0 +1,87 @@
+[package]
+name = "nodx-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nodx-core = { path = "../crates/nodx-core" }
+nodx-package = { path = "../crates/nodx-package" }
+nodx-style = { path = "../crates/nodx-style" }
+nodx-url = { path = "../crates/nodx-url" }
+
+[[bin]]
+name = "parse_bytes"
+path = "fuzz_targets/parse_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "front_matter"
+path = "fuzz_targets/front_matter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "block_parser"
+path = "fuzz_targets/block_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "inline_parser"
+path = "fuzz_targets/inline_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "attrs"
+path = "fuzz_targets/attrs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "url"
+path = "fuzz_targets/url.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "package"
+path = "fuzz_targets/package.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "nods"
+path = "fuzz_targets/nods.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ncp"
+path = "fuzz_targets/ncp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "navigation"
+path = "fuzz_targets/navigation.rs"
+test = false
+doc = false
+bench = false

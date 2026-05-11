@@ -1,15 +1,13 @@
 # Security Policy
 
 NODX is designed for offline-first, fail-closed processing of untrusted document
-input. This file is a skeleton for the 1.0 security policy and will be expanded
-as the implementation reaches the security milestones in
-`NODX_1.0_Evolution_Plan.md`.
+input. This policy covers the NODX 1.0 reference implementation release gate.
 
 ## Supported Versions
 
 | Version | Security status |
 |---|---|
-| `nodx/1.0` | Target contract, not released yet. |
+| `nodx/1.0` | Release-gate contract; known limitations are in `RELEASE_NOTES-1.0.md`. |
 | `nodx/0.1` | Reference implementation draft, not a stable security release. |
 
 ## Baseline Rules
@@ -37,6 +35,50 @@ Processors handling untrusted input must:
 - Inline MathML in NODX 1.0.
 - Agent mutations in NODX 1.0.
 
+## Implemented Security Boundaries
+
+- `nodx-core` validates UTF-8 bytes before text parsing and rejects U+0000.
+- Front matter accepts only the documented YAML safe subset and rejects anchors,
+  aliases, explicit tags, merge keys, duplicate keys, multiple documents,
+  timestamp-like scalars, binary tags, custom objects, and non-finite numbers
+  with `NODX-E019`.
+- `nodx-url` centralizes URL classification, resource limits, and package path
+  normalization.
+- `nodx-render-html` escapes HTML text, attributes, URLs, and style content by
+  context and emits a restrictive CSP.
+- `nodx-style` audits and sanitizes the safe NODS subset; forbidden constructs
+  produce `NODX-E027` diagnostics and unsafe rules are omitted from rendered
+  HTML.
+- `nodx-package` reads stored ZIP packages into an in-memory read-only
+  `PackageFs`, verifies manifest-listed sizes and SHA-256 digests, rejects path
+  traversal and special files, and never extracts package content to disk.
+- Unsupported required profiles fail closed with `NODX-E024` and CLI exit code
+  `3`.
+
+## Security Corpus
+
+Committed security inputs:
+
+- `spec/tests/security/url-policy.tsv`
+- `spec/tests/security/yaml-hostile`
+- `spec/tests/security/nods-hostile`
+- `spec/tests/security/xss`
+- `spec/tests/security/package-corpus.md`
+
+The corpus is active and run through unit, renderer, package, validator, or
+conformance checks as appropriate. The larger numeric corpus targets from the
+evolution plan are not yet fully populated; this is a documented release
+limitation.
+
+## Fuzzing
+
+Fuzz target entry points are published under `fuzz/`. Local and release-branch
+commands are documented in `fuzz/README.md`.
+
+The full release-candidate budget of at least 24 CPU-hours per target has not
+been completed in this local wave. Accepted fuzz findings must be recorded in
+this file or in a linked advisory before a stable release is tagged.
+
 ## Reporting Vulnerabilities
 
 This repository does not yet publish a stable vulnerability disclosure process.
@@ -51,7 +93,6 @@ maintainer channel and include:
 
 Do not include secrets, private documents, or production data in reports.
 
-## Security Test Status
+## Current Accepted Findings
 
-The repository does not yet include the full 1.0 security corpus or fuzzing
-targets. Those are required before a stable 1.0 release.
+No accepted security findings are documented for this wave.

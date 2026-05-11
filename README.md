@@ -10,6 +10,10 @@ Active documents:
 - [NODX 1.0 Evolution Plan](./NODX_1.0_Evolution_Plan.md): implementation roadmap.
 - [NODX 0.1 Working Draft](./NODX_0.1_Working_Draft.md): historical input.
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md): current implementation status.
+- [Conformance Report](./CONFORMANCE.md): release-gate corpus and DoD matrix.
+- [Interop Notes](./INTEROP.md): AST, NCP, package, profile, and media type notes.
+- [Migration Guide](./MIGRATION-0.1-TO-1.0.md): changes from 0.1 to 1.0.
+- [Release Notes](./RELEASE_NOTES-1.0.md): known limitations and verification.
 
 NODX uses `.nodx` as a hybrid extension. A file can be UTF-8 Text NODX or a ZIP
 Packaged NODX, and readers identify the representation from the first bytes.
@@ -40,8 +44,9 @@ centralized URL/resource policy, TUI rendering, semantic NCP
 projection, and a safe stored-ZIP package reader with manifest digest
 verification and read-only virtual filesystem access.
 
-The workspace does not yet contain a separate `nodx-ncp` crate. That remains a
-roadmap target.
+The workspace does not yet contain a separate `nodx-ncp` crate. Semantic NCP is
+implemented in `nodx-core` and in the independent JavaScript package; a split
+crate remains a roadmap target.
 
 ## Verify
 
@@ -123,3 +128,7 @@ Current inline `:::style` blocks are processed by the `nodx-style` allowlist
 validator. Forbidden NODS constructs emit deterministic `NODX-E027`
 diagnostics, and unsafe rules are omitted from rendered HTML. Full cascade and
 computed style remain future work.
+
+The full numeric corpus targets and release-candidate fuzz budget from
+`NODX_1.0_Evolution_Plan.md` are documented release limitations until completed
+on the release branch.
