@@ -77,7 +77,7 @@ fn split_attr_tokens(input: &str) -> Vec<String> {
     out
 }
 
-pub(crate) fn valid_name(s: &str, allow_hyphen: bool) -> bool {
+pub fn valid_name(s: &str, allow_hyphen: bool) -> bool {
     let mut chars = s.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
         && chars.all(|c| c.is_ascii_alphanumeric() || (allow_hyphen && c == '-'))

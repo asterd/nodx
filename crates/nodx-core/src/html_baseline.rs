@@ -1,7 +1,9 @@
 use crate::ast::{Document, Inline, Node, Value};
+use crate::navigation::{NavigationGraph, resolve_navigation};
 use crate::style_baseline::strip_forbidden_nods;
 
 pub fn render_html(doc: &Document) -> String {
+    let navigation = resolve_navigation(doc);
     let lang = match doc.meta.get("language") {
         Some(Value::String(s)) if s != "und" => s.clone(),
         _ => String::new(),
@@ -30,14 +32,14 @@ pub fn render_html(doc: &Document) -> String {
         escape_html(&mut out, title);
         out.push_str("</title>");
     }
-    for node in &doc.body {
-        render_node(&mut out, node);
+    for (i, node) in doc.body.iter().enumerate() {
+        render_node(&mut out, node, &i.to_string(), &navigation);
     }
     out.push_str("</html>");
     out
 }
 
-fn render_node(out: &mut String, node: &Node) {
+fn render_node(out: &mut String, node: &Node, path: &str, navigation: &NavigationGraph) {
     match node.node_type.as_str() {
         "heading" => {
             let level = node
@@ -50,10 +52,10 @@ fn render_node(out: &mut String, node: &Node) {
             render_inlines(out, &node.inlines);
             out.push_str(&format!("</h{}>", level));
         }
-        "paragraph" => wrap_inlines(out, "p", node),
-        "section" => wrap_children(out, "section", node),
-        "note" => wrap_children(out, "aside", node),
-        "quote" => wrap_children(out, "blockquote", node),
+        "paragraph" => wrap_inlines(out, "p", node, path, navigation),
+        "section" => wrap_children(out, "section", node, path, navigation),
+        "note" => wrap_children(out, "aside", node, path, navigation),
+        "quote" => wrap_children(out, "blockquote", node, path, navigation),
         "list" => {
             let tag = if node.attrs.get("kind").map(|s| s.as_str()) == Some("ordered") {
                 "ol"
@@ -61,12 +63,12 @@ fn render_node(out: &mut String, node: &Node) {
                 "ul"
             };
             out.push_str(tag_open(tag, node).as_str());
-            for child in &node.children {
-                render_node(out, child);
+            for (i, child) in node.children.iter().enumerate() {
+                render_node(out, child, &child_path(path, i), navigation);
             }
             out.push_str(&format!("</{}>", tag));
         }
-        "item" => wrap_inlines(out, "li", node),
+        "item" => wrap_inlines(out, "li", node, path, navigation),
         "code" | "pre" => {
             out.push_str("<pre><code>");
             escape_html(out, node.text.as_deref().unwrap_or(""));
@@ -82,18 +84,18 @@ fn render_node(out: &mut String, node: &Node) {
             escape_style(out, node.text.as_deref().unwrap_or(""));
             out.push_str("</style>");
         }
-        "table" => wrap_children(out, "table", node),
-        "row" => wrap_children(out, "tr", node),
+        "table" => wrap_children(out, "table", node, path, navigation),
+        "row" => wrap_children(out, "tr", node, path, navigation),
         "cell" => {
             let tag = if node.attrs.get("header").map(|s| s.as_str()) == Some("true") {
                 "th"
             } else {
                 "td"
             };
-            wrap_inlines(out, tag, node);
+            wrap_inlines(out, tag, node, path, navigation);
         }
-        "figure" => wrap_children(out, "figure", node),
-        "caption" => wrap_inlines(out, "figcaption", node),
+        "figure" => wrap_children(out, "figure", node, path, navigation),
+        "caption" => wrap_inlines(out, "figcaption", node, path, navigation),
         "image" => {
             let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
             let safe_src = node.attrs.get("src").and_then(|s| {
@@ -118,7 +120,7 @@ fn render_node(out: &mut String, node: &Node) {
                 }
             }
         }
-        "form" => wrap_children(out, "dl", node),
+        "form" => wrap_children(out, "dl", node, path, navigation),
         "field" => {
             out.push_str("<div");
             out.push_str(&html_id(node));
@@ -141,9 +143,32 @@ fn render_node(out: &mut String, node: &Node) {
         "toc" => {
             out.push_str("<nav");
             out.push_str(&html_id(node));
-            out.push_str(
-                " aria-label=\"Table of contents\"><strong>Table of contents</strong></nav>",
-            );
+            let nav = navigation
+                .navigations
+                .iter()
+                .find(|candidate| candidate.toc_path == path);
+            let label = nav
+                .map(|nav| nav.label.as_str())
+                .unwrap_or("Table of contents");
+            out.push_str(" aria-label=\"");
+            escape_attr(out, label);
+            out.push_str("\"><strong>");
+            escape_html(out, label);
+            out.push_str("</strong>");
+            if let Some(nav) = nav {
+                if !nav.entries.is_empty() {
+                    out.push_str("<ol>");
+                    for entry in &nav.entries {
+                        out.push_str("<li><a href=\"#");
+                        escape_attr(out, &entry.id);
+                        out.push_str("\">");
+                        escape_html(out, &entry.title);
+                        out.push_str("</a></li>");
+                    }
+                    out.push_str("</ol>");
+                }
+            }
+            out.push_str("</nav>");
         }
         "pagebreak" => {
             out.push_str("<hr");
@@ -166,32 +191,52 @@ fn render_node(out: &mut String, node: &Node) {
                 escape_html(out, src);
             }
             out.push_str("</div>");
-            for child in &node.children {
-                render_node(out, child);
+            for (i, child) in node.children.iter().enumerate() {
+                render_node(out, child, &child_path(path, i), navigation);
             }
             out.push_str("</figure>");
         }
-        "bibliography" => wrap_children(out, "ol", node),
-        "citation-entry" => wrap_inlines(out, "li", node),
-        _ => wrap_children(out, "div", node),
+        "bibliography" => wrap_children(out, "ol", node, path, navigation),
+        "citation-entry" => wrap_inlines(out, "li", node, path, navigation),
+        _ => wrap_children(out, "div", node, path, navigation),
     }
 }
 
-fn wrap_children(out: &mut String, tag: &str, node: &Node) {
+fn wrap_children(
+    out: &mut String,
+    tag: &str,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+) {
     out.push_str(tag_open(tag, node).as_str());
-    for child in &node.children {
-        render_node(out, child);
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(out, child, &child_path(path, i), navigation);
     }
     out.push_str(&format!("</{}>", tag));
 }
 
-fn wrap_inlines(out: &mut String, tag: &str, node: &Node) {
+fn wrap_inlines(
+    out: &mut String,
+    tag: &str,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+) {
     out.push_str(tag_open(tag, node).as_str());
     render_inlines(out, &node.inlines);
-    for child in &node.children {
-        render_node(out, child);
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(out, child, &child_path(path, i), navigation);
     }
     out.push_str(&format!("</{}>", tag));
+}
+
+fn child_path(prefix: &str, index: usize) -> String {
+    if prefix.is_empty() {
+        index.to_string()
+    } else {
+        format!("{prefix}.{index}")
+    }
 }
 
 fn tag_open(tag: &str, node: &Node) -> String {
@@ -399,7 +444,7 @@ fn is_relative_asset(raw: &str) -> bool {
     is_safe_asset_ref(raw)
 }
 
-pub(crate) fn is_safe_asset_ref(raw: &str) -> bool {
+pub fn is_safe_asset_ref(raw: &str) -> bool {
     let trimmed = raw.trim();
     if trimmed.is_empty()
         || trimmed.starts_with('/')

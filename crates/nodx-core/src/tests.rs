@@ -166,16 +166,15 @@ fn package_rejects_duplicate_paths() {
 }
 
 #[test]
-fn validator_reports_core_semantic_issues() {
+fn parser_leaves_semantic_validation_to_validator() {
     let doc = parse_str(
         "# A {#x}\n\n## B {#x}\n\n@[missing]\n\n:::image {src=\"../secret.png\"}\n:::\n\n| A | B |\n| - | - |\n| 1 |\n",
     );
     let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
-    assert!(codes.contains(&"NODX-E006"));
-    assert!(codes.contains(&"NODX-E007"));
-    assert!(codes.contains(&"NODX-E009"));
-    assert!(codes.contains(&"NODX-E010"));
-    assert!(codes.contains(&"NODX-E025"));
+    assert!(!codes.contains(&"NODX-E006"));
+    assert!(!codes.contains(&"NODX-E007"));
+    assert!(!codes.contains(&"NODX-E009"));
+    assert!(!codes.contains(&"NODX-E025"));
 }
 
 #[test]
@@ -202,6 +201,15 @@ fn ncp_is_recursive_and_hashes_source() {
     assert!(ncp.contains("\"sha256\":\"sha256-"));
     assert!(ncp.contains("\"path\":\"0.0\""));
     assert!(ncp.contains("\"id\":\"t\""));
+}
+
+#[test]
+fn ncp_includes_resolved_toc_entries() {
+    let doc = parse_str(":::toc\n:::\n\n# Title {#t}\n");
+    let ncp = ncp_json(&doc);
+    assert!(ncp.contains("\"navigationEntries\""));
+    assert!(ncp.contains("\"id\":\"t\""));
+    assert!(ncp.contains("\"title\":\"Title\""));
 }
 
 #[test]

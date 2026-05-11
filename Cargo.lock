@@ -7,8 +7,16 @@ name = "nodx"
 version = "0.1.0"
 dependencies = [
  "nodx-core",
+ "nodx-validate",
 ]
 
 [[package]]
 name = "nodx-core"
 version = "0.1.0"
+
+[[package]]
+name = "nodx-validate"
+version = "0.1.0"
+dependencies = [
+ "nodx-core",
+]

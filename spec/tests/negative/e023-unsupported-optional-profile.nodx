@@ -1,0 +1,7 @@
+---
+schema: nodx/1.0
+profiles:
+  optional: [signature]
+---
+
+# Optional

@@ -19,6 +19,7 @@ Packaged NODX, and readers identify the representation from the first bytes.
 Implemented today:
 
 - Rust reference crate: `crates/nodx-core`
+- Rust validator crate: `crates/nodx-validate`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
 - Public conformance fixtures: `spec/tests/conformance`
@@ -29,13 +30,13 @@ Implemented today:
 The implemented behavior covers UTF-8 parsing, Plain/Core syntax, a practical
 Rich subset, front matter, delimited blocks, headings, paragraphs, lists, pipe
 tables, literal blocks, attributes, common inline nodes, deterministic
-canonical JSON, focused semantic validation, safe HTML rendering, TUI rendering,
-semantic NCP projection, and a minimal stored-ZIP package reader with manifest
-digest verification.
+canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
+rendering, TUI rendering, semantic NCP projection, and a minimal stored-ZIP
+package reader with manifest digest verification.
 
-The workspace does not yet contain separate `nodx-validate`, `nodx-url`,
-`nodx-package`, `nodx-style`, `nodx-ncp`, or `nodx-render-html` crates. Those
-are roadmap targets, not current modules.
+The workspace does not yet contain separate `nodx-url`, `nodx-package`,
+`nodx-style`, `nodx-ncp`, or `nodx-render-html` crates. Those are roadmap
+targets, not current modules.
 
 ## Verify
 
@@ -65,10 +66,10 @@ target/debug/nodx ncp examples/agent-workflow.nodx
 target/debug/nodx inspect examples/extended-showcase-bundled.nodx
 ```
 
-The current CLI does not yet implement the full 1.0 CLI contract from
-`NODX_1.0_Working_Draft.md`, including `--format` flags, profile flags, stable
-diagnostic JSON, package subcommands, or exit code `3` for unsupported required
-profiles.
+The current CLI implements `nodx validate --profile <profile>`,
+`nodx validate --format json`, `nodx diagnostics --format json`, and exit code
+`3` for unsupported required profiles. It does not yet implement the full 1.0
+CLI contract from `NODX_1.0_Working_Draft.md`, including package subcommands.
 
 ## Package
 

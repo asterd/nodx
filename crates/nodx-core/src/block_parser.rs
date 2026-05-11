@@ -6,7 +6,6 @@ use crate::diagnostic::{Diagnostic, diag};
 use crate::front_matter::parse_front_matter;
 use crate::inline_parser::{parse_inlines, plain_inlines};
 use crate::style_baseline::audit_nods;
-use crate::validate_baseline::validate_document;
 
 pub fn parse_str(input: &str) -> Document {
     let mut diagnostics = Vec::new();
@@ -67,14 +66,12 @@ pub fn parse_str(input: &str) -> Document {
     let mut diagnostics = parser.diagnostics;
     audit_nods(&body, &mut diagnostics);
 
-    let mut doc = Document {
+    Document {
         schema: "nodx/0.1".to_string(),
         meta,
         body,
         diagnostics,
-    };
-    validate_document(&mut doc);
-    doc
+    }
 }
 
 struct Parser<'a> {
