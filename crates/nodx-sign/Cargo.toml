@@ -1,0 +1,13 @@
+[package]
+name = "nodx-sign"
+version = "0.1.0"
+edition = "2024"
+description = "NODX signature profile verification"
+license = "MIT"
+
+[dependencies]
+nodx-core = { path = "../nodx-core" }
+nodx-package = { path = "../nodx-package" }
+nodx-url = { path = "../nodx-url" }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
+serde_json = "1"

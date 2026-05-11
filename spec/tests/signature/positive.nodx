@@ -1,0 +1,8 @@
+---
+schema: nodx/1.0
+title: Signed Fixture
+---
+
+# Signed Fixture
+
+This fixture is used by nodx-sign positive signature tests.

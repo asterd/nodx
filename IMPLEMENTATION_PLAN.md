@@ -19,6 +19,7 @@ crates/
   nodx-validate/
   nodx-style/
   nodx-render-html/
+  nodx-sign/
   nodx-cli/
 packages/
   nodx-js/
@@ -40,6 +41,8 @@ Current crates and packages:
   diagnostic JSON helpers.
 - `crates/nodx-style`: safe NODS subset validator and sanitizer.
 - `crates/nodx-render-html`: safe standalone HTML renderer.
+- `crates/nodx-sign`: NODX Signature 1.1 digest and ES256 compact JWS
+  verification.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
 - `packages/nodx-js`: independent JavaScript parser, canonical serializer,
@@ -74,6 +77,8 @@ Implemented now:
   SHA-256 hashes and resolved `toc` navigation entries.
 - Safe stored-ZIP package reader with manifest size/digest verification, CRC
   checks, package path validation, ZIP bomb controls, and read-only virtual FS.
+- Signature profile verification over frozen 1.0 canonical AST digests,
+  including detached and packaged compact JWS with ES256.
 
 ## Known Gaps Against 1.0
 
@@ -83,8 +88,8 @@ Not implemented yet:
 - Separate NCP crate.
 - Deflated ZIP entries and advanced package policy.
 - Full NODS cascade and computed style.
-- Lossless CST, source maps, signatures, mutation SDK, and native PDF/DOCX/PPTX
-  exporters.
+- Lossless CST, source maps, signature trust store UX, mutation SDK, and native
+  PDF/DOCX/PPTX exporters.
 - Full security corpus and fuzz targets.
 
 ## Wave 00 Contract Cleanup
@@ -126,13 +131,9 @@ changes canonical AST output, NCP output, diagnostics, or CLI exit codes.
 
 Follow `NODX_1.0_Evolution_Plan.md`:
 
-1. M1: split `nodx-core` mechanically without behavior changes.
-2. M2: validator, profiles, diagnostics, and CLI contract.
-3. M3: URL policy and resource limits.
-4. M4: package reader hardening.
-5. M5: style safety.
-6. M6: JavaScript parity and NCP.
-7. M7: release readiness, fixtures, security corpus, and documentation.
+1. M9: agent mutate profile.
+2. M10 and later: continue post-1.1 profile work as scoped by the evolution
+   plan.
 
 ## Wave 06 JavaScript Parity
 
@@ -163,3 +164,21 @@ Completed by this wave:
 
 No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
 is changed by Wave 07.
+
+## Wave 08 Signature Profile
+
+Completed by this wave:
+
+1. Added `crates/nodx-sign`.
+2. Added canonical AST digest helpers using
+   `sha256-BASE64URL_WITHOUT_PADDING`.
+3. Added compact JWS verification for detached and attached digest payloads.
+4. Added mandatory ES256 verification with RustCrypto `p256`.
+5. Kept EdDSA deferred with a dependency threat note in
+   `crates/nodx-sign/README.md`.
+6. Added `TrustPolicy` so key/trust decisions are separate from
+   cryptographic validity.
+7. Added detached and packaged signature verification tests and tamper vectors.
+
+No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
+is changed by Wave 08.

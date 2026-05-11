@@ -28,6 +28,7 @@ Implemented today:
 - Rust style safety crate: `crates/nodx-style`
 - Rust HTML renderer crate: `crates/nodx-render-html`
 - Rust package reader crate: `crates/nodx-package`
+- Rust signature verification crate: `crates/nodx-sign`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
 - Public conformance fixtures: `spec/tests/conformance`
@@ -42,7 +43,9 @@ canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
 rendering in `nodx-render-html`, safe NODS subset validation in `nodx-style`,
 centralized URL/resource policy, TUI rendering, semantic NCP
 projection, and a safe stored-ZIP package reader with manifest digest
-verification and read-only virtual filesystem access.
+verification and read-only virtual filesystem access. The `nodx-sign` crate
+implements the NODX Signature 1.1 verification profile for canonical AST
+digests and ES256 compact JWS signatures.
 
 The workspace does not yet contain a separate `nodx-ncp` crate. Semantic NCP is
 implemented in `nodx-core` and in the independent JavaScript package; a split
@@ -119,10 +122,11 @@ browser. It does not require Tkinter.
 
 ## Intentional Gaps
 
-The full NODS cascade, signatures, lossless CST, complete URL resolver, native
-PDF/DOCX/PPTX exporters, stable 1.0 profile enforcement, and complete YAML 1.2
-safe-subset validation are not implemented yet. These are security-sensitive
-surfaces and should be added as separately tested milestones.
+The full NODS cascade, signature trust store UX, lossless CST, complete URL
+resolver, native PDF/DOCX/PPTX exporters, stable 1.0 profile enforcement, and
+complete YAML 1.2 safe-subset validation are not implemented yet. These are
+security-sensitive surfaces and should be added as separately tested
+milestones.
 
 Current inline `:::style` blocks are processed by the `nodx-style` allowlist
 validator. Forbidden NODS constructs emit deterministic `NODX-E027`

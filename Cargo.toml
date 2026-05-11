@@ -6,6 +6,7 @@ members = [
   "crates/nodx-validate",
   "crates/nodx-style",
   "crates/nodx-render-html",
+  "crates/nodx-sign",
   "crates/nodx-cli",
 ]
 resolver = "3"
