@@ -126,6 +126,8 @@ For 1.0, the format layer includes:
 - Plain, Core, and Rich profiles.
 - Optional Style syntax with safe rejection of unsupported features.
 - Optional Package syntax and manifest rules.
+- Declarative navigation nodes for generated tables of contents and local
+  section navigation.
 - Canonical Semantic AST.
 - NCP semantic projection.
 - Error registry.
@@ -225,7 +227,7 @@ Profiles are capability declarations. They are not release milestones.
 |---|---|---:|---|
 | Required format | `NODX-Plain-1.0` | blocking | UTF-8 text, paragraphs, headings, safe escaping, implicit metadata. |
 | Required format | `NODX-Core-1.0` | blocking | front matter, blocks, attrs, lists, inline base, diagnostics. |
-| Required format | `NODX-Rich-1.0` | blocking | tables, figures, images, math text, footnotes, bibliography, forms, media fallbacks where specified. |
+| Required format | `NODX-Rich-1.0` | blocking | tables, figures, images, math text, footnotes, bibliography, forms, declarative navigation/TOC nodes, media fallbacks where specified. |
 | Supported subset | `NODX-Style-1.0` | partial blocking | safe NODS allowlist and rejection. Full cascade may land after 1.0. |
 | Supported subset | `NODX-Package-1.0` | blocking for package reader only | ZIP package read, manifest, assets, digest verification, no extraction. |
 | Projection | `NODX-Agent-Read-1.0` | blocking | stable IDs, hashes, NCP semantic, read-only agent consumption. |
@@ -261,7 +263,69 @@ Rules:
 8. Package manifests must declare a profile set that is a superset of the entry
    document's required profiles.
 
-### 4.3 Minimal viable reader
+### 4.3 Navigable document model
+
+NODX 1.0 must support documents that are natively ready for modern navigable
+documentation experiences without baking a specific screen layout into the
+format.
+
+The format-level feature is a declarative `toc` block in the Rich profile. A
+document may contain zero, one, or many `toc` nodes. Each node declares which
+part of the document it describes; renderers decide whether that becomes a
+left navigation rail, a right in-chapter outline, a dropdown with submenus, a
+print table of contents, or a textual fallback.
+
+Example:
+
+```nodx
+:::toc {#main-nav role="primary" source="document" depth="2" title="Contents"}
+:::
+
+::::section {#chapter-3}
+## Chapter 3
+
+:::toc {#chapter-3-nav role="local" scope="#chapter-3" depth="3" title="In this chapter"}
+:::
+
+...
+:::: section
+```
+
+Required 1.0 rules:
+
+1. `toc` is a Rich block node with empty source content.
+2. Multiple `toc` nodes are allowed.
+3. A `toc` node may use `role="primary"`, `role="local"`,
+   `role="secondary"`, or `role="breadcrumb"`.
+4. A `toc` node may use `source="document"` or `scope="#id"`. If neither is
+   present, `source="document"` is implied.
+5. `scope="#id"` resolves to the subtree rooted at the referenced node.
+6. `depth` is a positive integer from `1` to `6` and limits included heading
+   levels relative to the selected source.
+7. `min-level` and `max-level`, if present, are absolute heading levels from
+   `1` to `6`; invalid values or ranges produce `NODX-E004`.
+8. `title` is a plain text accessible label, not rendered inline content. If
+   omitted, renderers use a deterministic default label based on `role`.
+9. Styling uses normal IDs, classes, attributes, and the Style profile. The
+   source format must not require fixed left/right column semantics.
+10. The resolved entries are derived from existing `heading` and `section`
+    nodes with stable IDs. Generated entries are not duplicated into the
+    canonical AST as child nodes.
+11. Unresolved `scope="#id"` references produce `NODX-E007`.
+12. Renderers that support navigation should resolve entries deterministically
+    in document order. Renderers that do not support navigation must render a
+    safe fallback or emit `NODX-E015`.
+13. The NCP semantic projection must expose resolved navigation entries so
+    agents can understand document structure without renderer-specific HTML.
+14. Previous/next navigation is renderer output derived from the resolved
+    navigation graph. It is not represented as a source node or `toc` attribute
+    in NODX 1.0.
+
+Implementation note: the existing `toc` placeholder should evolve into this
+model instead of adding a second node such as `nav` or `summary`. This keeps the
+surface small and preserves compatibility with current examples.
+
+### 4.4 Minimal viable reader
 
 A minimal conforming reader may implement only Plain or only Core if it:
 
@@ -462,7 +526,7 @@ apps/desktop/
 
 ```text
 crates/
-  nodx-core/          # AST, parser, canonical JSON, ResourceLimits
+  nodx-core/          # AST, parser, canonical JSON, ResourceLimits, navigation graph
   nodx-validate/      # semantic validation and profile support
   nodx-url/           # URL parsing, normalization, ResourcePolicy
   nodx-package/       # safe package reader, manifest verifier, virtual FS
@@ -513,6 +577,8 @@ packages/
 9. No crate uses `unsafe` in code that touches untrusted input.
 10. Any dependency added to a security boundary requires a short threat note in
     the pull request.
+11. `toc` resolution is implemented once as a pure navigation graph helper
+    shared by validation, HTML rendering, and NCP projection.
 
 ---
 
@@ -593,14 +659,15 @@ should implement only the requested milestone unless explicitly told otherwise.
 2. Preserve the 0.1 draft as historical input.
 3. Replace `0.1` with `1.0` only where the contract is intentionally promoted.
 4. Add the profile model from Section 4.
-5. Add the minimal viable reader rules.
-6. Add resource limits from Section 6.
-7. Add CLI exit code semantics from Section 10.
-8. Add unsupported-feature behavior.
-9. Add the error registry from Section 13.
-10. Update README and `IMPLEMENTATION_PLAN.md` so they do not claim unsupported
+5. Add the navigable document model from Section 4.3.
+6. Add the minimal viable reader rules.
+7. Add resource limits from Section 6.
+8. Add CLI exit code semantics from Section 10.
+9. Add unsupported-feature behavior.
+10. Add the error registry from Section 13.
+11. Update README and `IMPLEMENTATION_PLAN.md` so they do not claim unsupported
     modules.
-11. Add `SECURITY.md` and `THREAT_MODEL.md` skeletons.
+12. Add `SECURITY.md` and `THREAT_MODEL.md` skeletons.
 
 **Out of scope.**
 
@@ -699,8 +766,12 @@ rtk sh scripts/run_conformance.sh
 8. Implement `nodx validate --format json`.
 9. Implement stable JSON diagnostic array output.
 10. Add negative fixtures for every validation-owned error code.
-11. Add golden diagnostics.
-12. Update CLI exit codes to Section 10.
+11. Validate `toc` navigation attributes: `role`, `source`, `scope`, `depth`,
+    `min-level`, `max-level`, and accessible label defaults.
+12. Add a shared deterministic navigation graph resolver without changing the
+    canonical AST shape.
+13. Add golden diagnostics.
+14. Update CLI exit codes to Section 10.
 
 **Validation-owned codes at 1.0.**
 
@@ -723,6 +794,7 @@ rtk sh scripts/run_conformance.sh
 - Full NODS cascade.
 - Package internals.
 - Signature checks.
+- Renderer-specific navigation layout.
 
 **Done criteria.**
 
@@ -731,6 +803,10 @@ rtk sh scripts/run_conformance.sh
 - Unsupported required profile exits code `3`.
 - `warning` and `info` do not raise exit code above `0`.
 - Every validation code has at least one fixture.
+- Invalid navigation attributes and unresolved `toc` scopes are covered by
+  negative fixtures.
+- Navigation graph resolution is covered by unit tests and reused by later
+  renderer/NCP work.
 
 **Verification.**
 
@@ -846,9 +922,11 @@ rtk sh scripts/run_conformance.sh
 5. Emit `NODX-E027` deterministically.
 6. Split safe HTML renderer to `crates/nodx-render-html`.
 7. Escape by context: text, attribute, URL, and style.
-8. Add CSP for standalone HTML.
-9. Add XSS corpus.
-10. Add NODS security corpus.
+8. Render resolved `toc` nodes as safe navigation landmarks with deterministic
+   links and accessible labels.
+9. Add CSP for standalone HTML.
+10. Add XSS corpus.
+11. Add NODS security corpus.
 
 **Important scope rule.**
 
@@ -864,6 +942,7 @@ pixel-perfect styling.
 - Transitions.
 - JS-driven interactivity.
 - DOCX/PPTX/PDF exporters.
+- Prescribing left/right navigation placement as a source-format requirement.
 
 **Done criteria.**
 
@@ -871,6 +950,8 @@ pixel-perfect styling.
 - Forbidden NODS corpus passes 100%.
 - Renderer never embeds unsanitized CSS.
 - Renderer never emits executable document content.
+- Supported HTML navigation output links only to safe in-document IDs and
+  degrades to a deterministic fallback when entries cannot be resolved.
 - Existing print examples still render through safe HTML.
 
 **Verification.**
@@ -896,13 +977,14 @@ rtk sh scripts/run_conformance.sh
 4. Implement canonical JSON parity.
 5. Implement NCP semantic parity.
 6. Add JS diagnostics parity for shared parser/validator errors.
-7. Expand conformance fixtures.
-8. Add negative fixtures.
-9. Add security fixtures.
-10. Expand `scripts/run_conformance.sh` to compare:
+7. Add resolved navigation entries to NCP semantic output for `toc` nodes.
+8. Expand conformance fixtures.
+9. Add negative fixtures.
+10. Add security fixtures.
+11. Expand `scripts/run_conformance.sh` to compare:
     - Rust AST vs JS AST;
     - Rust NCP semantic vs JS NCP semantic.
-11. Produce `target/conformance-report.json`.
+12. Produce `target/conformance-report.json`.
 
 **Out of scope for JS 1.0.**
 
@@ -916,6 +998,8 @@ rtk sh scripts/run_conformance.sh
 
 - Rust and JS canonical AST match byte-for-byte for every conformance fixture.
 - Rust and JS NCP semantic match byte-for-byte for every NCP fixture.
+- Navigation fixtures cover a primary document TOC and at least one local
+  chapter TOC.
 - Conformance report is generated.
 - Fixtures are small, targeted, and documented.
 
@@ -1155,11 +1239,12 @@ It is not required to implement every Rust subsystem.
 6. Attribute parser parity.
 7. Canonical Semantic AST parity.
 8. NCP semantic parity.
-9. Shared diagnostics for parser-owned errors.
-10. Resource limits matching Section 6 where applicable.
-11. ESM package.
-12. Node 20 and modern browser compatibility.
-13. Zero runtime dependencies.
+9. Resolved navigation entries in NCP semantic output for `toc` nodes.
+10. Shared diagnostics for parser-owned errors.
+11. Resource limits matching Section 6 where applicable.
+12. ESM package.
+13. Node 20 and modern browser compatibility.
+14. Zero runtime dependencies.
 
 ### 11.2 Optional for JS 1.0
 
@@ -1232,6 +1317,7 @@ packages/nodx-js/
 | HTML/XSS payload fixtures | 40 |
 | Package digest/tamper fixtures | 10 |
 | NCP semantic goldens | 20 |
+| Navigation/TOC fixtures | 6 |
 
 These numbers are release gates. During earlier milestones, smaller corpora are
 acceptable only if the milestone document says so.
@@ -1263,6 +1349,7 @@ Required fuzz targets by 1.0:
 - package reader;
 - NODS parser or rejector;
 - NCP serializer.
+- navigation resolver.
 
 Release candidate fuzz budget:
 
@@ -1402,8 +1489,9 @@ Reviewers check:
 6. Are unsafe URLs blocked before rendering?
 7. Does parser recovery preserve partial AST where expected?
 8. Does CLI exit code match Section 10?
-9. Did README/spec change when behavior changed?
-10. Did any dependency broaden the trust boundary?
+9. Do navigation/TOC changes avoid renderer-specific layout requirements?
+10. Did README/spec change when behavior changed?
+11. Did any dependency broaden the trust boundary?
 
 ---
 
@@ -1465,11 +1553,13 @@ NODX 1.0 is ready only when all of these hold:
 19. Package reader never extracts during read.
 20. Resource limits use a single shared source.
 21. Safe HTML renderer escapes by context.
-22. No reference crate opens network sockets.
-23. Fuzz targets exist and release budget is complete or documented.
-24. `SECURITY.md`, `THREAT_MODEL.md`, `CONFORMANCE.md`, `INTEROP.md`, and
+22. Declarative `toc` navigation resolves deterministically in HTML and NCP
+    fixtures.
+23. No reference crate opens network sockets.
+24. Fuzz targets exist and release budget is complete or documented.
+25. `SECURITY.md`, `THREAT_MODEL.md`, `CONFORMANCE.md`, `INTEROP.md`, and
     migration docs are published.
-25. Known limitations are explicit in release notes.
+26. Known limitations are explicit in release notes.
 
 ### 16.2 NODX 1.1 Definition of Done
 
@@ -1510,6 +1600,7 @@ Current gaps relative to 1.0:
 | Style | textual heuristic | safe NODS parser/rejector |
 | HTML | safe baseline | split crate, XSS corpus |
 | NCP | semantic baseline | `nodx-ncp`, Rust/JS parity |
+| Navigation | `toc` placeholder | scoped, styled, deterministic navigation nodes |
 | JS | single-file parser | modular package |
 | Tests | small conformance set | conformance, negative, security, goldens |
 | Fuzz | absent | required targets |
