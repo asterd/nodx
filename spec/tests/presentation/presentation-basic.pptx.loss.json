@@ -1,0 +1,1 @@
+{"format":"pptx","losses":[{"code":"NODX-E026","message":"PPTX export maps presentation slides to one slide per `slide` block and flattens unsupported semantics.","path":"$","severity":"warning"}],"lossy":true,"profile":"NODX-Presentation-1.2","schema":"nodx/export-loss/1.2","sourceSchema":"nodx/1.0"}

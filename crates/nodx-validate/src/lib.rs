@@ -21,7 +21,15 @@ pub struct Validator {
 
 impl Default for ProfileSet {
     fn default() -> Self {
-        Self::new(["plain", "core", "rich", "style", "package", "agent-read"])
+        Self::new([
+            "plain",
+            "core",
+            "rich",
+            "style",
+            "package",
+            "agent-read",
+            "presentation",
+        ])
     }
 }
 

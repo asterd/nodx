@@ -1,16 +1,22 @@
-use std::{env, fs, process};
+use std::{env, fs, path::PathBuf, process};
 
 use nodx_core::{canonical_json, is_packaged_nodx, ncp_json, parse_bytes, render_tui};
+use nodx_export::{ExportFormat, export_document, loss_report_json};
 use nodx_render_html::render_html;
 use nodx_validate::{Validator, diagnostics_json, exit_code_for};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("usage: nodx <ast|html|tui|ncp|diagnostics|validate|inspect> <file.nodx>");
+        eprintln!(
+            "usage: nodx <ast|html|tui|ncp|diagnostics|validate|inspect> <file.nodx>\n       nodx export <pdf|docx|pptx> <file.nodx> -o <out>"
+        );
         process::exit(1);
     }
     let command = args[1].as_str();
+    if command == "export" {
+        process::exit(export_command(&args[2..]));
+    }
     let file = args[2].as_str();
     let options = parse_options(&args[3..]).unwrap_or_else(|err| {
         eprintln!("{err}");
@@ -86,6 +92,53 @@ fn main() {
     if exit != 0 {
         process::exit(exit);
     }
+}
+
+fn export_command(args: &[String]) -> i32 {
+    if args.len() != 4 || args[2] != "-o" {
+        eprintln!("usage: nodx export <pdf|docx|pptx> <file.nodx> -o <out>");
+        return 1;
+    }
+    let format = match args[0].as_str() {
+        "pdf" => ExportFormat::Pdf,
+        "docx" => ExportFormat::Docx,
+        "pptx" => ExportFormat::Pptx,
+        other => {
+            eprintln!("unknown export format: {other}");
+            return 1;
+        }
+    };
+    let bytes = match fs::read(&args[1]) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("read error: {err}");
+            return 1;
+        }
+    };
+    let doc = parse_or_exit(&bytes);
+    let exported = export_document(&doc, format);
+    if let Err(err) = fs::write(&args[3], &exported.bytes) {
+        eprintln!("write error: {err}");
+        return 1;
+    }
+    let report_path = loss_report_path(&args[3]);
+    let mut report_json = loss_report_json(&exported.loss_report);
+    report_json.push('\n');
+    if let Err(err) = fs::write(&report_path, report_json) {
+        eprintln!("loss report write error: {err}");
+        return 1;
+    }
+    diagnostic_exit_code(&doc)
+}
+
+fn loss_report_path(output: &str) -> PathBuf {
+    let mut path = PathBuf::from(output);
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("export");
+    path.set_file_name(format!("{file_name}.loss.json"));
+    path
 }
 
 #[derive(Clone, Debug)]

@@ -1,0 +1,18 @@
+---
+schema: nodx/1.0
+title: Lossy Export Fixture
+profiles:
+  optional: [presentation]
+---
+
+# Lossy Export
+
+Inline math $a+b$ and a [link](https://example.test) need a loss report.
+
+:::style
+h1 { color: red; }
+:::
+
+:::math {notation="tex" display="block" alt="Equation"}
+a+b=c
+:::

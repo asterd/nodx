@@ -31,6 +31,7 @@ Implemented today:
 - Rust signature verification crate: `crates/nodx-sign`
 - Rust agent mutation SDK crate: `crates/nodx-agent-sdk`
 - Rust editor CST crate: `crates/nodx-cst`
+- Rust presentation/export crate: `crates/nodx-export`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
 - Public conformance fixtures: `spec/tests/conformance`
@@ -53,6 +54,9 @@ the NODX Agent Mutate 1.1 local mutation profile with target resolution,
 change records. The `nodx-cst` crate implements the NODX Editor 1.2
 byte-preserving CST profile for editor state, AST path mapping, local source
 patches, and minimal agent attribute rewrites when a CST patch is available.
+The `nodx-export` crate defines the NODX Presentation 1.2 exporter baseline,
+including a safe paged HTML PDF bridge, minimal DOCX/PPTX exporters, and
+machine-readable loss reports for lossy exports.
 
 The workspace does not yet contain a separate `nodx-ncp` crate. Semantic NCP is
 implemented in `nodx-core` and in the independent JavaScript package; a split
@@ -85,6 +89,7 @@ target/debug/nodx validate examples/extended-showcase.nodx
 target/debug/nodx diagnostics examples/extended-showcase.nodx
 target/debug/nodx ncp examples/agent-workflow.nodx
 target/debug/nodx inspect examples/extended-showcase-bundled.nodx
+target/debug/nodx export pptx spec/tests/presentation/presentation-basic.nodx -o target/presentation-basic.pptx
 ```
 
 The current CLI implements `nodx validate --profile <profile>`,
@@ -130,15 +135,18 @@ browser. It does not require Tkinter.
 ## Intentional Gaps
 
 The full NODS cascade, signature trust store UX, complete URL resolver, native
-PDF/DOCX/PPTX exporters, stable 1.0 profile enforcement, LLM API integration
-for agent workflows, and complete YAML 1.2 safe-subset validation are not
-implemented yet. These are security-sensitive surfaces and should be added as
-separately tested milestones.
+pure-Rust PDF rendering, stable 1.0 profile enforcement, LLM API integration
+for agent workflows, complete YAML 1.2 safe-subset validation, and high-fidelity
+DOCX/PPTX export are not implemented yet. These are security-sensitive surfaces
+and should be added as separately tested milestones.
 
 Current inline `:::style` blocks are processed by the `nodx-style` allowlist
 validator. Forbidden NODS constructs emit deterministic `NODX-E027`
 diagnostics, and unsafe rules are omitted from rendered HTML. Full cascade and
 computed style remain future work.
+
+Native pure-Rust PDF rendering, WYSIWYG editing, and pixel-perfect DOCX/PPTX
+round-trip fidelity remain intentionally out of scope.
 
 The full numeric corpus targets and release-candidate fuzz budget from
 `NODX_1.0_Evolution_Plan.md` are documented release limitations until completed

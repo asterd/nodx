@@ -1,0 +1,25 @@
+---
+schema: nodx/1.0
+title: Presentation Fixture
+profiles:
+  requires: [presentation]
+---
+
+:::deck {#deck title="Presentation Fixture"}
+:::slide {#intro title="Intro"}
+# Intro
+
+This slide introduces **presentation** export.
+
+:::speaker-notes
+Keep notes out of slide body exports.
+:::
+:::
+
+:::slide {#details title="Details"}
+# Details
+
+- Fixture-backed slides come before PPTX renderer complexity.
+- Exporters emit machine-readable loss reports.
+:::
+:::

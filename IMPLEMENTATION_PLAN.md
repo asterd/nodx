@@ -22,6 +22,7 @@ crates/
   nodx-sign/
   nodx-agent-sdk/
   nodx-cst/
+  nodx-export/
   nodx-cli/
 packages/
   nodx-js/
@@ -49,6 +50,9 @@ Current crates and packages:
   including atomic batches and JSONL change records.
 - `crates/nodx-cst`: NODX Editor 1.2 byte-preserving CST state, AST path
   mapping, local patch primitives, and minimal agent attribute rewrites.
+- `crates/nodx-export`: NODX Presentation 1.2 exporter baseline with safe
+  paged HTML PDF bridge, minimal DOCX/PPTX packages, and deterministic loss
+  reports.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
 - `packages/nodx-js`: independent JavaScript parser, canonical serializer,
@@ -92,6 +96,9 @@ Implemented now:
   preservation, CST-to-AST path mapping, local source patches, and
   validation-backed minimal source rewrites for supported agent attribute
   mutations.
+- Presentation fixtures, safe paged HTML PDF bridge export, minimal stored-ZIP
+  DOCX/PPTX export, and machine-readable `nodx/export-loss/1.2` reports for
+  lossy output.
 
 ## Known Gaps Against 1.0
 
@@ -101,8 +108,8 @@ Not implemented yet:
 - Separate NCP crate.
 - Deflated ZIP entries and advanced package policy.
 - Full NODS cascade and computed style.
-- Signature trust store UX, LLM mutation integration, and native PDF/DOCX/PPTX
-  exporters.
+- Signature trust store UX, LLM mutation integration, native pure-Rust PDF
+  rendering, and pixel-perfect DOCX/PPTX round-trip.
 - Full security corpus and fuzz targets.
 
 ## Wave 00 Contract Cleanup
@@ -230,3 +237,19 @@ Completed by this wave:
 
 No canonical AST hash, NCP semantic output, diagnostic, or CLI exit-code
 behavior is changed by Wave 10.
+
+## Wave 11 Presentation and Exporters
+
+Completed by this wave:
+
+1. Added `crates/nodx-export`.
+2. Defined the NODX Presentation 1.2 exporter profile name.
+3. Added presentation fixtures before PPTX exporter tests.
+4. Added PDF export as a safe paged HTML host bridge.
+5. Added minimal DOCX and PPTX stored-ZIP exporters after deterministic loss
+   reports were in place.
+6. Added `nodx export pdf|docx|pptx file.nodx -o out` with a sibling
+   `out.loss.json` machine-readable loss report.
+
+No canonical AST hash, NCP semantic output, or diagnostic behavior is changed
+by Wave 11. The CLI gains a deferred 1.2 export command.

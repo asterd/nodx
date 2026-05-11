@@ -9,6 +9,7 @@ members = [
   "crates/nodx-sign",
   "crates/nodx-agent-sdk",
   "crates/nodx-cst",
+  "crates/nodx-export",
   "crates/nodx-cli",
 ]
 resolver = "3"

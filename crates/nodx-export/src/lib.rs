@@ -1,0 +1,665 @@
+#![forbid(unsafe_code)]
+
+use nodx_core::{Document, Inline, Node, Value};
+use nodx_render_html::render_html;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExportFormat {
+    Pdf,
+    Docx,
+    Pptx,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Exported {
+    pub bytes: Vec<u8>,
+    pub loss_report: LossReport,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LossReport {
+    pub schema: String,
+    pub source_schema: String,
+    pub profile: String,
+    pub format: String,
+    pub lossy: bool,
+    pub losses: Vec<Loss>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Loss {
+    pub code: String,
+    pub severity: String,
+    pub path: String,
+    pub message: String,
+}
+
+pub const PRESENTATION_PROFILE_NAME: &str = "NODX-Presentation-1.2";
+
+pub fn presentation_profile() -> &'static str {
+    PRESENTATION_PROFILE_NAME
+}
+
+pub fn export_document(doc: &Document, format: ExportFormat) -> Exported {
+    match format {
+        ExportFormat::Pdf => export_pdf_bridge(doc),
+        ExportFormat::Docx => export_docx(doc),
+        ExportFormat::Pptx => export_pptx(doc),
+    }
+}
+
+pub fn export_pdf_bridge(doc: &Document) -> Exported {
+    let mut report = base_report(doc, "pdf");
+    report.losses.push(loss(
+        "NODX-E026",
+        "warning",
+        "$",
+        "PDF export is a safe paged HTML host bridge; a host renderer must produce final PDF bytes.",
+    ));
+    let html = paged_html_bridge(doc);
+    Exported {
+        bytes: html.into_bytes(),
+        loss_report: finish_report(report),
+    }
+}
+
+pub fn export_docx(doc: &Document) -> Exported {
+    let mut report = base_report(doc, "docx");
+    collect_common_losses(&doc.body, "$.body", &mut report);
+    report.losses.push(loss(
+        "NODX-E026",
+        "warning",
+        "$",
+        "DOCX export preserves text structure only; NODX semantics remain in the source document.",
+    ));
+    let document_xml = docx_document_xml(doc);
+    Exported {
+        bytes: office_zip(vec![
+            (
+                "[Content_Types].xml".to_string(),
+                br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#.to_vec(),
+            ),
+            (
+                "_rels/.rels".to_string(),
+                br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#.to_vec(),
+            ),
+            ("word/document.xml".to_string(), document_xml.into_bytes()),
+        ]),
+        loss_report: finish_report(report),
+    }
+}
+
+pub fn export_pptx(doc: &Document) -> Exported {
+    let mut report = base_report(doc, "pptx");
+    collect_common_losses(&doc.body, "$.body", &mut report);
+    report.losses.push(loss(
+        "NODX-E026",
+        "warning",
+        "$",
+        "PPTX export maps presentation slides to one slide per `slide` block and flattens unsupported semantics.",
+    ));
+    let slides = presentation_slides(doc);
+    Exported {
+        bytes: office_zip(vec![
+            (
+                "[Content_Types].xml".to_string(),
+                pptx_content_types(slides.len()).into_bytes(),
+            ),
+            (
+                "_rels/.rels".to_string(),
+                br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>"#.to_vec(),
+            ),
+            (
+                "ppt/presentation.xml".to_string(),
+                pptx_presentation_xml(slides.len()).into_bytes(),
+            ),
+            (
+                "ppt/_rels/presentation.xml.rels".to_string(),
+                pptx_presentation_rels(slides.len()).into_bytes(),
+            ),
+        ]
+        .into_iter()
+        .chain(slides.iter().enumerate().map(|(i, slide)| {
+            (
+                format!("ppt/slides/slide{}.xml", i + 1),
+                pptx_slide_xml(slide).into_bytes(),
+            )
+        }))
+        .collect()),
+        loss_report: finish_report(report),
+    }
+}
+
+pub fn loss_report_json(report: &LossReport) -> String {
+    let mut out = String::from("{\"format\":");
+    write_json_string(&mut out, &report.format);
+    out.push_str(",\"losses\":[");
+    for (i, item) in report.losses.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str("{\"code\":");
+        write_json_string(&mut out, &item.code);
+        out.push_str(",\"message\":");
+        write_json_string(&mut out, &item.message);
+        out.push_str(",\"path\":");
+        write_json_string(&mut out, &item.path);
+        out.push_str(",\"severity\":");
+        write_json_string(&mut out, &item.severity);
+        out.push('}');
+    }
+    out.push_str("],\"lossy\":");
+    out.push_str(if report.lossy { "true" } else { "false" });
+    out.push_str(",\"profile\":");
+    write_json_string(&mut out, &report.profile);
+    out.push_str(",\"schema\":");
+    write_json_string(&mut out, &report.schema);
+    out.push_str(",\"sourceSchema\":");
+    write_json_string(&mut out, &report.source_schema);
+    out.push('}');
+    out
+}
+
+fn base_report(doc: &Document, format: &str) -> LossReport {
+    LossReport {
+        schema: "nodx/export-loss/1.2".to_string(),
+        source_schema: doc
+            .meta
+            .get("schema")
+            .and_then(value_string)
+            .unwrap_or(&doc.schema)
+            .to_string(),
+        profile: PRESENTATION_PROFILE_NAME.to_string(),
+        format: format.to_string(),
+        lossy: false,
+        losses: Vec::new(),
+    }
+}
+
+fn finish_report(mut report: LossReport) -> LossReport {
+    report.lossy = !report.losses.is_empty();
+    report
+}
+
+fn value_string(value: &Value) -> Option<&str> {
+    match value {
+        Value::String(s) => Some(s),
+        _ => None,
+    }
+}
+
+fn loss(code: &str, severity: &str, path: &str, message: &str) -> Loss {
+    Loss {
+        code: code.to_string(),
+        severity: severity.to_string(),
+        path: path.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn paged_html_bridge(doc: &Document) -> String {
+    let rendered = render_html(doc);
+    let insert = "<meta name=\"nodx-export-profile\" content=\"NODX-Presentation-1.2\"><meta name=\"nodx-pdf-bridge\" content=\"safe-paged-html\"><style>@page{size:A4;margin:20mm}.pagebreak{break-before:page}</style>";
+    if let Some(pos) = rendered.find("<style>") {
+        let mut out = rendered;
+        out.insert_str(pos, insert);
+        out
+    } else {
+        rendered
+    }
+}
+
+fn collect_common_losses(nodes: &[Node], path: &str, report: &mut LossReport) {
+    for (i, node) in nodes.iter().enumerate() {
+        let node_path = format!("{path}[{i}]");
+        match node.node_type.as_str() {
+            "style" => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &node_path,
+                "Style rules are not faithfully mapped by this exporter.",
+            )),
+            "math" => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &node_path,
+                "Math is exported as source text.",
+            )),
+            "image" | "media" | "embed" => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &node_path,
+                "External media is replaced by textual fallback.",
+            )),
+            "toc" => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &node_path,
+                "Generated navigation is flattened.",
+            )),
+            "speaker-notes" if report.format == "docx" => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &node_path,
+                "Speaker notes are rendered as normal document text in DOCX.",
+            )),
+            _ => {}
+        }
+        collect_inline_losses(&node.inlines, &format!("{node_path}.inlines"), report);
+        collect_common_losses(&node.children, &format!("{node_path}.children"), report);
+    }
+}
+
+fn collect_inline_losses(inlines: &[Inline], path: &str, report: &mut LossReport) {
+    for (i, item) in inlines.iter().enumerate() {
+        let inline_path = format!("{path}[{i}]");
+        match item {
+            Inline::Link { label, .. } => {
+                report.losses.push(loss(
+                    "NODX-E026",
+                    "warning",
+                    &inline_path,
+                    "Link target is preserved as visible text only.",
+                ));
+                collect_inline_losses(label, &format!("{inline_path}.label"), report);
+            }
+            Inline::Var { .. } | Inline::Ref { .. } | Inline::Mention { .. } => {
+                report.losses.push(loss(
+                    "NODX-E026",
+                    "warning",
+                    &inline_path,
+                    "Agent-readable inline semantics are flattened to text.",
+                ));
+            }
+            Inline::MathInline { .. } => report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &inline_path,
+                "Inline math is exported as source text.",
+            )),
+            Inline::Strong(children)
+            | Inline::Em(children)
+            | Inline::Mark(children)
+            | Inline::Sub(children)
+            | Inline::Sup(children) => {
+                collect_inline_losses(children, &format!("{inline_path}.children"), report)
+            }
+            Inline::Span { children, .. } => {
+                report.losses.push(loss(
+                    "NODX-E026",
+                    "warning",
+                    &inline_path,
+                    "Span attributes are flattened.",
+                ));
+                collect_inline_losses(children, &format!("{inline_path}.children"), report);
+            }
+            Inline::Text(_)
+            | Inline::Code(_)
+            | Inline::FootnoteRef { .. }
+            | Inline::CitationRef { .. } => {}
+        }
+    }
+}
+
+fn docx_document_xml(doc: &Document) -> String {
+    let mut out = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>"#,
+    );
+    for node in &doc.body {
+        push_docx_node(&mut out, node);
+    }
+    out.push_str("<w:sectPr/></w:body></w:document>");
+    out
+}
+
+fn push_docx_node(out: &mut String, node: &Node) {
+    match node.node_type.as_str() {
+        "heading" => push_docx_paragraph(out, &node.inlines),
+        "paragraph" | "item" | "caption" | "citation-entry" => {
+            push_docx_paragraph(out, &node.inlines)
+        }
+        "code" | "pre" | "math" => {
+            push_docx_text_paragraph(out, node.text.as_deref().unwrap_or(""))
+        }
+        "image" | "media" | "embed" => push_docx_text_paragraph(
+            out,
+            node.attrs
+                .get("alt")
+                .map(String::as_str)
+                .unwrap_or(&node.node_type),
+        ),
+        "pagebreak" => out.push_str(r#"<w:p><w:r><w:br w:type="page"/></w:r></w:p>"#),
+        _ => {
+            if !node.inlines.is_empty() {
+                push_docx_paragraph(out, &node.inlines);
+            }
+            for child in &node.children {
+                push_docx_node(out, child);
+            }
+        }
+    }
+}
+
+fn push_docx_paragraph(out: &mut String, inlines: &[Inline]) {
+    let text = inline_text(inlines);
+    push_docx_text_paragraph(out, &text);
+}
+
+fn push_docx_text_paragraph(out: &mut String, text: &str) {
+    out.push_str("<w:p><w:r><w:t>");
+    escape_xml(out, text);
+    out.push_str("</w:t></w:r></w:p>");
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Slide {
+    title: String,
+    lines: Vec<String>,
+}
+
+fn presentation_slides(doc: &Document) -> Vec<Slide> {
+    let mut slides = Vec::new();
+    collect_slides(&doc.body, &mut slides);
+    if slides.is_empty() {
+        slides.push(Slide {
+            title: doc
+                .meta
+                .get("title")
+                .and_then(value_string)
+                .unwrap_or("Untitled")
+                .to_string(),
+            lines: text_lines(&doc.body),
+        });
+    }
+    slides
+}
+
+fn collect_slides(nodes: &[Node], slides: &mut Vec<Slide>) {
+    for node in nodes {
+        if node.node_type == "slide" {
+            slides.push(slide_from_node(node));
+        } else {
+            collect_slides(&node.children, slides);
+        }
+    }
+}
+
+fn slide_from_node(node: &Node) -> Slide {
+    let mut title = node
+        .attrs
+        .get("title")
+        .cloned()
+        .unwrap_or_else(|| "Slide".to_string());
+    for child in &node.children {
+        if child.node_type == "heading" {
+            title = inline_text(&child.inlines);
+            break;
+        }
+    }
+    Slide {
+        title,
+        lines: text_lines(&node.children),
+    }
+}
+
+fn text_lines(nodes: &[Node]) -> Vec<String> {
+    let mut lines = Vec::new();
+    for node in nodes {
+        match node.node_type.as_str() {
+            "heading" | "paragraph" | "item" | "caption" | "citation-entry" => {
+                let text = inline_text(&node.inlines);
+                if !text.is_empty() {
+                    lines.push(text);
+                }
+            }
+            "code" | "pre" | "math" => {
+                if let Some(text) = &node.text {
+                    lines.push(text.clone());
+                }
+            }
+            "speaker-notes" => {}
+            "image" | "media" | "embed" => {
+                if let Some(alt) = node.attrs.get("alt") {
+                    lines.push(alt.clone());
+                }
+            }
+            _ => lines.extend(text_lines(&node.children)),
+        }
+    }
+    lines
+}
+
+fn inline_text(inlines: &[Inline]) -> String {
+    let mut out = String::new();
+    for inline in inlines {
+        match inline {
+            Inline::Text(text) | Inline::Code(text) => out.push_str(text),
+            Inline::Strong(children)
+            | Inline::Em(children)
+            | Inline::Mark(children)
+            | Inline::Sub(children)
+            | Inline::Sup(children) => out.push_str(&inline_text(children)),
+            Inline::Link { label, target } => {
+                out.push_str(&inline_text(label));
+                out.push_str(" (");
+                out.push_str(target);
+                out.push(')');
+            }
+            Inline::Span { children, .. } => out.push_str(&inline_text(children)),
+            Inline::Var { namespace, name } => {
+                out.push_str(namespace);
+                out.push('.');
+                out.push_str(name);
+            }
+            Inline::Ref { target }
+            | Inline::Mention { target, .. }
+            | Inline::FootnoteRef { target }
+            | Inline::CitationRef { target } => out.push_str(target),
+            Inline::MathInline { source } => out.push_str(source),
+        }
+    }
+    out
+}
+
+fn pptx_content_types(slide_count: usize) -> String {
+    let mut out = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>"#,
+    );
+    for i in 1..=slide_count {
+        out.push_str(&format!(r#"<Override PartName="/ppt/slides/slide{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#));
+    }
+    out.push_str("</Types>");
+    out
+}
+
+fn pptx_presentation_xml(slide_count: usize) -> String {
+    let mut out = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst>"#,
+    );
+    for i in 1..=slide_count {
+        out.push_str(&format!(r#"<p:sldId id="{}" r:id="rId{}"/>"#, 255 + i, i));
+    }
+    out.push_str("</p:sldIdLst></p:presentation>");
+    out
+}
+
+fn pptx_presentation_rels(slide_count: usize) -> String {
+    let mut out = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+    );
+    for i in 1..=slide_count {
+        out.push_str(&format!(r#"<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide{i}.xml"/>"#));
+    }
+    out.push_str("</Relationships>");
+    out
+}
+
+fn pptx_slide_xml(slide: &Slide) -> String {
+    let mut out = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>"#,
+    );
+    escape_xml(&mut out, &slide.title);
+    out.push_str("</a:t></a:r></a:p></p:txBody></p:sp><p:sp><p:nvSpPr><p:cNvPr id=\"3\" name=\"Body\"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:txBody><a:bodyPr/><a:lstStyle/>");
+    for line in &slide.lines {
+        out.push_str("<a:p><a:r><a:t>");
+        escape_xml(&mut out, line);
+        out.push_str("</a:t></a:r></a:p>");
+    }
+    out.push_str("</p:txBody></p:sp></p:spTree></p:cSld></p:sld>");
+    out
+}
+
+fn office_zip(entries: Vec<(String, Vec<u8>)>) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut central = Vec::new();
+    for (name, data) in entries {
+        let local_offset = out.len() as u32;
+        let crc = crc32(&data);
+        write_u32(&mut out, 0x0403_4b50);
+        write_u16(&mut out, 20);
+        write_u16(&mut out, 0);
+        write_u16(&mut out, 0);
+        write_u16(&mut out, 0);
+        write_u16(&mut out, 0);
+        write_u32(&mut out, crc);
+        write_u32(&mut out, data.len() as u32);
+        write_u32(&mut out, data.len() as u32);
+        write_u16(&mut out, name.len() as u16);
+        write_u16(&mut out, 0);
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(&data);
+
+        write_u32(&mut central, 0x0201_4b50);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u32(&mut central, crc);
+        write_u32(&mut central, data.len() as u32);
+        write_u32(&mut central, data.len() as u32);
+        write_u16(&mut central, name.len() as u16);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u32(&mut central, 0);
+        write_u32(&mut central, local_offset);
+        central.extend_from_slice(name.as_bytes());
+    }
+    let central_offset = out.len() as u32;
+    let central_size = central.len() as u32;
+    let entry_count = count_central_entries(&central);
+    out.extend_from_slice(&central);
+    write_u32(&mut out, 0x0605_4b50);
+    write_u16(&mut out, 0);
+    write_u16(&mut out, 0);
+    write_u16(&mut out, entry_count);
+    write_u16(&mut out, entry_count);
+    write_u32(&mut out, central_size);
+    write_u32(&mut out, central_offset);
+    write_u16(&mut out, 0);
+    out
+}
+
+fn count_central_entries(central: &[u8]) -> u16 {
+    central
+        .windows(4)
+        .filter(|window| *window == [0x50, 0x4b, 0x01, 0x02])
+        .count() as u16
+}
+
+fn write_u16(out: &mut Vec<u8>, value: u16) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_u32(out: &mut Vec<u8>, value: u32) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for byte in data {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+fn escape_xml(out: &mut String, input: &str) {
+    for ch in input.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(ch),
+        }
+    }
+}
+
+fn write_json_string(out: &mut String, input: &str) {
+    out.push('"');
+    for ch in input.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c < ' ' => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+#[cfg(test)]
+mod tests {
+    use nodx_core::parse_str;
+
+    use super::*;
+
+    #[test]
+    fn presentation_profile_is_named() {
+        assert_eq!(presentation_profile(), "NODX-Presentation-1.2");
+    }
+
+    #[test]
+    fn pdf_export_is_safe_html_bridge_with_loss_report() {
+        let doc = parse_str("# Deck\n");
+        let exported = export_pdf_bridge(&doc);
+        let html = String::from_utf8(exported.bytes).unwrap();
+        assert!(html.contains("nodx-pdf-bridge"));
+        assert_eq!(exported.loss_report.format, "pdf");
+        assert!(exported.loss_report.lossy);
+    }
+
+    #[test]
+    fn docx_export_emits_zip_and_loss_report() {
+        let doc = parse_str("# Title\n\n:::style\nh1 { color: red; }\n:::\n");
+        let exported = export_docx(&doc);
+        assert!(exported.bytes.starts_with(b"PK\x03\x04"));
+        assert!(loss_report_json(&exported.loss_report).contains("\"format\":\"docx\""));
+        assert!(
+            exported
+                .loss_report
+                .losses
+                .iter()
+                .any(|loss| loss.message.contains("Style rules"))
+        );
+    }
+
+    #[test]
+    fn pptx_export_uses_slide_fixtures() {
+        let doc = parse_str(":::slide {title=\"One\"}\n# First\nBody\n:::\n");
+        let exported = export_pptx(&doc);
+        assert!(exported.bytes.starts_with(b"PK\x03\x04"));
+        assert!(loss_report_json(&exported.loss_report).contains("\"format\":\"pptx\""));
+    }
+}

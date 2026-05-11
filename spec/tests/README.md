@@ -17,6 +17,10 @@ Negative fixtures pair with exact diagnostic JSON goldens under
 `spec/tests/golden`. Security-focused inputs live under `spec/tests/security`.
 Signature profile fixture documents live under `spec/tests/signature` and are
 used by `crates/nodx-sign` tests for positive and tamper verification.
+Presentation and exporter fixtures live under `spec/tests/presentation` and
+`spec/tests/export`; they are consumed by `crates/nodx-export` tests and are
+kept out of canonical conformance unless Rust/JS AST and NCP parity is required
+for that fixture.
 The full release-gate status for the current corpus is documented in
 `CONFORMANCE.md`.
 

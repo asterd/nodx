@@ -67,7 +67,7 @@ function validateRequiredProfile(profile, diagnostics) {
 }
 
 function supportsProfile(profile) {
-  return ["plain", "core", "rich", "style", "package", "agent-read", "rich-tables", "math", "media", "custom-components"].includes(profile);
+  return ["plain", "core", "rich", "style", "package", "agent-read", "presentation", "rich-tables", "math", "media", "custom-components"].includes(profile);
 }
 
 function componentNames(doc) {

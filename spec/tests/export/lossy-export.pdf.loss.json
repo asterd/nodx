@@ -1,0 +1,1 @@
+{"format":"pdf","losses":[{"code":"NODX-E026","message":"PDF export is a safe paged HTML host bridge; a host renderer must produce final PDF bytes.","path":"$","severity":"warning"}],"lossy":true,"profile":"NODX-Presentation-1.2","schema":"nodx/export-loss/1.2","sourceSchema":"nodx/1.0"}

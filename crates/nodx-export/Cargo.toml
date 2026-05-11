@@ -1,11 +1,9 @@
 [package]
-name = "nodx"
+name = "nodx-export"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
 [dependencies]
 nodx-core = { path = "../nodx-core" }
-nodx-export = { path = "../nodx-export" }
 nodx-render-html = { path = "../nodx-render-html" }
-nodx-validate = { path = "../nodx-validate" }

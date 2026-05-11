@@ -177,6 +177,7 @@ name = "nodx"
 version = "0.1.0"
 dependencies = [
  "nodx-core",
+ "nodx-export",
  "nodx-render-html",
  "nodx-validate",
 ]
@@ -206,6 +207,14 @@ dependencies = [
  "nodx-agent-sdk",
  "nodx-core",
  "nodx-validate",
+]
+
+[[package]]
+name = "nodx-export"
+version = "0.1.0"
+dependencies = [
+ "nodx-core",
+ "nodx-render-html",
 ]
 
 [[package]]
