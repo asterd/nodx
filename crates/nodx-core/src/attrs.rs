@@ -24,10 +24,10 @@ pub(crate) fn parse_heading(line: &str) -> Option<(usize, &str, Option<Attrs>)> 
         return None;
     }
     let raw = line[level + 1..].trim_end();
-    if let Some(pos) = raw.rfind(" {") {
-        if raw.ends_with('}') {
-            return Some((level, raw[..pos].trim_end(), parse_attrs(&raw[pos + 1..])));
-        }
+    if let Some(pos) = raw.rfind(" {")
+        && raw.ends_with('}')
+    {
+        return Some((level, raw[..pos].trim_end(), parse_attrs(&raw[pos + 1..])));
     }
     Some((level, raw, None))
 }

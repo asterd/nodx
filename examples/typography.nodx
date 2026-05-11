@@ -6,9 +6,18 @@ title: Typography, Colour, and Visual Style
 subtitle: A complete walkthrough of the NODS visual primitives
 language: en
 dir: ltr
-authors: [NODX Working Group]
-keywords: [typography, color, design, style]
-requires: [rich-tables, style]
+authors:
+  - NODX Working Group
+keywords:
+  - typography
+  - color
+  - design
+  - style
+profiles:
+  requires:
+    - core
+    - rich
+    - style
 ---
 
 :::style

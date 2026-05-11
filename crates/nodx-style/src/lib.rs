@@ -256,11 +256,11 @@ fn audit_selector_token(token: &str, violations: &mut Vec<StyleViolation>) {
     ) {
         return;
     }
-    if let Some(arg) = token.strip_prefix(":not(") {
-        if let Some(inner) = arg.strip_suffix(')') {
-            audit_selector_token(inner, violations);
-            return;
-        }
+    if let Some(arg) = token.strip_prefix(":not(")
+        && let Some(inner) = arg.strip_suffix(')')
+    {
+        audit_selector_token(inner, violations);
+        return;
     }
     if token.contains("::") {
         violations.push(error(token, "Pseudo-elements are not allowed in NODS."));
@@ -665,10 +665,10 @@ fn decode_css_escapes(input: &str) -> String {
                 if j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t' || bytes[j] == b'\n') {
                     j += 1;
                 }
-                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                    if let Some(ch) = char::from_u32(code) {
-                        out.push(ch);
-                    }
+                if let Ok(code) = u32::from_str_radix(&hex, 16)
+                    && let Some(ch) = char::from_u32(code)
+                {
+                    out.push(ch);
                 }
                 i = j;
                 continue;

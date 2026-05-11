@@ -39,17 +39,9 @@ pub enum UrlError {
     InvalidPackagePath,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ResourcePolicy {
     limits: ResourceLimits,
-}
-
-impl Default for ResourcePolicy {
-    fn default() -> Self {
-        Self {
-            limits: ResourceLimits::default(),
-        }
-    }
 }
 
 impl ResourcePolicy {
@@ -189,7 +181,7 @@ fn reject_control_or_backslash(input: &str) -> Result<(), UrlError> {
 
 fn scheme_prefix(input: &str) -> Result<Option<(String, usize)>, UrlError> {
     let boundary = input
-        .find(|c| matches!(c, ':' | '/' | '?' | '#'))
+        .find([':', '/', '?', '#'])
         .unwrap_or(input.len());
     if input.as_bytes().get(boundary) != Some(&b':') {
         return Ok(None);
@@ -209,7 +201,7 @@ fn validate_data_uri(raw: &str, limits: ResourceLimits) -> Result<String, UrlErr
         return Err(UrlError::TooLong);
     }
     let colon = raw.find(':').ok_or(UrlError::UnsafeDataUri)?;
-    if raw[..colon].to_ascii_lowercase() != "data" {
+    if !raw[..colon].eq_ignore_ascii_case("data") {
         return Err(UrlError::UnsafeDataUri);
     }
     let rest = &raw[colon + 1..];

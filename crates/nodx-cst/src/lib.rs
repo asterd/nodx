@@ -78,6 +78,10 @@ pub fn parse_bytes_with_limits(
     let mut diagnostics = Vec::new();
     let mut nodes = Vec::new();
     let start_line = front_matter_end(text, &lines).unwrap_or(0);
+    let mut out = CstScanOutput {
+        nodes: &mut nodes,
+        diagnostics: &mut diagnostics,
+    };
     scan_blocks(
         text,
         &lines,
@@ -85,8 +89,7 @@ pub fn parse_bytes_with_limits(
         lines.len(),
         &mut Vec::new(),
         None,
-        &mut nodes,
-        &mut diagnostics,
+        &mut out,
     );
     Ok(CstDocument {
         source: source.to_vec(),
@@ -632,6 +635,11 @@ fn front_matter_end(text: &str, lines: &[Line]) -> Option<usize> {
     None
 }
 
+struct CstScanOutput<'a> {
+    nodes: &'a mut Vec<CstNode>,
+    diagnostics: &'a mut Vec<CstDiagnostic>,
+}
+
 fn scan_blocks(
     text: &str,
     lines: &[Line],
@@ -639,33 +647,32 @@ fn scan_blocks(
     end: usize,
     parent_path: &mut Vec<usize>,
     close: Option<(usize, &str)>,
-    nodes: &mut Vec<CstNode>,
-    diagnostics: &mut Vec<CstDiagnostic>,
+    out: &mut CstScanOutput<'_>,
 ) -> usize {
     let mut sibling = 0;
     while index < end {
         let line = line_text(text, &lines[index]);
         if let Some((colons, name)) = close {
             if let Some(label) = parse_close(line, colons) {
-                if let Some(label) = label {
-                    if label != name {
-                        diagnostics.push(CstDiagnostic {
-                            message: format!("Closing delimiter does not match `{name}`."),
-                            byte_offset: lines[index].start,
-                        });
-                    }
+                if let Some(label) = label
+                    && label != name
+                {
+                    out.diagnostics.push(CstDiagnostic {
+                        message: format!("Closing delimiter does not match `{name}`."),
+                        byte_offset: lines[index].start,
+                    });
                 }
                 return index + 1;
             }
             if is_mismatched_close(line, colons) {
-                diagnostics.push(CstDiagnostic {
+                out.diagnostics.push(CstDiagnostic {
                     message: format!("Closing delimiter does not match `{name}`."),
                     byte_offset: lines[index].start,
                 });
                 return index + 1;
             }
         } else if is_any_close(line) {
-            diagnostics.push(CstDiagnostic {
+            out.diagnostics.push(CstDiagnostic {
                 message: "Unmatched block closer.".to_string(),
                 byte_offset: lines[index].start,
             });
@@ -694,13 +701,13 @@ fn scan_blocks(
                     cursor += 1;
                     close_end
                 } else {
-                    diagnostics.push(CstDiagnostic {
+                    out.diagnostics.push(CstDiagnostic {
                         message: "Unclosed literal block.".to_string(),
                         byte_offset: start,
                     });
                     text.len()
                 };
-                nodes.push(CstNode {
+                out.nodes.push(CstNode {
                     kind: open.name,
                     ast_path: path,
                     byte_range: start..node_end,
@@ -710,8 +717,8 @@ fn scan_blocks(
                 });
                 index = cursor;
             } else {
-                let node_index = nodes.len();
-                nodes.push(CstNode {
+                let node_index = out.nodes.len();
+                out.nodes.push(CstNode {
                     kind: open.name.clone(),
                     ast_path: path.clone(),
                     byte_range: start..text.len(),
@@ -727,25 +734,24 @@ fn scan_blocks(
                     end,
                     &mut child_path,
                     Some((open.colons, open.name.as_str())),
-                    nodes,
-                    diagnostics,
+                    out,
                 );
                 let node_end = if next > index + 1 {
                     lines[next - 1].end
                 } else {
-                    diagnostics.push(CstDiagnostic {
+                    out.diagnostics.push(CstDiagnostic {
                         message: "Unclosed delimited block.".to_string(),
                         byte_offset: start,
                     });
                     text.len()
                 };
-                nodes[node_index].byte_range.end = node_end;
+                out.nodes[node_index].byte_range.end = node_end;
                 index = next;
             }
             continue;
         }
         if let Some(heading) = parse_heading(line, &lines[index]) {
-            nodes.push(CstNode {
+            out.nodes.push(CstNode {
                 kind: "heading".to_string(),
                 ast_path: path,
                 byte_range: lines[index].start..lines[index].end,
@@ -763,7 +769,7 @@ fn scan_blocks(
             while index < end && list_kind(line_text(text, &lines[index])) == kind {
                 index += 1;
             }
-            nodes.push(CstNode {
+            out.nodes.push(CstNode {
                 kind: "list".to_string(),
                 ast_path: path,
                 byte_range: start..lines[index - 1].end,
@@ -779,7 +785,7 @@ fn scan_blocks(
             while index < end && line_text(text, &lines[index]).trim_start().starts_with('|') {
                 index += 1;
             }
-            nodes.push(CstNode {
+            out.nodes.push(CstNode {
                 kind: "table".to_string(),
                 ast_path: path,
                 byte_range: start..lines[index - 1].end,
@@ -805,7 +811,7 @@ fn scan_blocks(
             }
             index += 1;
         }
-        nodes.push(CstNode {
+        out.nodes.push(CstNode {
             kind: "paragraph".to_string(),
             ast_path: path,
             byte_range: start..lines[index - 1].end,
@@ -815,7 +821,7 @@ fn scan_blocks(
         });
     }
     if let Some((_colons, name)) = close {
-        diagnostics.push(CstDiagnostic {
+        out.diagnostics.push(CstDiagnostic {
             message: format!("Unclosed delimited block `{name}`."),
             byte_offset: lines
                 .get(index.saturating_sub(1))
@@ -995,13 +1001,13 @@ fn find_attr(attr_text: &str, base: usize, name: &str) -> Option<AttrMatch> {
         }
         let token_end = i;
         let token = &attr_text[token_start..token_end];
-        if let Some(eq) = token.find('=') {
-            if &token[..eq] == name {
-                return Some(AttrMatch {
-                    token: base + token_start..base + token_end,
-                    value: base + token_start + eq + 1..base + token_end,
-                });
-            }
+        if let Some(eq) = token.find('=')
+            && &token[..eq] == name
+        {
+            return Some(AttrMatch {
+                token: base + token_start..base + token_end,
+                value: base + token_start + eq + 1..base + token_end,
+            });
         }
         i += 1;
     }

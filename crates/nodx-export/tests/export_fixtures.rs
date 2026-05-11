@@ -31,8 +31,8 @@ fn lossy_fixture_reports_docx_losses() {
 
 #[test]
 fn export_resource_limits_are_enforced() {
-    let body = "# Title\n\nLong body. ".repeat(1);
-    let doc = parse_str(&body);
+    let body = "# Title\n\nLong body. ";
+    let doc = parse_str(body);
     let limits = ResourceLimits {
         export_bytes: 1,
         ..ResourceLimits::default()

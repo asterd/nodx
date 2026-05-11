@@ -16,7 +16,7 @@ pub struct ProfileSet {
     supported: BTreeSet<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Validator {
     profiles: ProfileSet,
     limits: ResourceLimits,
@@ -48,15 +48,6 @@ impl ProfileSet {
             profile,
             "agent-mutate" | "signature" | "editor" | "presentation"
         )
-    }
-}
-
-impl Default for Validator {
-    fn default() -> Self {
-        Self {
-            profiles: ProfileSet::default(),
-            limits: ResourceLimits::default(),
-        }
     }
 }
 
@@ -93,23 +84,23 @@ impl Validator {
         validate_meta(doc, &self.profiles, requested_profile, diagnostics);
         let declared_components = component_names(doc);
         let declared_vars = declared_vars(doc);
-        let mut ids = BTreeSet::new();
-        let mut refs = Vec::new();
-        let mut previous_heading = 0usize;
+        let mut state = NodeValidationState {
+            ids: BTreeSet::new(),
+            refs: Vec::new(),
+            previous_heading: 0,
+            diagnostics,
+        };
         validate_nodes(
             &doc.body,
-            &mut ids,
-            &mut refs,
             &declared_components,
             &declared_vars,
-            &mut previous_heading,
-            diagnostics,
             self.limits,
+            &mut state,
         );
-        validate_navigation(doc, &ids, diagnostics);
-        for target in refs {
-            if !ids.contains(&target) {
-                diagnostics.push(Diagnostic {
+        validate_navigation(doc, &state.ids, state.diagnostics);
+        for target in state.refs {
+            if !state.ids.contains(&target) {
+                state.diagnostics.push(Diagnostic {
                     code: "NODX-E007".to_string(),
                     severity: "error".to_string(),
                     message: format!("Unresolved reference `#{}`.", target),
@@ -207,17 +198,17 @@ fn validate_meta(
         }
         if let Some(Value::List(optional)) = map.get("optional") {
             for item in optional {
-                if let Value::String(profile) = item {
-                    if !profiles.supports(profile) {
-                        diagnostics.push(Diagnostic {
-                            code: "NODX-E023".to_string(),
-                            severity: "warning".to_string(),
-                            message: format!("Optional profile `{}` is unsupported.", profile),
-                            line: None,
-                            column: None,
-                            target: Some(format!("profile:{profile}")),
-                        });
-                    }
+                if let Value::String(profile) = item
+                    && !profiles.supports(profile)
+                {
+                    diagnostics.push(Diagnostic {
+                        code: "NODX-E023".to_string(),
+                        severity: "warning".to_string(),
+                        message: format!("Optional profile `{}` is unsupported.", profile),
+                        line: None,
+                        column: None,
+                        target: Some(format!("profile:{profile}")),
+                    });
                 }
             }
         }
@@ -245,10 +236,10 @@ fn component_names(doc: &Document) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     if let Some(Value::List(items)) = doc.meta.get("components") {
         for item in items {
-            if let Value::Map(map) = item {
-                if let Some(Value::String(name)) = map.get("name") {
-                    out.insert(name.clone());
-                }
+            if let Value::Map(map) = item
+                && let Some(Value::String(name)) = map.get("name")
+            {
+                out.insert(name.clone());
             }
         }
     }
@@ -262,28 +253,32 @@ fn declared_vars(doc: &Document) -> BTreeSet<String> {
     }
 }
 
+struct NodeValidationState<'a> {
+    ids: BTreeSet<String>,
+    refs: Vec<String>,
+    previous_heading: usize,
+    diagnostics: &'a mut Vec<Diagnostic>,
+}
+
 fn validate_nodes(
     nodes: &[Node],
-    ids: &mut BTreeSet<String>,
-    refs: &mut Vec<String>,
     components: &BTreeSet<String>,
     vars: &BTreeSet<String>,
-    previous_heading: &mut usize,
-    diagnostics: &mut Vec<Diagnostic>,
     limits: ResourceLimits,
+    state: &mut NodeValidationState<'_>,
 ) {
     for node in nodes {
         if let Some(id) = &node.id {
             if !valid_name(id, true) || id.len() > limits.id_bytes {
-                diagnostics.push(validation_diag(
+                state.diagnostics.push(validation_diag(
                     "NODX-E004",
                     "error",
                     "Invalid node id.",
                     id,
                 ));
             }
-            if !ids.insert(id.clone()) {
-                diagnostics.push(validation_diag(
+            if !state.ids.insert(id.clone()) {
+                state.diagnostics.push(validation_diag(
                     "NODX-E006",
                     "error",
                     "Duplicate node id.",
@@ -291,13 +286,13 @@ fn validate_nodes(
                 ));
             }
         }
-        validate_common_attrs(node, diagnostics);
+        validate_common_attrs(node, state.diagnostics);
         if node.node_type.contains('-')
             && !is_standard_node(&node.node_type)
             && !components.contains(&node.node_type)
             && !node.attrs.contains_key("fallback")
         {
-            diagnostics.push(validation_diag(
+            state.diagnostics.push(validation_diag(
                 "NODX-E014",
                 "warning",
                 "Custom component is not declared and has no explicit fallback.",
@@ -305,38 +300,31 @@ fn validate_nodes(
             ));
         }
         match node.node_type.as_str() {
-            "heading" => validate_heading(node, previous_heading, diagnostics),
-            "image" => validate_image(node, diagnostics, limits),
-            "media" | "embed" | "include" => validate_asset_node(node, diagnostics, limits),
-            "table" => validate_table(node, diagnostics),
-            "toc" => validate_toc(node, diagnostics),
-            "style" => validate_style_block(node, diagnostics, limits),
+            "heading" => validate_heading(node, &mut state.previous_heading, state.diagnostics),
+            "image" => validate_image(node, state.diagnostics, limits),
+            "media" | "embed" | "include" => {
+                validate_asset_node(node, state.diagnostics, limits)
+            }
+            "table" => validate_table(node, state.diagnostics),
+            "toc" => validate_toc(node, state.diagnostics),
+            "style" => validate_style_block(node, state.diagnostics, limits),
             _ => {}
         }
-        collect_inline_refs(&node.inlines, refs, vars, diagnostics, limits);
-        validate_nodes(
-            &node.children,
-            ids,
-            refs,
-            components,
-            vars,
-            previous_heading,
-            diagnostics,
-            limits,
-        );
+        collect_inline_refs(&node.inlines, &mut state.refs, vars, state.diagnostics, limits);
+        validate_nodes(&node.children, components, vars, limits, state);
     }
 }
 
 fn validate_common_attrs(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    if let Some(dir) = node.attrs.get("dir") {
-        if !matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
-            diagnostics.push(validation_diag(
-                "NODX-E004",
-                "error",
-                "Invalid dir attribute.",
-                dir,
-            ));
-        }
+    if let Some(dir) = node.attrs.get("dir")
+        && !matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid dir attribute.",
+            dir,
+        ));
     }
 }
 
@@ -387,18 +375,17 @@ fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: Resour
 }
 
 fn validate_asset_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
-    if let Some(src) = node.attrs.get("src") {
-        if ResourcePolicy::new(limits)
+    if let Some(src) = node.attrs.get("src")
+        && ResourcePolicy::new(limits)
             .classify_uri(ReferenceKind::Asset, src)
             .is_err()
-        {
-            diagnostics.push(validation_diag(
-                "NODX-E008",
-                "error",
-                "Unresolvable asset.",
-                src,
-            ));
-        }
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E008",
+            "error",
+            "Unresolvable asset.",
+            src,
+        ));
     }
 }
 
@@ -427,63 +414,62 @@ fn validate_table(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 fn validate_toc(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    if let Some(role) = node.attrs.get("role") {
-        if !matches!(
+    if let Some(role) = node.attrs.get("role")
+        && !matches!(
             role.as_str(),
             "primary" | "local" | "secondary" | "breadcrumb"
-        ) {
-            diagnostics.push(validation_diag(
-                "NODX-E004",
-                "error",
-                "Invalid toc role.",
-                role,
-            ));
-        }
+        )
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid toc role.",
+            role,
+        ));
     }
-    if let Some(source) = node.attrs.get("source") {
-        if source != "document" {
-            diagnostics.push(validation_diag(
-                "NODX-E004",
-                "error",
-                "Invalid toc source.",
-                source,
-            ));
-        }
+    if let Some(source) = node.attrs.get("source")
+        && source != "document"
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid toc source.",
+            source,
+        ));
     }
-    if let Some(scope) = node.attrs.get("scope") {
-        if !scope.starts_with('#') || scope.len() == 1 {
-            diagnostics.push(validation_diag(
-                "NODX-E004",
-                "error",
-                "Invalid toc scope.",
-                scope,
-            ));
-        }
+    if let Some(scope) = node.attrs.get("scope")
+        && (!scope.starts_with('#') || scope.len() == 1)
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid toc scope.",
+            scope,
+        ));
     }
     for name in ["depth", "min-level", "max-level"] {
-        if let Some(value) = node.attrs.get(name) {
-            if parse_level(value).is_none() {
-                diagnostics.push(validation_diag(
-                    "NODX-E004",
-                    "error",
-                    "Invalid toc level attribute.",
-                    value,
-                ));
-            }
+        if let Some(value) = node.attrs.get(name)
+            && parse_level(value).is_none()
+        {
+            diagnostics.push(validation_diag(
+                "NODX-E004",
+                "error",
+                "Invalid toc level attribute.",
+                value,
+            ));
         }
     }
     if let (Some(min), Some(max)) = (
         node.attrs.get("min-level").and_then(|v| parse_level(v)),
         node.attrs.get("max-level").and_then(|v| parse_level(v)),
-    ) {
-        if min > max {
-            diagnostics.push(validation_diag(
-                "NODX-E004",
-                "error",
-                "toc min-level must not exceed max-level.",
-                &format!("{min}..{max}"),
-            ));
-        }
+    ) && min > max
+    {
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "toc min-level must not exceed max-level.",
+            &format!("{min}..{max}"),
+        ));
     }
     if !node.attrs.contains_key("title") {
         let role = node
@@ -528,19 +514,17 @@ fn validate_navigation(doc: &Document, ids: &BTreeSet<String>, diagnostics: &mut
 
 fn collect_toc_scopes(nodes: &[Node], ids: &BTreeSet<String>, diagnostics: &mut Vec<Diagnostic>) {
     for node in nodes {
-        if node.node_type == "toc" {
-            if let Some(scope) = node.attrs.get("scope") {
-                if let Some(id) = scope.strip_prefix('#') {
-                    if !ids.contains(id) {
-                        diagnostics.push(validation_diag(
-                            "NODX-E007",
-                            "error",
-                            "Unresolved toc scope.",
-                            scope,
-                        ));
-                    }
-                }
-            }
+        if node.node_type == "toc"
+            && let Some(scope) = node.attrs.get("scope")
+            && let Some(id) = scope.strip_prefix('#')
+            && !ids.contains(id)
+        {
+            diagnostics.push(validation_diag(
+                "NODX-E007",
+                "error",
+                "Unresolved toc scope.",
+                scope,
+            ));
         }
         collect_toc_scopes(&node.children, ids, diagnostics);
     }
@@ -584,15 +568,15 @@ fn collect_inline_refs(
                 collect_inline_refs(label, refs, vars, diagnostics, limits);
             }
             Inline::Span { children, attrs } => {
-                if let Some(dir) = attrs.attrs.get("dir") {
-                    if !matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
-                        diagnostics.push(validation_diag(
-                            "NODX-E004",
-                            "error",
-                            "Invalid inline dir attribute.",
-                            dir,
-                        ));
-                    }
+                if let Some(dir) = attrs.attrs.get("dir")
+                    && !matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+                {
+                    diagnostics.push(validation_diag(
+                        "NODX-E004",
+                        "error",
+                        "Invalid inline dir attribute.",
+                        dir,
+                    ));
                 }
                 collect_inline_refs(children, refs, vars, diagnostics, limits);
             }

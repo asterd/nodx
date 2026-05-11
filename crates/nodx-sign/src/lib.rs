@@ -145,7 +145,7 @@ pub fn digest_text_nodx_with_limits(
 fn parse_bytes_with_limits(
     input: &[u8],
     limits: ResourceLimits,
-) -> Result<Document, nodx_core::Diagnostic> {
+) -> Result<Document, Box<nodx_core::Diagnostic>> {
     nodx_core::parse_bytes_with_limits(input, limits)
 }
 

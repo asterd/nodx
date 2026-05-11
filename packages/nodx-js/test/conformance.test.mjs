@@ -29,6 +29,8 @@ function positiveFixtures() {
     ...nodxFiles("spec/tests/ncp"),
     ...nodxFiles("spec/tests/navigation"),
     ...nodxFiles("spec/tests/rendering"),
+    "spec/conformance/v1.0/fixtures/minimal.nodx",
+    "spec/conformance/v1.0/fixtures/rich-web.nodx",
   ];
 }
 

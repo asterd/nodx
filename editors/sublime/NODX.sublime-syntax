@@ -1,0 +1,43 @@
+%YAML 1.2
+---
+name: NODX
+file_extensions:
+  - nodx
+scope: source.nodx
+
+contexts:
+  main:
+    - match: '^---$'
+      scope: punctuation.definition.front-matter.nodx
+      push: front-matter
+    - match: '^(#{1,6})\s+(.+)$'
+      captures:
+        1: punctuation.definition.heading.nodx
+        2: markup.heading.nodx
+    - match: '^:{3,}[A-Za-z][A-Za-z0-9-]*(?:\s+\{[^}]*\})?$'
+      scope: entity.name.tag.block.nodx
+    - match: '^:{3,}(?:\s+[A-Za-z][A-Za-z0-9-]*)?$'
+      scope: punctuation.definition.block.end.nodx
+    - match: '\|'
+      scope: punctuation.separator.table.nodx
+    - match: '`[^`]+`'
+      scope: markup.inline.raw.nodx
+    - match: '\*\*[^*]+\*\*'
+      scope: markup.bold.nodx
+    - match: '\*[^*]+\*'
+      scope: markup.italic.nodx
+    - match: '\[[^\]]+\]\([^\)]+\)'
+      scope: markup.underline.link.nodx
+    - match: '@\[[A-Za-z][A-Za-z0-9-]*\]'
+      scope: variable.other.reference.nodx
+    - match: '\{\{[A-Za-z][A-Za-z0-9_-]*\.[A-Za-z][A-Za-z0-9_-]*\}\}'
+      scope: variable.other.nodx
+
+  front-matter:
+    - match: '^---$'
+      scope: punctuation.definition.front-matter.nodx
+      pop: true
+    - match: '^\s*[A-Za-z][A-Za-z0-9_-]*:'
+      scope: support.type.property-name.nodx
+    - match: '\b(nodx/1\.0|document)\b'
+      scope: constant.language.nodx

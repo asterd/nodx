@@ -1,0 +1,28 @@
+{
+  "name": "nodx-language",
+  "displayName": "NODX Language Support",
+  "description": "Syntax highlighting for NODX 1.0 documents.",
+  "version": "0.1.0",
+  "publisher": "nodx",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nodx",
+        "aliases": ["NODX", "nodx"],
+        "extensions": [".nodx"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nodx",
+        "scopeName": "source.nodx",
+        "path": "./syntaxes/nodx.tmLanguage.json"
+      }
+    ]
+  }
+}

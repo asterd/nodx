@@ -1,0 +1,50 @@
+{
+  "scopeName": "source.nodx",
+  "name": "NODX",
+  "patterns": [
+    { "include": "#front-matter" },
+    { "include": "#blocks" },
+    { "include": "#headings" },
+    { "include": "#tables" },
+    { "include": "#inline" }
+  ],
+  "repository": {
+    "front-matter": {
+      "begin": "\\A---$",
+      "end": "^---$",
+      "name": "meta.front-matter.nodx",
+      "patterns": [
+        { "match": "^\\s*[A-Za-z][A-Za-z0-9_-]*:", "name": "support.type.property-name.nodx" },
+        { "match": "\\b(nodx/1\\.0|document)\\b", "name": "constant.language.nodx" }
+      ]
+    },
+    "blocks": {
+      "patterns": [
+        { "match": "^:{3,}[A-Za-z][A-Za-z0-9-]*(?:\\s+\\{[^}]*\\})?$", "name": "entity.name.tag.block.nodx" },
+        { "match": "^:{3,}(?:\\s+[A-Za-z][A-Za-z0-9-]*)?$", "name": "punctuation.definition.block.end.nodx" },
+        { "match": "\\{#[A-Za-z][A-Za-z0-9-]*\\}", "name": "entity.name.tag.id.nodx" }
+      ]
+    },
+    "headings": {
+      "patterns": [
+        { "match": "^(#{1,6})\\s+(.+)$", "captures": { "1": { "name": "punctuation.definition.heading.nodx" }, "2": { "name": "markup.heading.nodx" } } }
+      ]
+    },
+    "tables": {
+      "patterns": [
+        { "match": "^\\|.*\\|$", "name": "markup.table.row.nodx" },
+        { "match": "^\\s*\\|?\\s*:?-{1,}:?\\s*(\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$", "name": "punctuation.separator.table.nodx" }
+      ]
+    },
+    "inline": {
+      "patterns": [
+        { "match": "`[^`]+`", "name": "markup.inline.raw.nodx" },
+        { "match": "\\*\\*[^*]+\\*\\*", "name": "markup.bold.nodx" },
+        { "match": "\\*[^*]+\\*", "name": "markup.italic.nodx" },
+        { "match": "\\[[^\\]]+\\]\\([^\\)]+\\)", "name": "markup.underline.link.nodx" },
+        { "match": "@\\[[A-Za-z][A-Za-z0-9-]*\\]", "name": "variable.other.reference.nodx" },
+        { "match": "\\{\\{[A-Za-z][A-Za-z0-9_-]*\\.[A-Za-z][A-Za-z0-9_-]*\\}\\}", "name": "variable.other.nodx" }
+      ]
+    }
+  }
+}

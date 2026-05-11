@@ -1,7 +1,7 @@
 # NODX Public Test Suite
 
-This directory contains public conformance fixtures for NODX 0.1 and the
-targeted NODX 1.0 milestone corpora.
+This directory contains public conformance fixtures for the NODX 1.0 reference
+implementation.
 
 Current invariant:
 
@@ -21,7 +21,6 @@ Presentation and exporter fixtures live under `spec/tests/presentation` and
 `spec/tests/export`; they are consumed by `crates/nodx-export` tests and are
 kept out of canonical conformance unless Rust/JS AST and NCP parity is required
 for that fixture.
-The full release-gate status for the current corpus is documented in
-`CONFORMANCE.md`.
+Historical release-gate notes are archived under `docs/archive/`.
 
 Add new fixtures when adding syntax. Prefer small documents that isolate one behavior, plus one realistic mixed document.

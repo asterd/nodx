@@ -92,7 +92,7 @@ fn resolve_toc(
         .and_then(|raw| raw.strip_prefix('#'))
         .and_then(|id| ids.get(id))
         .and_then(|scope_path| node_at_path(&doc.body, scope_path))
-        .map(|node| std::slice::from_ref(node))
+        .map(std::slice::from_ref)
         .unwrap_or(&doc.body);
 
     let min_level = toc.attrs.get("min-level").and_then(|v| parse_level(v));
@@ -127,17 +127,16 @@ fn collect_entries(
 ) {
     for (i, node) in nodes.iter().enumerate() {
         let path = child_path(prefix, i);
-        if node.node_type == "heading" {
-            if let (Some(id), Some(level)) = (&node.id, heading_level(node)) {
-                if (min_level..=max_level).contains(&level) {
-                    out.push(NavigationEntry {
-                        id: id.clone(),
-                        level,
-                        title: plain_node_text(node),
-                        path: path.clone(),
-                    });
-                }
-            }
+        if node.node_type == "heading"
+            && let (Some(id), Some(level)) = (&node.id, heading_level(node))
+            && (min_level..=max_level).contains(&level)
+        {
+            out.push(NavigationEntry {
+                id: id.clone(),
+                level,
+                title: plain_node_text(node),
+                path: path.clone(),
+            });
         }
         collect_entries(&node.children, &path, min_level, max_level, out);
     }
@@ -145,10 +144,10 @@ fn collect_entries(
 
 fn first_heading_level(nodes: &[Node]) -> Option<usize> {
     for node in nodes {
-        if node.node_type == "heading" {
-            if let Some(level) = heading_level(node) {
-                return Some(level);
-            }
+        if node.node_type == "heading"
+            && let Some(level) = heading_level(node)
+        {
+            return Some(level);
         }
         if let Some(level) = first_heading_level(&node.children) {
             return Some(level);

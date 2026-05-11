@@ -1,0 +1,94 @@
+---
+schema: nodx/1.0
+type: document
+id: layout-fonts-showcase
+title: Layout And Font Showcase
+language: en
+dir: ltr
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+---
+
+:::style
+.layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18pt; margin: 18pt 0; }
+.layout-card { padding: 14pt; border: 0.5pt solid #cbd5e1; border-radius: 6pt; background-color: #f8fafc; }
+.layout-row { display: flex; gap: 12pt; margin: 12pt 0; }
+.layout-row .layout-card { flex: 1; }
+.font-system { font-family: system-ui, sans-serif; }
+.font-serif { font-family: Georgia, "Times New Roman", serif; }
+.font-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+.font-humanist { font-family: "Gill Sans", "Trebuchet MS", sans-serif; }
+.margin-demo { margin: 20pt 8pt 12pt 28pt; padding: 10pt 14pt; border-inline-start: 4pt solid #0f766e; background-color: #ecfdf5; }
+::: style
+
+:::toc {#contents role="primary" depth="2" title="Contents"}
+:::
+
+# Layout And Font Showcase {#title}
+
+This document exists to make renderer behavior visible: horizontal layout,
+grid layout, margins, padding, and font-family selection.
+
+::::section {#font-rows}
+## Font Rows {#font-rows-heading}
+
+:::note {.font-system type="info"}
+System UI font row: the quick brown fox jumps over the lazy dog. 0123456789.
+::: note
+
+:::note {.font-serif type="info"}
+Serif font row: the quick brown fox jumps over the lazy dog. 0123456789.
+::: note
+
+:::note {.font-mono type="info"}
+Monospace font row: the quick brown fox jumps over the lazy dog. 0123456789.
+::: note
+
+:::note {.font-humanist type="info"}
+Humanist sans row: the quick brown fox jumps over the lazy dog. 0123456789.
+::: note
+:::: section
+
+::::section {#horizontal-layout}
+## Horizontal Layout {#horizontal-layout-heading}
+
+:::section {.layout-row}
+:::note {.layout-card type="info"}
+Left panel with padding and equal flex width.
+::: note
+:::note {.layout-card type="warning"}
+Right panel with the same source fallback behavior.
+::: note
+::: section
+:::: section
+
+::::section {#grid-layout}
+## Grid Layout {#grid-layout-heading}
+
+:::section {.layout-grid}
+:::note {.layout-card type="info"}
+Grid cell A.
+::: note
+:::note {.layout-card type="info"}
+Grid cell B.
+::: note
+:::note {.layout-card type="info"}
+Grid cell C.
+::: note
+:::note {.layout-card type="info"}
+Grid cell D.
+::: note
+::: section
+:::: section
+
+::::section {#margin-padding}
+## Margins And Padding {#margin-padding-heading}
+
+:::note {.margin-demo type="info"}
+This block has asymmetric margin, padding, border, and background styling.
+::: note
+:::: section

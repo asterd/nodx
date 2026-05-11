@@ -149,7 +149,7 @@ fn sha256_base64_for_csp(input: &[u8]) -> String {
 fn base64_standard(input: &[u8]) -> String {
     const ALPHABET: &[u8; 64] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 3 <= input.len() {
         let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | input[i + 2] as u32;
@@ -352,17 +352,16 @@ fn render_node(
                     .map(String::as_str)
                     .unwrap_or(&node.node_type),
             );
-            if let Some(src) = node.attrs.get("src") {
-                if ResourcePolicy::new(policy.limits())
+            if let Some(src) = node.attrs.get("src")
+                && (ResourcePolicy::new(policy.limits())
                     .classify_uri(ReferenceKind::MediaFallback, src)
                     .is_ok()
                     || ResourcePolicy::new(policy.limits())
                         .classify_uri(ReferenceKind::Asset, src)
-                        .is_ok()
-                {
-                    out.push_str(" - ");
-                    escape_html(out, src);
-                }
+                        .is_ok())
+            {
+                out.push_str(" - ");
+                escape_html(out, src);
             }
             out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
@@ -458,12 +457,12 @@ fn html_attrs(node: &Node) -> String {
         escape_attr(&mut s, lang);
         s.push('"');
     }
-    if let Some(dir) = node.attrs.get("dir") {
-        if matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
-            s.push_str(" dir=\"");
-            escape_attr(&mut s, dir);
-            s.push('"');
-        }
+    if let Some(dir) = node.attrs.get("dir")
+        && matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+    {
+        s.push_str(" dir=\"");
+        escape_attr(&mut s, dir);
+        s.push('"');
     }
     if let Some(title) = node.attrs.get("title") {
         s.push_str(" title=\"");
@@ -530,12 +529,12 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                     escape_attr(out, lang);
                     out.push('"');
                 }
-                if let Some(dir) = attrs.attrs.get("dir") {
-                    if matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
-                        out.push_str(" dir=\"");
-                        escape_attr(out, dir);
-                        out.push('"');
-                    }
+                if let Some(dir) = attrs.attrs.get("dir")
+                    && matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+                {
+                    out.push_str(" dir=\"");
+                    escape_attr(out, dir);
+                    out.push('"');
                 }
                 if let Some(title) = attrs.attrs.get("title") {
                     out.push_str(" title=\"");

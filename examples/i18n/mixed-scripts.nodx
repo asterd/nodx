@@ -6,9 +6,16 @@ title: Mixed Scripts and Unicode Coverage
 subtitle: Latin, Cyrillic, Greek, Arabic, Hebrew, Devanagari, CJK, and emoji in one source
 language: en
 dir: ltr
-authors: [NODX Working Group]
-keywords: [unicode, i18n, bidi]
-requires: [rich-tables]
+authors:
+  - NODX Working Group
+keywords:
+  - unicode
+  - i18n
+  - bidi
+profiles:
+  requires:
+    - core
+    - rich
 ---
 
 # Mixed Scripts and Unicode Coverage {#title}

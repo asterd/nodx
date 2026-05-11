@@ -40,7 +40,7 @@ pub enum Inline {
     MathInline { source: String },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Attrs {
     pub id: Option<String>,
     pub classes: Vec<String>,
@@ -85,16 +85,6 @@ impl Node {
             children,
             inlines,
             text,
-        }
-    }
-}
-
-impl Default for Attrs {
-    fn default() -> Self {
-        Self {
-            id: None,
-            classes: Vec::new(),
-            attrs: BTreeMap::new(),
         }
     }
 }

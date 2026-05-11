@@ -113,19 +113,19 @@ impl Parser<'_> {
             }
             if let Some((n, expected_name)) = close_frame {
                 if let Some(label) = parse_close(line, n) {
-                    if let Some(name) = label {
-                        if name != expected_name {
-                            self.diagnostics.push(diag(
-                                "NODX-E005",
-                                "error",
-                                &format!(
-                                    "Closing label `{}` does not match open block `{}`.",
-                                    name, expected_name
-                                ),
-                                self.pos + 1,
-                                1,
-                            ));
-                        }
+                    if let Some(name) = label
+                        && name != expected_name
+                    {
+                        self.diagnostics.push(diag(
+                            "NODX-E005",
+                            "error",
+                            &format!(
+                                "Closing label `{}` does not match open block `{}`.",
+                                name, expected_name
+                            ),
+                            self.pos + 1,
+                            1,
+                        ));
                     }
                     self.pos += 1;
                     closed = true;
@@ -194,19 +194,19 @@ impl Parser<'_> {
             }
             let text = self.lines[start..self.pos].join("\n");
             if self.pos < self.lines.len() {
-                if let Some(Some(label)) = parse_close(self.lines[self.pos], colons) {
-                    if label != name {
-                        self.diagnostics.push(diag(
-                            "NODX-E005",
-                            "error",
-                            &format!(
-                                "Closing label `{}` does not match open block `{}`.",
-                                label, name
-                            ),
-                            self.pos + 1,
-                            1,
-                        ));
-                    }
+                if let Some(Some(label)) = parse_close(self.lines[self.pos], colons)
+                    && label != name
+                {
+                    self.diagnostics.push(diag(
+                        "NODX-E005",
+                        "error",
+                        &format!(
+                            "Closing label `{}` does not match open block `{}`.",
+                            label, name
+                        ),
+                        self.pos + 1,
+                        1,
+                    ));
                 }
                 self.pos += 1;
             } else {

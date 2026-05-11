@@ -167,17 +167,17 @@ fn inflate_huffman_block(
 
 fn fixed_literal_table() -> HuffmanTable {
     let mut lengths = [0u8; 288];
-    for i in 0..=143 {
-        lengths[i] = 8;
+    for item in lengths.iter_mut().take(143 + 1) {
+        *item = 8;
     }
-    for i in 144..=255 {
-        lengths[i] = 9;
+    for item in lengths.iter_mut().take(255 + 1).skip(144) {
+        *item = 9;
     }
-    for i in 256..=279 {
-        lengths[i] = 7;
+    for item in lengths.iter_mut().take(279 + 1).skip(256) {
+        *item = 7;
     }
-    for i in 280..=287 {
-        lengths[i] = 8;
+    for item in lengths.iter_mut().skip(280) {
+        *item = 8;
     }
     build_huffman(&lengths, 288).expect("fixed literal table")
 }
@@ -237,7 +237,7 @@ fn decode_symbol(reader: &mut BitReader, table: &HuffmanTable) -> Result<u16, &'
     let mut code: u32 = 0;
     for bits in 1..=table.max_len {
         let bit = reader.read_bits(1)?;
-        code = (code << 1) | (bit as u32);
+        code = (code << 1) | bit;
         for &(c, l, s) in &table.codes {
             if l == bits && c as u32 == code {
                 return Ok(s);
@@ -284,7 +284,7 @@ impl<'a> BitReader<'a> {
     }
 
     fn read_byte(&mut self) -> Result<u8, &'static str> {
-        if self.buffered % 8 != 0 {
+        if !self.buffered.is_multiple_of(8) {
             self.buffer >>= self.buffered % 8;
             self.buffered -= self.buffered % 8;
         }

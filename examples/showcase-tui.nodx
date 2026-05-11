@@ -1,0 +1,65 @@
+---
+schema: nodx/1.0
+type: document
+title: NODX TUI And Desktop Showcase
+language: en
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - agent-read
+---
+
+# NODX TUI And Desktop Showcase {#tui-showcase}
+
+This companion showcase focuses on text-first surfaces: terminal rendering,
+desktop preview, code blocks, notes, page breaks, speaker notes, and fallback
+content that must remain useful without CSS.
+
+:::toc {#local-map role="primary" depth="2" title="Document map"}
+:::
+
+## Operational Notes {#notes}
+
+:::note {#review-note type="warning"}
+Warnings should remain readable as plain text in terminal, desktop, and
+accessibility-oriented renderers.
+:::
+
+- [x] Parse source bytes
+- [x] Validate semantic constraints
+- [x] Render TUI safely
+- [ ] Complete external editor integrations
+
+## Literal Blocks {#literal}
+
+:::code {lang="sh"}
+target/debug/nodx validate examples/showcase-tui.nodx
+target/debug/nodx tui examples/showcase-tui.nodx
+:::
+
+:::quote {#quote}
+Fallback text is not a second-class path. It is the portable document path.
+:::
+
+## Presentation Fallback {#presentation}
+
+:::slide {#slide-1 title="Text-first slide" fallback="children"}
+### Text-first slide {#slide-heading}
+
+Slide-like content should still be visible as a structured section when a host
+does not implement presentation behavior.
+
+:::speaker-notes
+Speaker notes are deferred presentation semantics, but terminal and desktop
+views should keep them inspectable as text.
+:::
+:::
+
+:::pagebreak {#page-cut}
+:::
+
+## Closing {#closing}
+
+Use this file to inspect non-web behavior with the TUI and desktop viewer.

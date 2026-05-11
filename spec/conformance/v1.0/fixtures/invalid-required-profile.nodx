@@ -1,0 +1,13 @@
+---
+schema: nodx/1.0
+type: document
+title: Invalid Required Profile
+profiles:
+  requires:
+    - core
+    - future-required
+---
+
+# Invalid Required Profile
+
+This fixture must emit `NODX-E024`.

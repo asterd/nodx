@@ -10,7 +10,7 @@ pub fn render_tui(doc: &Document) -> String {
     };
     if let Some(title) = title {
         out.push_str(&paint(ansi, "1;36", &title));
-        out.push_str("\n");
+        out.push('\n');
         out.push_str(&paint(ansi, "2", &"═".repeat(title.chars().count().max(8))));
         out.push_str("\n\n");
     }

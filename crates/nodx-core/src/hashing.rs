@@ -14,9 +14,12 @@ pub fn base64url_encode(input: &[u8]) -> String {
     out
 }
 
-pub fn base64url_decode(input: &str) -> Result<Vec<u8>, ()> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Base64UrlError;
+
+pub fn base64url_decode(input: &str) -> Result<Vec<u8>, Base64UrlError> {
     if input.len() % 4 == 1 {
-        return Err(());
+        return Err(Base64UrlError);
     }
     let mut bits = 0u32;
     let mut bit_len = 0u8;
@@ -28,7 +31,7 @@ pub fn base64url_decode(input: &str) -> Result<Vec<u8>, ()> {
             b'0'..=b'9' => byte - b'0' + 52,
             b'-' => 62,
             b'_' => 63,
-            _ => return Err(()),
+            _ => return Err(Base64UrlError),
         };
         bits = (bits << 6) | value as u32;
         bit_len += 6;
@@ -38,7 +41,7 @@ pub fn base64url_decode(input: &str) -> Result<Vec<u8>, ()> {
         }
     }
     if bit_len > 0 && (bits & ((1u32 << bit_len) - 1)) != 0 {
-        return Err(());
+        return Err(Base64UrlError);
     }
     Ok(out)
 }

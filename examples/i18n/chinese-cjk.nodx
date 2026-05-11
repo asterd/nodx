@@ -6,12 +6,19 @@ title: 中文文档示例
 subtitle: NODX 对中日韩字符的支持
 language: zh-CN
 dir: ltr
-authors: [NODX 工作组]
-keywords: [中文, CJK, 国际化]
+authors:
+  - NODX 工作组
+keywords:
+  - 中文
+  - CJK
+  - 国际化
 vars:
   organization: 示例公司
   release: 0.1
-requires: [rich-tables, math]
+profiles:
+  requires:
+    - core
+    - rich
 ---
 
 # 中文文档示例 {#title}

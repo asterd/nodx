@@ -6,11 +6,18 @@ title: مثال على وثيقة عربية
 subtitle: NODX يدعم النصوص من اليمين إلى اليسار
 language: ar
 dir: rtl
-authors: [مجموعة عمل NODX]
-keywords: [عربي, RTL, اختبار]
+authors:
+  - مجموعة عمل NODX
+keywords:
+  - عربي
+  - RTL
+  - اختبار
 vars:
   organization: شركة المثال
-requires: [rich-tables]
+profiles:
+  requires:
+    - core
+    - rich
 ---
 
 # مثال على وثيقة عربية {#title}

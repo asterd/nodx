@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+type: document
+title: Minimal NODX
+profiles:
+  requires:
+    - core
+---
+
+# Minimal NODX {#minimal}
+
+A minimal conforming document.

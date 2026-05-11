@@ -6,10 +6,20 @@ title: Operations Dashboard — Landscape Print Sheet
 subtitle: Wide tables, generous spacing, A3 landscape
 language: en
 dir: ltr
-authors: [NODX Working Group]
+authors:
+  - NODX Working Group
 created: "2026-05-10"
-keywords: [print, landscape, dashboard, spacing, padding]
-requires: [rich-tables, style]
+keywords:
+  - print
+  - landscape
+  - dashboard
+  - spacing
+  - padding
+profiles:
+  requires:
+    - core
+    - rich
+    - style
 ---
 
 :::style
@@ -78,10 +88,6 @@ th {
   text-transform: uppercase;
   font-size: 9.5pt;
 }
-tr:nth-child(even) td {
-  background-color: #f8fafc;
-}
-
 .legend {
   margin: 6pt 0 18pt;
   font-size: 9.5pt;
@@ -103,7 +109,7 @@ aside {
   page-break-inside: avoid;
 }
 
-footer {
+#footer {
   margin-top: 24pt;
   padding-top: 8pt;
   border-top: 0.4pt solid #94a3b8;

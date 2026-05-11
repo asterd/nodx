@@ -51,33 +51,33 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                 out.push(Inline::Text(rest[..end + 3].to_string()));
             }
             i += end + 3;
-        } else if rest.starts_with("==") {
-            if let Some(end) = rest[2..].find("==") {
-                out.push(Inline::Mark(parse_inlines(&rest[2..end + 2])));
+        } else if let Some(stripped) = rest.strip_prefix("==") {
+            if let Some(end) = stripped.find("==") {
+                out.push(Inline::Mark(parse_inlines(&stripped[..end])));
                 i += end + 4;
             } else {
                 push_text(&mut out, "=");
                 i += 1;
             }
-        } else if rest.starts_with('~') {
-            if let Some(end) = rest[1..].find('~') {
-                out.push(Inline::Sub(parse_inlines(&rest[1..end + 1])));
+        } else if let Some(stripped) = rest.strip_prefix('~') {
+            if let Some(end) = stripped.find('~') {
+                out.push(Inline::Sub(parse_inlines(&stripped[..end])));
                 i += end + 2;
             } else {
                 push_text(&mut out, "~");
                 i += 1;
             }
-        } else if rest.starts_with('^') {
-            if let Some(end) = rest[1..].find('^') {
-                out.push(Inline::Sup(parse_inlines(&rest[1..end + 1])));
+        } else if let Some(stripped) = rest.strip_prefix('^') {
+            if let Some(end) = stripped.find('^') {
+                out.push(Inline::Sup(parse_inlines(&stripped[..end])));
                 i += end + 2;
             } else {
                 push_text(&mut out, "^");
                 i += 1;
             }
-        } else if rest.starts_with("**") {
-            if let Some(end) = rest[2..].find("**") {
-                out.push(Inline::Strong(parse_inlines(&rest[2..end + 2])));
+        } else if let Some(stripped) = rest.strip_prefix("**") {
+            if let Some(end) = stripped.find("**") {
+                out.push(Inline::Strong(parse_inlines(&stripped[..end])));
                 i += end + 4;
             } else {
                 push_text(&mut out, "*");
@@ -95,26 +95,25 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
             if let Some(close) = rest.find(']') {
                 let label = &rest[1..close];
                 let after = &rest[close + 1..];
-                if after.starts_with('(') {
-                    if let Some(end) = after.find(')') {
+                if let Some(stripped) = after.strip_prefix('(') {
+                    if let Some(end) = stripped.find(')') {
                         out.push(Inline::Link {
                             label: parse_inlines(label),
-                            target: after[1..end].to_string(),
+                            target: stripped[..end].to_string(),
                         });
-                        i += close + 1 + end + 1;
+                        i += close + 1 + end + 2;
                         continue;
                     }
-                } else if after.starts_with('{') {
-                    if let Some(end) = after.find('}') {
-                        if let Some(attrs) = parse_attrs(&after[..=end]) {
-                            out.push(Inline::Span {
-                                children: parse_inlines(label),
-                                attrs,
-                            });
-                            i += close + 1 + end + 1;
-                            continue;
-                        }
-                    }
+                } else if after.starts_with('{')
+                    && let Some(end) = after.find('}')
+                    && let Some(attrs) = parse_attrs(&after[..=end])
+                {
+                    out.push(Inline::Span {
+                        children: parse_inlines(label),
+                        attrs,
+                    });
+                    i += close + 1 + end + 1;
+                    continue;
                 }
             }
             push_text(&mut out, "[");

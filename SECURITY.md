@@ -7,8 +7,7 @@ input. This policy covers the NODX 1.0 reference implementation release gate.
 
 | Version | Security status |
 |---|---|
-| `nodx/1.0` | Release-gate contract; known limitations are in `RELEASE_NOTES-1.0.md`. |
-| `nodx/0.1` | Reference implementation draft, not a stable security release. |
+| `nodx/1.0` | Stable reference contract defined by `NODX-RFC-0001.md`. |
 
 ## Baseline Rules
 
@@ -66,9 +65,8 @@ Committed security inputs:
 - `spec/tests/security/package-corpus.md`
 
 The corpus is active and run through unit, renderer, package, validator, or
-conformance checks as appropriate. The larger numeric corpus targets from the
-evolution plan are not yet fully populated; this is a documented release
-limitation.
+conformance checks as appropriate. Larger numeric corpus targets and fuzz
+budgets remain release-readiness work, not changes to the RFC contract.
 
 ## Fuzzing
 

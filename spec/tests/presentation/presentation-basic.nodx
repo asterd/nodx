@@ -2,7 +2,8 @@
 schema: nodx/1.0
 title: Presentation Fixture
 profiles:
-  requires: [presentation]
+  requires:
+    - presentation
 ---
 
 :::deck {#deck title="Presentation Fixture"}

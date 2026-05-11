@@ -1,153 +1,218 @@
-# NODX Reference Implementation
+# NODX
 
-This repository contains the current public NODX reference implementation. The
-code is still based on the `nodx/0.1` implementation surface while the 1.0
-contract is being defined.
+NODX is a UTF-8, text-first document format for structured, portable source
+documents. A `.nodx` file can be plain text or a packaged ZIP; readers detect
+the representation from the first bytes.
 
-Active documents:
+The normative specification is [NODX-RFC-0001](./NODX-RFC-0001.md).
 
-- [NODX 1.0 Working Draft](./NODX_1.0_Working_Draft.md): target 1.0 contract.
-- [NODX 1.0 Evolution Plan](./NODX_1.0_Evolution_Plan.md): implementation roadmap.
-- [NODX 0.1 Working Draft](./NODX_0.1_Working_Draft.md): historical input.
-- [Implementation Plan](./IMPLEMENTATION_PLAN.md): current implementation status.
-- [Conformance Report](./CONFORMANCE.md): release-gate corpus and DoD matrix.
-- [Interop Notes](./INTEROP.md): AST, NCP, package, profile, and media type notes.
-- [Migration Guide](./MIGRATION-0.1-TO-1.0.md): changes from 0.1 to 1.0.
-- [Release Notes](./RELEASE_NOTES-1.0.md): known limitations and verification.
+## What This Repo Contains
 
-NODX uses `.nodx` as a hybrid extension. A file can be UTF-8 Text NODX or a ZIP
-Packaged NODX, and readers identify the representation from the first bytes.
+- Rust reference implementation: parser, validator, URL policy, style safety,
+  HTML renderer, TUI renderer, package reader, NCP projection, signing,
+  editor/CST support, agent mutation SDK, and export previews.
+- Independent JavaScript parser/projection in `packages/nodx-js`.
+- Conformance, negative, rendering, security, package, export, and presentation
+  fixtures under `spec/tests`.
+- Implementer-facing conformance package under `spec/conformance/v1.0`.
+- Showcase documents under `examples`.
+- Editor starter integrations under `editors`.
 
-## Current Implementation
+## Example
 
-Implemented today:
+```nodx
+---
+schema: nodx/1.0
+type: document
+title: Hello NODX
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - agent-read
+---
 
-- Rust reference crate: `crates/nodx-core`
-- Rust URL policy crate: `crates/nodx-url`
-- Rust validator crate: `crates/nodx-validate`
-- Rust style safety crate: `crates/nodx-style`
-- Rust HTML renderer crate: `crates/nodx-render-html`
-- Rust package reader crate: `crates/nodx-package`
-- Rust signature verification crate: `crates/nodx-sign`
-- Rust agent mutation SDK crate: `crates/nodx-agent-sdk`
-- Rust editor CST crate: `crates/nodx-cst`
-- Rust presentation/export crate: `crates/nodx-export`
-- CLI facade: `crates/nodx-cli`
-- Independent JavaScript parser: `packages/nodx-js`
-- Public conformance fixtures: `spec/tests/conformance`
-- Example documents under `examples`
-- Desktop local viewer: `apps/desktop/nodx_viewer.py`
-- Deterministic stored-ZIP package builder: `scripts/build_package.py`
+:::toc {#contents role="primary" depth="2" title="Contents"}
+:::
 
-The implemented behavior covers UTF-8 parsing, Plain/Core syntax, a practical
-Rich subset, front matter, delimited blocks, headings, paragraphs, lists, pipe
-tables, literal blocks, attributes, common inline nodes, deterministic
-canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
-rendering in `nodx-render-html`, safe NODS subset validation in `nodx-style`,
-centralized URL/resource policy, TUI rendering, semantic NCP
-projection, and a safe stored-ZIP package reader with manifest digest
-verification and read-only virtual filesystem access. The `nodx-sign` crate
-implements the NODX Signature 1.1 verification profile for canonical AST
-digests and ES256 compact JWS signatures. The `nodx-agent-sdk` crate implements
-the NODX Agent Mutate 1.1 local mutation profile with target resolution,
-`beforeHash` checks, validation-backed atomic batches, and deterministic JSONL
-change records. The `nodx-cst` crate implements the NODX Editor 1.2
-byte-preserving CST profile for editor state, AST path mapping, local source
-patches, and minimal agent attribute rewrites when a CST patch is available.
-The `nodx-export` crate defines the NODX Presentation 1.2 exporter baseline,
-including a safe paged HTML PDF bridge, minimal DOCX/PPTX exporters, and
-machine-readable loss reports for lossy exports.
+# Hello NODX {#hello}
 
-The workspace does not yet contain a separate `nodx-ncp` crate. Semantic NCP is
-implemented in `nodx-core` and in the independent JavaScript package; a split
-crate remains a roadmap target.
+This is **structured text** with a safe [link](https://example.com).
 
-## Verify
+| Feature | Status |
+| - | - |
+| Canonical AST | stable |
+| NCP semantic projection | stable |
 
-Use `rtk` when running repository commands:
+:::note {#safe-note type="info"}
+Unknown renderers keep fallback children as ordinary document content.
+:::
+```
+
+## Build And Verify
+
+Use `rtk` for repository commands:
 
 ```sh
 rtk cargo test
+rtk node --test packages/nodx-js/test/*.mjs
 rtk sh scripts/run_conformance.sh
+rtk sh scripts/verify_conformance_package.sh
 rtk git diff --check
 ```
 
-The conformance script compares canonical AST output and semantic NCP output
-from the Rust parser and the independent JavaScript implementation for every
-text fixture and example. It writes `target/conformance-report.json`.
+The conformance runner compares Rust and JavaScript canonical AST, NCP, and
+diagnostics output for the committed fixture corpus and writes
+`target/conformance-report.json`.
 
 ## CLI
 
-Current commands:
+```sh
+rtk cargo build -p nodx
+target/debug/nodx ast examples/showcase-web.nodx
+target/debug/nodx validate examples/showcase-web.nodx --format json
+target/debug/nodx html examples/showcase-web.nodx > target/showcase.html
+target/debug/nodx tui examples/showcase-tui.nodx
+target/debug/nodx ncp examples/showcase-web.nodx
+target/debug/nodx package inspect examples/extended-showcase-bundled.nodx
+target/debug/nodx package verify examples/extended-showcase-bundled.nodx
+```
+
+Exit codes follow the RFC: `0` success, `1` I/O or CLI usage failure, `2`
+parse/validation/security failure, `3` unsupported required capability.
+
+## Run The Examples
+
+Build the CLI once:
 
 ```sh
 rtk cargo build -p nodx
-target/debug/nodx ast examples/agent-workflow.nodx
-target/debug/nodx html examples/rich-demo.nodx
-target/debug/nodx tui examples/complex-long-form.nodx
-target/debug/nodx validate examples/extended-showcase.nodx
-target/debug/nodx diagnostics examples/extended-showcase.nodx
-target/debug/nodx ncp examples/agent-workflow.nodx
-target/debug/nodx inspect examples/extended-showcase-bundled.nodx
-target/debug/nodx export pptx spec/tests/presentation/presentation-basic.nodx -o target/presentation-basic.pptx
 ```
 
-The current CLI implements `nodx validate --profile <profile>`,
-`nodx validate --format json`, `nodx diagnostics --format json`, and exit code
-`3` for unsupported required profiles. It does not yet implement the full 1.0
-CLI contract from `NODX_1.0_Working_Draft.md`, including package subcommands.
-
-## Package
-
-Build the bundled `.nodx` ZIP package example:
+Validate a single example before rendering it:
 
 ```sh
-rtk python3 scripts/build_package.py
+target/debug/nodx validate examples/showcase-web.nodx --format json
 ```
 
-The package reader currently handles stored ZIP entries, manifest size and
-digest verification, CRC checks, ZIP path validation, and read-only virtual
-filesystem access. Deflated entries, signatures, and advanced package policy
-are deferred.
-
-## Media Types
-
-The drafts propose `text/nodx; charset=utf-8` for Text NODX and
-`application/nodx+zip` for Packaged NODX. Until registration, integrations
-should use documented experimental names such as `text/x-nodx` and
-`application/x-nodx+zip`.
-
-## Desktop Viewer
+Start the interactive web app from the repository root:
 
 ```sh
-rtk python3 apps/desktop/nodx_viewer.py examples/agent-workflow.nodx
+python3 -m http.server 8080
 ```
 
-For non-interactive verification:
+Then open:
+
+```text
+http://127.0.0.1:8080/apps/web/
+```
+
+The web app lets you select committed examples, including the packaged ZIP
+showcase, edit the NODX source on the left, inspect the rendered document,
+Canonical AST, and diagnostics on the right, toggle page simulation for
+`:::pagebreak`, follow clickable TOC anchors, and export the current HTML
+preview. The playground variant is available at:
+
+```text
+http://127.0.0.1:8080/apps/web/playground.html
+```
+
+Generate one static HTML file when you want a renderer artifact without the
+interactive app:
 
 ```sh
-rtk python3 apps/desktop/nodx_viewer.py --check examples/complex-long-form.nodx
+mkdir -p target/examples
+cp -R examples/assets target/examples/assets
+target/debug/nodx html examples/showcase-web.nodx > target/examples/showcase-web.html
 ```
 
-The viewer uses only the Python standard library, the Rust CLI, and the default
-browser. It does not require Tkinter.
+Run the terminal showcase:
 
-## Intentional Gaps
+```sh
+target/debug/nodx tui examples/showcase-tui.nodx
+```
 
-The full NODS cascade, signature trust store UX, complete URL resolver, native
-pure-Rust PDF rendering, stable 1.0 profile enforcement, LLM API integration
-for agent workflows, complete YAML 1.2 safe-subset validation, and high-fidelity
-DOCX/PPTX export are not implemented yet. These are security-sensitive surfaces
-and should be added as separately tested milestones.
+Run the local desktop-style viewer for a single file:
 
-Current inline `:::style` blocks are processed by the `nodx-style` allowlist
-validator. Forbidden NODS constructs emit deterministic `NODX-E027`
-diagnostics, and unsafe rules are omitted from rendered HTML. Full cascade and
-computed style remain future work.
+```sh
+python3 apps/desktop/nodx_viewer.py examples/showcase-web.nodx
+```
 
-Native pure-Rust PDF rendering, WYSIWYG editing, and pixel-perfect DOCX/PPTX
-round-trip fidelity remain intentionally out of scope.
+Generate the agent-readable NCP projection:
 
-The full numeric corpus targets and release-candidate fuzz budget from
-`NODX_1.0_Evolution_Plan.md` are documented release limitations until completed
-on the release branch.
+```sh
+target/debug/nodx ncp examples/showcase-web.nodx > target/showcase-web.ncp.json
+```
+
+Inspect and verify the packaged ZIP example:
+
+```sh
+target/debug/nodx package inspect examples/extended-showcase-bundled.nodx
+target/debug/nodx package verify examples/extended-showcase-bundled.nodx
+```
+
+Render print and internationalization examples through the same HTML path:
+
+```sh
+target/debug/nodx html examples/print/print-portrait.nodx > target/examples/print-portrait.html
+target/debug/nodx html examples/print/print-landscape.nodx > target/examples/print-landscape.html
+target/debug/nodx html examples/i18n/arabic-rtl.nodx > target/examples/arabic-rtl.html
+target/debug/nodx html examples/i18n/chinese-cjk.nodx > target/examples/chinese-cjk.html
+target/debug/nodx html examples/i18n/mixed-scripts.nodx > target/examples/mixed-scripts.html
+```
+
+Run preview exports with machine-readable loss reports:
+
+```sh
+target/debug/nodx export pdf examples/showcase-web.nodx -o target/showcase.pdf
+target/debug/nodx export docx examples/showcase-web.nodx -o target/showcase.docx
+target/debug/nodx export pptx spec/tests/presentation/presentation-basic.nodx -o target/presentation.pptx
+```
+
+Run the full committed example/conformance sweep:
+
+```sh
+rtk sh scripts/run_conformance.sh
+```
+
+## Showcase
+
+- `examples/showcase-web.nodx`: primary HTML showcase for the implemented 1.0
+  web-safe surface: front matter, profiles, TOC, headings, inline syntax,
+  tables, figures/images, safe style blocks, custom components with fallback,
+  footnotes/citations, forms, and NCP-friendly IDs.
+- `examples/showcase-tui.nodx`: terminal/desktop-oriented showcase for content
+  where text, navigation, notes, code, page breaks, speaker notes, and
+  fallback rendering matter more than CSS.
+- `examples/extended-showcase-bundled.nodx`: packaged ZIP sample generated by
+  `scripts/build_package.py`.
+- `examples/layout-fonts.nodx`: visual showcase for horizontal layout, grid,
+  asymmetric margins/padding, and different font-family rows.
+
+The older focused examples remain useful as small regression fixtures.
+
+## Security
+
+NODX processors are expected to fail closed for untrusted input: no script
+execution, no default network fetches, no package extraction to disk, strict
+resource limits, safe URL/path policy, and context escaping for renderers.
+
+See [SECURITY.md](./SECURITY.md) for the security policy.
+
+## Documentation Layout
+
+Root documentation is intentionally small:
+
+- [NODX-RFC-0001.md](./NODX-RFC-0001.md): final 1.0 specification.
+- [README.md](./README.md): project entry point.
+- [SECURITY.md](./SECURITY.md): security policy.
+
+Historical planning, migration, conformance snapshot, threat-model, and wave
+prompt documents are archived under `docs/archive/` to keep the project root
+readable without losing context.
+
+For external implementers, start with [docs/IMPLEMENTER_GUIDE.md](./docs/IMPLEMENTER_GUIDE.md)
+and [spec/conformance/v1.0](./spec/conformance/v1.0/README.md). The ecosystem
+roadmap is [docs/ECOSYSTEM_PLAN.md](./docs/ECOSYSTEM_PLAN.md).

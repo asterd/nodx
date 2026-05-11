@@ -1,0 +1,32 @@
+---
+schema: nodx/1.0
+type: document
+title: Rich Web Fixture
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+---
+
+:::toc {#contents role="primary" depth="2" title="Contents"}
+:::
+
+# Rich Web Fixture {#rich}
+
+This fixture covers **strong**, *emphasis*, `code`, [safe links](https://example.com),
+variables like {{vars.missing}}, and references such as @[table].
+
+:::style
+h1 { color: #0f766e; }
+:::
+
+| Name | Value |
+| - | - |
+| AST | canonical |
+| NCP | semantic |
+
+:::note {#table fallback="children"}
+The table is referenced by a stable ID.
+:::

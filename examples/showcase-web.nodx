@@ -1,0 +1,89 @@
+---
+schema: nodx/1.0
+type: document
+title: NODX Web Showcase
+language: en
+dir: ltr
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - agent-read
+vars:
+  release: 1.0
+components:
+  - name: approval-card
+    fallback: children
+---
+
+:::toc {#contents role="primary" source="document" depth="2" title="Contents"}
+:::
+
+:::style
+:root {
+  --ink: #1f2937;
+  --accent: #0f766e;
+  --soft: #ccfbf1;
+}
+h1, h2 { color: var(--accent); }
+.lead { font-size: 19pt; color: #475569; }
+aside[data-type="info"] { border-inline-start: 4pt solid var(--accent); background-color: var(--soft); padding: 10pt 14pt; }
+@media print {
+  nav { display: none; }
+}
+:::
+
+# NODX Web Showcase {#showcase}
+
+[A compact HTML-oriented showcase.]{.lead}
+
+This document exercises **strong**, *emphasis*, `code`, ==mark==, ~sub~,
+^sup^, [safe links](https://example.com), spans with attributes, variables
+like {{vars.release}}, and stable references such as @[feature-table].
+
+## Navigation And Tables {#navigation}
+
+| Feature | Covered |
+| - | - |
+| Front matter and profiles | yes |
+| Canonical AST and NCP IDs | yes |
+| Safe HTML rendering | yes |
+| Tables and inline syntax | yes |
+
+:::note {#web-note type="info"}
+Renderers may style this note, but unsupported renderers still expose the child
+paragraph as ordinary document content.
+:::
+
+## Media And Fallbacks {#media}
+
+:::figure {#pipeline}
+:::image {src="assets/reference-pipeline.svg" alt="Pipeline diagram: parse, validate, canonicalize, render"}
+:::
+:::caption
+Local package-relative assets are allowed; remote assets are blocked by default.
+:::
+:::
+
+:::approval-card {#approval status="pending" fallback="children"}
+Approval cards are custom components. The fallback content is the source of
+truth when a renderer does not know the component.
+:::
+
+## Forms And References {#forms}
+
+:::form {#release-checklist}
+:::field {name="owner" label="Owner" value="reference implementation"}
+:::
+:::field {name="status" label="Status" value="release candidate"}
+:::
+:::
+
+:::bibliography {#refs}
+:::citation-entry {#feature-table}
+The feature table above is intentionally addressable from inline references and
+NCP projections.
+:::
+:::

@@ -11,3 +11,4 @@ export { parseInlines } from "./inlineParser.mjs";
 export { resolveNavigation } from "./navigation.mjs";
 export { DEFAULT_LIMITS } from "./limits.mjs";
 export { classifyUri, normalizePackagePath, ReferenceKind } from "./url.mjs";
+export { isPackagedNodx, openStoredPackage, packageEntryText } from "./package.mjs";

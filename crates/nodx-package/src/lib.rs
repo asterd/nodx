@@ -95,18 +95,18 @@ impl Package {
                     "Manifest lists a missing package entry.",
                 ));
             };
-            if let Some(size) = manifest_entry.size {
-                if size != data.len() {
-                    return Err(diag_code(
-                        "NODX-E021",
-                        "Package manifest size does not match entry bytes.",
-                    ));
-                }
+            if let Some(size) = manifest_entry.size
+                && size != data.len()
+            {
+                return Err(diag_code(
+                    "NODX-E021",
+                    "Package manifest size does not match entry bytes.",
+                ));
             }
-            if let Some(expected) = &manifest_entry.sha256 {
-                if expected != &sha256_base64url(data) {
-                    return Err(diag_code("NODX-E021", "Package digest mismatch."));
-                }
+            if let Some(expected) = &manifest_entry.sha256
+                && expected != &sha256_base64url(data)
+            {
+                return Err(diag_code("NODX-E021", "Package digest mismatch."));
             }
         }
         let entry = manifest_data

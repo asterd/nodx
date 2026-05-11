@@ -1,0 +1,107 @@
+---
+schema: nodx/1.0
+type: document
+id: multi-page-report
+title: Multi-Page Report Demo
+language: en
+dir: ltr
+vars:
+  company: Example Industries
+  quarter: Q2 2026
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+---
+
+:::style
+.cover { text-align: center; padding-top: 72pt; }
+.lead { font-size: 14pt; color: #475569; }
+.summary-card { padding: 12pt; border: 0.5pt solid #cbd5e1; border-radius: 6pt; background-color: #f8fafc; margin: 10pt 0; }
+.metric-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12pt; margin: 12pt 0; }
+.metric-row aside { padding: 10pt; border: 0.5pt solid #cbd5e1; border-radius: 6pt; background-color: #ffffff; }
+::: style
+
+:::section {#cover .cover}
+# Multi-Page Report Demo {#cover-title}
+
+[{{vars.company}} - {{vars.quarter}}]{.lead}
+
+:::pagebreak {#page-2}
+::: pagebreak
+::: section
+
+:::section {#contents-page}
+## Contents {#contents-heading}
+
+:::toc {#report-toc role="primary" depth="3" title="Jump to sections on later pages"}
+:::
+
+The `Pages` toggle in the playground shows each explicit `:::pagebreak` as a
+new visual page. Use the TOC above to jump to page 3 and page 4 sections.
+
+:::pagebreak {#page-3}
+::: pagebreak
+::: section
+
+:::section {#executive-summary}
+## Executive Summary {#executive-summary-heading}
+
+:::note {.summary-card type="info"}
+This page contains the narrative summary. It intentionally has enough content
+to make page simulation visible and to exercise stable anchors.
+::: note
+
+The report tracks operational readiness, documentation quality, security review
+status, and integration readiness. Each section has a stable ID so the generated
+TOC can navigate to it.
+
+### Highlights {#highlights}
+
+- [x] Canonical AST is stable.
+- [x] NCP projection is deterministic.
+- [x] Web playground renders package and text examples.
+- [ ] Export profiles remain preview quality.
+
+:::pagebreak {#page-4}
+::: pagebreak
+::: section
+
+:::section {#metrics}
+## Metrics On Page 4 {#metrics-heading}
+
+:::section {.metric-row}
+:::note {type="info"}
+### Parser {#metric-parser}
+145 Rust tests passing.
+::: note
+
+:::note {type="info"}
+### JavaScript {#metric-js}
+Conformance and package tests passing.
+::: note
+
+:::note {type="warning"}
+### Export {#metric-export}
+Preview output includes loss reports.
+::: note
+::: section
+
+| Area | Status | Evidence |
+| - | - | - |
+| Source format | Stable | RFC 0001 |
+| Web renderer | Improved | TOC, package, pages |
+| Font embedding | Gap | Future NODS/package work |
+
+:::pagebreak {#page-5}
+::: pagebreak
+::: section
+
+:::section {#appendix}
+## Appendix On Page 5 {#appendix-heading}
+
+This final page gives the TOC another deep target. It is useful when checking
+whether anchor navigation crosses page containers correctly.
+::: section

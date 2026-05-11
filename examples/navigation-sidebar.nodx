@@ -1,0 +1,82 @@
+---
+schema: nodx/1.0
+type: document
+id: navigation-sidebar-demo
+title: Navigation Sidebar Demo
+language: en
+dir: ltr
+vars:
+  product: NODX
+  release: 1.0
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+---
+
+:::style
+.app-shell { display: grid; grid-template-columns: minmax(180px, 240px) 1fr; gap: 20pt; }
+.side-nav { border: 0.5pt solid #cbd5e1; background-color: #f8fafc; padding: 12pt; border-radius: 6pt; }
+.side-nav ol { padding-inline-start: 16pt; }
+.side-nav li { margin: 4pt 0; }
+.content-panel { min-width: 0; }
+.feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; margin: 16pt 0; }
+.feature-card { padding: 12pt; border: 0.5pt solid #cbd5e1; border-radius: 6pt; background-color: #ffffff; }
+.hero-band { padding: 18pt; background-color: #ecfdf5; border-inline-start: 5pt solid #0f766e; border-radius: 6pt; }
+::: style
+
+# Navigation Sidebar Demo {#top}
+
+:::section {.app-shell}
+:::toc {#side-nav .side-nav role="primary" depth="3" title="Document navigation"}
+:::
+
+::::section {.content-panel}
+:::note {.hero-band type="info"}
+This example renders a real navigation sidebar with nested heading levels. It
+also resolves runtime variables: {{vars.product}} {{vars.release}}.
+::: note
+
+## Overview {#overview}
+
+The sidebar is a normal `toc` node styled as a sticky navigation region. The
+links target stable heading IDs in this content panel.
+
+:::section {.feature-grid}
+:::approval-card {#card-authoring .feature-card status="ready" fallback="children"}
+### Authoring {#authoring}
+
+Write structured text and keep fallback children for unsupported components.
+::: approval-card
+
+:::approval-card {#card-review .feature-card status="pending" fallback="children"}
+### Review {#review}
+
+Agents and reviewers can address stable nodes and inspect the NCP projection.
+::: approval-card
+::: section
+
+## Workflow {#workflow}
+
+### Draft {#workflow-draft}
+
+Authors work in text-first source, then preview through web, TUI, or export
+surfaces.
+
+### Validate {#workflow-validate}
+
+Validation checks profiles, IDs, references, TOC scope, tables, images, and
+safe URL/resource policy.
+
+### Publish {#workflow-publish}
+
+Publishing can target HTML, package bundles, NCP, or preview export formats.
+
+## Deep Links {#deep-links}
+
+The entries in the sidebar should scroll to this section and to each subsection
+without leaving the playground preview area.
+:::: section
+::: section
