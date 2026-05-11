@@ -1,14 +1,32 @@
+use crate::ResourceLimits;
 use crate::ast::Document;
 use crate::diagnostic::Diagnostic;
 use crate::package_baseline::read_packaged_nodx_entry;
 
 pub fn parse_bytes(input: &[u8]) -> Result<Document, Diagnostic> {
+    parse_bytes_with_limits(input, ResourceLimits::default())
+}
+
+pub fn parse_bytes_with_limits(
+    input: &[u8],
+    limits: ResourceLimits,
+) -> Result<Document, Diagnostic> {
+    if input.len() > limits.source_bytes {
+        return Err(Diagnostic {
+            code: "NODX-E012".to_string(),
+            severity: "fatal".to_string(),
+            message: "Input byte size limit exceeded.".to_string(),
+            line: Some(1),
+            column: Some(1),
+            target: None,
+        });
+    }
     if input.starts_with(b"PK\x03\x04") {
-        let entry = read_packaged_nodx_entry(input)?;
-        return parse_bytes(&entry);
+        let entry = read_packaged_nodx_entry(input, limits)?;
+        return parse_bytes_with_limits(&entry, limits);
     }
     match std::str::from_utf8(input) {
-        Ok(s) => Ok(crate::block_parser::parse_str(s)),
+        Ok(s) => Ok(crate::block_parser::parse_str_with_limits(s, limits)),
         Err(_) => Err(Diagnostic {
             code: "NODX-E001".to_string(),
             severity: "fatal".to_string(),

@@ -4,8 +4,9 @@ use std::collections::BTreeSet;
 
 use nodx_core::{
     Diagnostic, Document, Inline, Node, ResourceLimits, Value, default_navigation_label,
-    is_safe_asset_ref, resolve_navigation, safe_link_url, valid_name,
+    resolve_navigation, valid_name,
 };
+use nodx_url::{ReferenceKind, ResourcePolicy};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSet {
@@ -15,6 +16,7 @@ pub struct ProfileSet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Validator {
     profiles: ProfileSet,
+    limits: ResourceLimits,
 }
 
 impl Default for ProfileSet {
@@ -43,13 +45,21 @@ impl Default for Validator {
     fn default() -> Self {
         Self {
             profiles: ProfileSet::default(),
+            limits: ResourceLimits::default(),
         }
     }
 }
 
 impl Validator {
     pub fn new(profiles: ProfileSet) -> Self {
-        Self { profiles }
+        Self {
+            profiles,
+            limits: ResourceLimits::default(),
+        }
+    }
+
+    pub fn with_limits(profiles: ProfileSet, limits: ResourceLimits) -> Self {
+        Self { profiles, limits }
     }
 
     pub fn validate(&self, doc: &Document) -> Vec<Diagnostic> {
@@ -84,6 +94,7 @@ impl Validator {
             &declared_vars,
             &mut previous_heading,
             diagnostics,
+            self.limits,
         );
         validate_navigation(doc, &ids, diagnostics);
         for target in refs {
@@ -254,8 +265,8 @@ fn validate_nodes(
     vars: &BTreeSet<String>,
     previous_heading: &mut usize,
     diagnostics: &mut Vec<Diagnostic>,
+    limits: ResourceLimits,
 ) {
-    let limits = ResourceLimits::default();
     for node in nodes {
         if let Some(id) = &node.id {
             if !valid_name(id, true) || id.len() > limits.id_bytes {
@@ -290,13 +301,13 @@ fn validate_nodes(
         }
         match node.node_type.as_str() {
             "heading" => validate_heading(node, previous_heading, diagnostics),
-            "image" => validate_image(node, diagnostics),
-            "media" | "embed" | "include" => validate_asset_node(node, diagnostics),
+            "image" => validate_image(node, diagnostics, limits),
+            "media" | "embed" | "include" => validate_asset_node(node, diagnostics, limits),
             "table" => validate_table(node, diagnostics),
             "toc" => validate_toc(node, diagnostics),
             _ => {}
         }
-        collect_inline_refs(&node.inlines, refs, vars, diagnostics);
+        collect_inline_refs(&node.inlines, refs, vars, diagnostics, limits);
         validate_nodes(
             &node.children,
             ids,
@@ -305,6 +316,7 @@ fn validate_nodes(
             vars,
             previous_heading,
             diagnostics,
+            limits,
         );
     }
 }
@@ -351,7 +363,7 @@ fn validate_heading(node: &Node, previous_heading: &mut usize, diagnostics: &mut
     *previous_heading = level;
 }
 
-fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
     let decorative = node.attrs.get("decorative").map(String::as_str) == Some("true");
     let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
     if !decorative && alt.trim().is_empty() {
@@ -362,12 +374,15 @@ fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             node.id.as_deref().unwrap_or("image"),
         ));
     }
-    validate_asset_node(node, diagnostics);
+    validate_asset_node(node, diagnostics, limits);
 }
 
-fn validate_asset_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+fn validate_asset_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
     if let Some(src) = node.attrs.get("src") {
-        if !is_safe_asset_ref(src) {
+        if ResourcePolicy::new(limits)
+            .classify_uri(ReferenceKind::Asset, src)
+            .is_err()
+        {
             diagnostics.push(validation_diag(
                 "NODX-E008",
                 "error",
@@ -514,6 +529,7 @@ fn collect_inline_refs(
     refs: &mut Vec<String>,
     vars: &BTreeSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
+    limits: ResourceLimits,
 ) {
     for item in inlines {
         match item {
@@ -521,9 +537,14 @@ fn collect_inline_refs(
             | Inline::Em(children)
             | Inline::Mark(children)
             | Inline::Sub(children)
-            | Inline::Sup(children) => collect_inline_refs(children, refs, vars, diagnostics),
+            | Inline::Sup(children) => {
+                collect_inline_refs(children, refs, vars, diagnostics, limits)
+            }
             Inline::Link { label, target } => {
-                if safe_link_url(target).is_none() {
+                if ResourcePolicy::new(limits)
+                    .classify_uri(ReferenceKind::Link, target)
+                    .is_err()
+                {
                     diagnostics.push(validation_diag(
                         "NODX-E020",
                         "error",
@@ -531,7 +552,7 @@ fn collect_inline_refs(
                         target,
                     ));
                 }
-                collect_inline_refs(label, refs, vars, diagnostics);
+                collect_inline_refs(label, refs, vars, diagnostics, limits);
             }
             Inline::Span { children, attrs } => {
                 if let Some(dir) = &attrs.attrs.get("dir") {
@@ -544,7 +565,7 @@ fn collect_inline_refs(
                         ));
                     }
                 }
-                collect_inline_refs(children, refs, vars, diagnostics);
+                collect_inline_refs(children, refs, vars, diagnostics, limits);
             }
             Inline::Var { namespace, name } => {
                 if namespace == "vars" && !vars.contains(name) {

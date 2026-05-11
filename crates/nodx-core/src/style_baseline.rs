@@ -1,5 +1,7 @@
+use crate::ResourceLimits;
 use crate::ast::Node;
 use crate::diagnostic::Diagnostic;
+use nodx_url::{ReferenceKind, ResourcePolicy};
 
 const FORBIDDEN_NODS_PATTERNS: &[&str] = &[
     ":hover",
@@ -49,7 +51,12 @@ const FORBIDDEN_NODS_PATTERNS: &[&str] = &[
     "expression(",
 ];
 
-pub(crate) fn audit_nods(nodes: &[Node], diagnostics: &mut Vec<Diagnostic>) {
+pub(crate) fn audit_nods(
+    nodes: &[Node],
+    diagnostics: &mut Vec<Diagnostic>,
+    limits: ResourceLimits,
+) {
+    let policy = ResourcePolicy::new(limits);
     for node in nodes {
         if node.node_type == "style" {
             if let Some(text) = &node.text {
@@ -69,9 +76,21 @@ pub(crate) fn audit_nods(nodes: &[Node], diagnostics: &mut Vec<Diagnostic>) {
                         });
                     }
                 }
+                for url in style_urls(text) {
+                    if policy.classify_uri(ReferenceKind::Style, url).is_err() {
+                        diagnostics.push(Diagnostic {
+                            code: "NODX-E020".to_string(),
+                            severity: "error".to_string(),
+                            message: "Unsafe URL or scheme.".to_string(),
+                            line: None,
+                            column: None,
+                            target: node.id.clone(),
+                        });
+                    }
+                }
             }
         }
-        audit_nods(&node.children, diagnostics);
+        audit_nods(&node.children, diagnostics, limits);
     }
 }
 
@@ -95,4 +114,21 @@ pub(crate) fn strip_forbidden_nods(input: &str) -> String {
         }
     }
     out
+}
+
+pub(crate) fn style_urls(input: &str) -> Vec<&str> {
+    let mut urls = Vec::new();
+    let mut offset = 0;
+    let lower = input.to_ascii_lowercase();
+    while let Some(start) = lower[offset..].find("url(") {
+        let url_start = offset + start + 4;
+        let after = &input[url_start..];
+        let Some(end) = after.find(')') else {
+            break;
+        };
+        let raw = after[..end].trim().trim_matches('"').trim_matches('\'');
+        urls.push(raw);
+        offset = url_start + end + 1;
+    }
+    urls
 }

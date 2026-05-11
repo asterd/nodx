@@ -1,13 +1,16 @@
 use std::collections::BTreeSet;
 
+use crate::ResourceLimits;
 use crate::bytes::sha256_base64url;
 use crate::diagnostic::Diagnostic;
 use crate::front_matter::unquote;
-use crate::limits::ResourceLimits;
+use nodx_url::ResourcePolicy;
 
-pub(crate) fn read_packaged_nodx_entry(input: &[u8]) -> Result<Vec<u8>, Diagnostic> {
-    let limits = ResourceLimits::default();
-    let entries = zip_entries(input)?;
+pub(crate) fn read_packaged_nodx_entry(
+    input: &[u8],
+    limits: ResourceLimits,
+) -> Result<Vec<u8>, Diagnostic> {
+    let entries = zip_entries(input, limits)?;
     if entries.len() > limits.package_file_count {
         return Err(package_diag_code(
             "NODX-E012",
@@ -45,7 +48,7 @@ pub(crate) fn read_packaged_nodx_entry(input: &[u8]) -> Result<Vec<u8>, Diagnost
     if manifest_data.schema.as_deref() != Some("nodx-package/0.1") {
         return Err(package_diag("Package manifest has an invalid schema."));
     }
-    verify_manifest_entries(input, &entries, &manifest_data.entries)?;
+    verify_manifest_entries(input, &entries, &manifest_data.entries, limits)?;
     let entry_path = manifest_data
         .entry
         .ok_or_else(|| package_diag("Package manifest is missing entry."))?;
@@ -64,7 +67,7 @@ struct ZipEntry {
     local_offset: usize,
 }
 
-fn zip_entries(input: &[u8]) -> Result<Vec<ZipEntry>, Diagnostic> {
+fn zip_entries(input: &[u8], limits: ResourceLimits) -> Result<Vec<ZipEntry>, Diagnostic> {
     let eocd =
         find_eocd(input).ok_or_else(|| package_diag("ZIP end of central directory not found."))?;
     let count = read_u16(input, eocd + 10)? as usize;
@@ -80,6 +83,12 @@ fn zip_entries(input: &[u8]) -> Result<Vec<ZipEntry>, Diagnostic> {
         let compression = read_u16(input, pos + 10)?;
         let compressed_size = read_u32(input, pos + 20)? as usize;
         let uncompressed_size = read_u32(input, pos + 24)? as usize;
+        if uncompressed_size > limits.package_entry_bytes {
+            return Err(package_diag_code(
+                "NODX-E012",
+                "Package entry size limit exceeded.",
+            ));
+        }
         let name_len = read_u16(input, pos + 28)? as usize;
         let extra_len = read_u16(input, pos + 30)? as usize;
         let comment_len = read_u16(input, pos + 32)? as usize;
@@ -92,7 +101,7 @@ fn zip_entries(input: &[u8]) -> Result<Vec<ZipEntry>, Diagnostic> {
         let name = std::str::from_utf8(&input[name_start..name_end])
             .map_err(|_| package_diag("ZIP entry name is not UTF-8."))?
             .to_string();
-        validate_package_path(&name)?;
+        validate_package_path(&name, limits)?;
         if flags & 1 != 0 {
             return Err(package_diag("Encrypted ZIP entries are not supported."));
         }
@@ -204,9 +213,16 @@ fn verify_manifest_entries(
     input: &[u8],
     entries: &[ZipEntry],
     manifest_entries: &[PackageManifestEntry],
+    limits: ResourceLimits,
 ) -> Result<(), Diagnostic> {
+    if manifest_entries.len() > limits.manifest_entries {
+        return Err(package_diag_code(
+            "NODX-E012",
+            "Package manifest entry limit exceeded.",
+        ));
+    }
     for manifest_entry in manifest_entries {
-        validate_package_path(&manifest_entry.path)?;
+        validate_package_path(&manifest_entry.path, limits)?;
         let Some(zip_entry) = entries
             .iter()
             .find(|entry| entry.name == manifest_entry.path)
@@ -231,24 +247,17 @@ fn verify_manifest_entries(
     Ok(())
 }
 
-fn validate_package_path(path: &str) -> Result<(), Diagnostic> {
-    if path.is_empty()
-        || path.starts_with('/')
-        || path.contains('\\')
-        || path
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
-    {
-        Err(package_diag_code("NODX-E010", "Unsafe package path."))
-    } else {
-        if path.len() > 512 || path.split('/').count() > 8 {
-            return Err(package_diag_code(
-                "NODX-E012",
-                "Package path limit exceeded.",
-            ));
-        }
-        Ok(())
+fn validate_package_path(path: &str, limits: ResourceLimits) -> Result<(), Diagnostic> {
+    if path.len() > 512 || path.split('/').count() > 8 {
+        return Err(package_diag_code(
+            "NODX-E012",
+            "Package path limit exceeded.",
+        ));
     }
+    ResourcePolicy::new(limits)
+        .normalize_package_path(path)
+        .map(|_| ())
+        .map_err(|_| package_diag_code("NODX-E010", "Unsafe package path."))
 }
 
 fn read_u16(input: &[u8], pos: usize) -> Result<u16, Diagnostic> {

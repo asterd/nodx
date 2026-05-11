@@ -9,3 +9,5 @@ description = "Minimal NODX 0.1 reference parser, canonicalizer, and renderers"
 name = "nodx_core"
 path = "src/lib.rs"
 
+[dependencies]
+nodx-url = { path = "../nodx-url" }

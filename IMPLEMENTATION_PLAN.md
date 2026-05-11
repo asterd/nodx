@@ -14,6 +14,7 @@ Current workspace:
 ```text
 crates/
   nodx-core/
+  nodx-url/
   nodx-validate/
   nodx-cli/
 packages/
@@ -29,6 +30,8 @@ Current crates and packages:
 - `crates/nodx-core`: Rust parser, canonical AST serializer, shared navigation
   graph resolver, HTML renderer, TUI renderer, NCP projection, and minimal
   package reader.
+- `crates/nodx-url`: centralized URL classification, package-relative path
+  normalization, `ResourcePolicy`, and shared `ResourceLimits`.
 - `crates/nodx-validate`: semantic validator, profile handling, and stable
   diagnostic JSON helpers.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
@@ -56,7 +59,7 @@ Implemented now:
 - Deterministic canonical JSON with sorted object keys.
 - Focused semantic validation for common Core/Rich correctness and safety
   issues.
-- Safe HTML escaping and context-aware URL and asset checks.
+- Safe HTML escaping and centralized context-aware URL and asset checks.
 - Recursive NCP semantic projection with deterministic SHA-256 hashes.
 - Minimal stored-ZIP package reader with manifest digest verification for
   generated examples.
@@ -66,8 +69,7 @@ Implemented now:
 Not implemented yet:
 
 - Full package-level 1.0 profile declaration enforcement.
-- Shared `ResourceLimits` type used across all processors.
-- Separate URL policy, package, style, NCP, and HTML renderer crates.
+- Separate package, style, NCP, and HTML renderer crates.
 - Deflated ZIP entries, package virtual filesystem, and advanced package policy.
 - Full NODS allowlist parser and cascade.
 - Lossless CST, source maps, signatures, mutation SDK, and native PDF/DOCX/PPTX

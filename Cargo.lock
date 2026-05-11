@@ -13,10 +13,18 @@ dependencies = [
 [[package]]
 name = "nodx-core"
 version = "0.1.0"
+dependencies = [
+ "nodx-url",
+]
+
+[[package]]
+name = "nodx-url"
+version = "0.1.0"
 
 [[package]]
 name = "nodx-validate"
 version = "0.1.0"
 dependencies = [
  "nodx-core",
+ "nodx-url",
 ]

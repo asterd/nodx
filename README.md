@@ -19,6 +19,7 @@ Packaged NODX, and readers identify the representation from the first bytes.
 Implemented today:
 
 - Rust reference crate: `crates/nodx-core`
+- Rust URL policy crate: `crates/nodx-url`
 - Rust validator crate: `crates/nodx-validate`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
@@ -31,12 +32,13 @@ The implemented behavior covers UTF-8 parsing, Plain/Core syntax, a practical
 Rich subset, front matter, delimited blocks, headings, paragraphs, lists, pipe
 tables, literal blocks, attributes, common inline nodes, deterministic
 canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
-rendering, TUI rendering, semantic NCP projection, and a minimal stored-ZIP
-package reader with manifest digest verification.
+rendering, centralized URL/resource policy, TUI rendering, semantic NCP
+projection, and a minimal stored-ZIP package reader with manifest digest
+verification.
 
-The workspace does not yet contain separate `nodx-url`, `nodx-package`,
-`nodx-style`, `nodx-ncp`, or `nodx-render-html` crates. Those are roadmap
-targets, not current modules.
+The workspace does not yet contain separate `nodx-package`, `nodx-style`,
+`nodx-ncp`, or `nodx-render-html` crates. Those are roadmap targets, not
+current modules.
 
 ## Verify
 

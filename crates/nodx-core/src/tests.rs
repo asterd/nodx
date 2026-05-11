@@ -21,35 +21,8 @@ fn parses_tables_and_lists() {
 }
 
 #[test]
-fn safe_link_url_blocks_dangerous_schemes() {
-    assert_eq!(
-        safe_link_url("https://example.com"),
-        Some("https://example.com".into())
-    );
-    assert_eq!(safe_link_url("#anchor"), Some("#anchor".into()));
-    assert_eq!(safe_link_url("relative/path"), Some("relative/path".into()));
-    assert_eq!(safe_link_url("javascript:alert(1)"), None);
-    assert_eq!(safe_link_url(" javascript:alert(1)"), None);
-    assert_eq!(safe_link_url("JaVaScRiPt:alert(1)"), None);
-    assert_eq!(safe_link_url("ja%76ascript:alert(1)"), None);
-    assert_eq!(safe_link_url("data:text/html,<script>"), None);
-    assert_eq!(safe_link_url("vbscript:alert(1)"), None);
-    assert_eq!(safe_link_url("file:///etc/passwd"), None);
-    assert_eq!(safe_link_url("\u{0008}javascript:alert"), None);
-}
-
-#[test]
-fn safe_image_url_allows_only_image_data_uris() {
-    assert!(safe_image_url("https://example.com/x.png").is_some());
-    assert!(safe_image_url("data:image/png;base64,AAA").is_some());
-    assert!(safe_image_url("data:image/svg+xml,<svg/>").is_some());
-    assert!(safe_image_url("data:text/html,<script>").is_none());
-    assert!(safe_image_url("javascript:alert(1)").is_none());
-}
-
-#[test]
 fn html_render_blocks_javascript_link() {
-    let doc = parse_str("[click](javascript:alert(1))\n");
+    let doc = parse_str("[click](java\u{73}cript:alert(1))\n");
     let html = render_html(&doc);
     assert!(!html.contains("href=\"javascript"));
     assert!(html.contains("nodx-blocked-link"));
@@ -136,6 +109,16 @@ fn forbidden_nods_emits_e027_and_strips_rule() {
     assert!(!html.contains("transform"));
     assert!(html.contains("color: blue"));
     assert!(html.contains("forbidden NODS rule omitted"));
+}
+
+#[test]
+fn style_url_policy_blocks_remote_urls() {
+    let doc = parse_str(":::style\n.hero { background: url(https://example.test/a.png); }\n:::\n");
+    let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(codes.contains(&"NODX-E020"));
+    let html = render_html(&doc);
+    assert!(!html.contains("https://example.test/a.png"));
+    assert!(html.contains("blocked unsafe style content"));
 }
 
 #[test]

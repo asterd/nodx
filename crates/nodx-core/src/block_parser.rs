@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::ResourceLimits;
 use crate::ast::{Attrs, Document, Node, Value};
 use crate::attrs::{parse_close, parse_heading, parse_opener, valid_name};
 use crate::diagnostic::{Diagnostic, diag};
@@ -8,6 +9,10 @@ use crate::inline_parser::{parse_inlines, plain_inlines};
 use crate::style_baseline::audit_nods;
 
 pub fn parse_str(input: &str) -> Document {
+    parse_str_with_limits(input, ResourceLimits::default())
+}
+
+pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
     let mut diagnostics = Vec::new();
     if input.starts_with('\u{feff}') {
         diagnostics.push(diag(
@@ -20,6 +25,15 @@ pub fn parse_str(input: &str) -> Document {
     }
     if input.contains('\0') {
         diagnostics.push(diag("NODX-E002", "fatal", "U+0000 is not allowed.", 1, 1));
+    }
+    if input.len() > limits.source_bytes {
+        diagnostics.push(diag(
+            "NODX-E012",
+            "fatal",
+            "Input byte size limit exceeded.",
+            1,
+            1,
+        ));
     }
 
     let normalized = input.replace("\r\n", "\n");
@@ -34,6 +48,16 @@ pub fn parse_str(input: &str) -> Document {
         match lines.iter().skip(1).position(|line| *line == "---") {
             Some(end_rel) => {
                 let end = end_rel + 1;
+                let front_matter_bytes = lines[1..end].iter().map(|line| line.len()).sum::<usize>();
+                if front_matter_bytes > limits.front_matter_bytes {
+                    diagnostics.push(diag(
+                        "NODX-E012",
+                        "fatal",
+                        "Front matter size limit exceeded.",
+                        1,
+                        1,
+                    ));
+                }
                 meta = parse_front_matter(&lines[1..end], &mut diagnostics);
                 start = end + 1;
             }
@@ -53,6 +77,7 @@ pub fn parse_str(input: &str) -> Document {
         lines: &lines,
         pos: start,
         diagnostics,
+        limits,
     };
     let body = parser.parse_until(None);
     if !meta.contains_key("title") {
@@ -64,7 +89,7 @@ pub fn parse_str(input: &str) -> Document {
     }
 
     let mut diagnostics = parser.diagnostics;
-    audit_nods(&body, &mut diagnostics);
+    audit_nods(&body, &mut diagnostics, limits);
 
     Document {
         schema: "nodx/0.1".to_string(),
@@ -78,6 +103,7 @@ struct Parser<'a> {
     lines: &'a [&'a str],
     pos: usize,
     diagnostics: Vec<Diagnostic>,
+    limits: ResourceLimits,
 }
 
 impl Parser<'_> {
@@ -86,6 +112,15 @@ impl Parser<'_> {
         let mut closed = close_frame.is_none();
         while self.pos < self.lines.len() {
             let line = self.lines[self.pos];
+            if line.len() > self.limits.line_length {
+                self.diagnostics.push(diag(
+                    "NODX-E012",
+                    "error",
+                    "Line length limit exceeded.",
+                    self.pos + 1,
+                    1,
+                ));
+            }
             if let Some((n, expected_name)) = close_frame {
                 if let Some(label) = parse_close(line, n) {
                     if let Some(name) = label {

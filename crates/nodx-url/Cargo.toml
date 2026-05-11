@@ -1,0 +1,10 @@
+[package]
+name = "nodx-url"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Central URL policy and resource limits for NODX"
+
+[lib]
+name = "nodx_url"
+path = "src/lib.rs"

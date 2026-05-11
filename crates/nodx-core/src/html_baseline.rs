@@ -1,8 +1,14 @@
+use crate::ResourceLimits;
 use crate::ast::{Document, Inline, Node, Value};
 use crate::navigation::{NavigationGraph, resolve_navigation};
-use crate::style_baseline::strip_forbidden_nods;
+use crate::style_baseline::{strip_forbidden_nods, style_urls};
+use nodx_url::{ReferenceKind, ResourcePolicy};
 
 pub fn render_html(doc: &Document) -> String {
+    render_html_with_limits(doc, ResourceLimits::default())
+}
+
+pub fn render_html_with_limits(doc: &Document, limits: ResourceLimits) -> String {
     let navigation = resolve_navigation(doc);
     let lang = match doc.meta.get("language") {
         Some(Value::String(s)) if s != "und" => s.clone(),
@@ -27,19 +33,26 @@ pub fn render_html(doc: &Document) -> String {
         "<!doctype html><html{}><meta charset=\"utf-8\"><style>html{{font-family:system-ui}}html[dir=\"rtl\"]{{direction:rtl}}body{{font:16px system-ui;line-height:1.6;max-width:900px;margin:32px auto;padding:0 16px}}pre{{padding:12px;background:#f5f5f5;overflow:auto}}aside{{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px 8px}}.nodx-blocked-link,.nodx-blocked-image{{color:#b91c1c;text-decoration:line-through}}</style>",
         html_attrs,
     );
+    let policy = ResourcePolicy::new(limits);
     if let Some(Value::String(title)) = doc.meta.get("title") {
         out.push_str("<title>");
         escape_html(&mut out, title);
         out.push_str("</title>");
     }
     for (i, node) in doc.body.iter().enumerate() {
-        render_node(&mut out, node, &i.to_string(), &navigation);
+        render_node(&mut out, node, &i.to_string(), &navigation, policy);
     }
     out.push_str("</html>");
     out
 }
 
-fn render_node(out: &mut String, node: &Node, path: &str, navigation: &NavigationGraph) {
+fn render_node(
+    out: &mut String,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+) {
     match node.node_type.as_str() {
         "heading" => {
             let level = node
@@ -49,13 +62,13 @@ fn render_node(out: &mut String, node: &Node, path: &str, navigation: &Navigatio
                 .unwrap_or(1)
                 .clamp(1, 6);
             out.push_str(&format!("<h{}{}>", level, html_id(node)));
-            render_inlines(out, &node.inlines);
+            render_inlines(out, &node.inlines, policy);
             out.push_str(&format!("</h{}>", level));
         }
-        "paragraph" => wrap_inlines(out, "p", node, path, navigation),
-        "section" => wrap_children(out, "section", node, path, navigation),
-        "note" => wrap_children(out, "aside", node, path, navigation),
-        "quote" => wrap_children(out, "blockquote", node, path, navigation),
+        "paragraph" => wrap_inlines(out, "p", node, path, navigation, policy),
+        "section" => wrap_children(out, "section", node, path, navigation, policy),
+        "note" => wrap_children(out, "aside", node, path, navigation, policy),
+        "quote" => wrap_children(out, "blockquote", node, path, navigation, policy),
         "list" => {
             let tag = if node.attrs.get("kind").map(|s| s.as_str()) == Some("ordered") {
                 "ol"
@@ -64,11 +77,11 @@ fn render_node(out: &mut String, node: &Node, path: &str, navigation: &Navigatio
             };
             out.push_str(tag_open(tag, node).as_str());
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation);
+                render_node(out, child, &child_path(path, i), navigation, policy);
             }
             out.push_str(&format!("</{}>", tag));
         }
-        "item" => wrap_inlines(out, "li", node, path, navigation),
+        "item" => wrap_inlines(out, "li", node, path, navigation, policy),
         "code" | "pre" => {
             out.push_str("<pre><code>");
             escape_html(out, node.text.as_deref().unwrap_or(""));
@@ -81,30 +94,27 @@ fn render_node(out: &mut String, node: &Node, path: &str, navigation: &Navigatio
         }
         "style" => {
             out.push_str("<style>");
-            escape_style(out, node.text.as_deref().unwrap_or(""));
+            escape_style(out, node.text.as_deref().unwrap_or(""), policy);
             out.push_str("</style>");
         }
-        "table" => wrap_children(out, "table", node, path, navigation),
-        "row" => wrap_children(out, "tr", node, path, navigation),
+        "table" => wrap_children(out, "table", node, path, navigation, policy),
+        "row" => wrap_children(out, "tr", node, path, navigation, policy),
         "cell" => {
             let tag = if node.attrs.get("header").map(|s| s.as_str()) == Some("true") {
                 "th"
             } else {
                 "td"
             };
-            wrap_inlines(out, tag, node, path, navigation);
+            wrap_inlines(out, tag, node, path, navigation, policy);
         }
-        "figure" => wrap_children(out, "figure", node, path, navigation),
-        "caption" => wrap_inlines(out, "figcaption", node, path, navigation),
+        "figure" => wrap_children(out, "figure", node, path, navigation, policy),
+        "caption" => wrap_inlines(out, "figcaption", node, path, navigation, policy),
         "image" => {
             let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
-            let safe_src = node.attrs.get("src").and_then(|s| {
-                if is_relative_asset(s) {
-                    Some(s.clone())
-                } else {
-                    safe_image_url(s)
-                }
-            });
+            let safe_src = node
+                .attrs
+                .get("src")
+                .and_then(|s| safe_image_url_with_policy(policy, s));
             match safe_src {
                 Some(src) => {
                     out.push_str("<img src=\"");
@@ -120,7 +130,7 @@ fn render_node(out: &mut String, node: &Node, path: &str, navigation: &Navigatio
                 }
             }
         }
-        "form" => wrap_children(out, "dl", node, path, navigation),
+        "form" => wrap_children(out, "dl", node, path, navigation, policy),
         "field" => {
             out.push_str("<div");
             out.push_str(&html_id(node));
@@ -192,13 +202,13 @@ fn render_node(out: &mut String, node: &Node, path: &str, navigation: &Navigatio
             }
             out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation);
+                render_node(out, child, &child_path(path, i), navigation, policy);
             }
             out.push_str("</figure>");
         }
-        "bibliography" => wrap_children(out, "ol", node, path, navigation),
-        "citation-entry" => wrap_inlines(out, "li", node, path, navigation),
-        _ => wrap_children(out, "div", node, path, navigation),
+        "bibliography" => wrap_children(out, "ol", node, path, navigation, policy),
+        "citation-entry" => wrap_inlines(out, "li", node, path, navigation, policy),
+        _ => wrap_children(out, "div", node, path, navigation, policy),
     }
 }
 
@@ -208,10 +218,11 @@ fn wrap_children(
     node: &Node,
     path: &str,
     navigation: &NavigationGraph,
+    policy: ResourcePolicy,
 ) {
     out.push_str(tag_open(tag, node).as_str());
     for (i, child) in node.children.iter().enumerate() {
-        render_node(out, child, &child_path(path, i), navigation);
+        render_node(out, child, &child_path(path, i), navigation, policy);
     }
     out.push_str(&format!("</{}>", tag));
 }
@@ -222,11 +233,12 @@ fn wrap_inlines(
     node: &Node,
     path: &str,
     navigation: &NavigationGraph,
+    policy: ResourcePolicy,
 ) {
     out.push_str(tag_open(tag, node).as_str());
-    render_inlines(out, &node.inlines);
+    render_inlines(out, &node.inlines, policy);
     for (i, child) in node.children.iter().enumerate() {
-        render_node(out, child, &child_path(path, i), navigation);
+        render_node(out, child, &child_path(path, i), navigation, policy);
     }
     out.push_str(&format!("</{}>", tag));
 }
@@ -287,18 +299,18 @@ fn html_attrs(node: &Node) -> String {
     s
 }
 
-fn render_inlines(out: &mut String, inlines: &[Inline]) {
+fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) {
     for item in inlines {
         match item {
             Inline::Text(text) => escape_html(out, text),
             Inline::Strong(children) => {
                 out.push_str("<strong>");
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</strong>");
             }
             Inline::Em(children) => {
                 out.push_str("<em>");
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</em>");
             }
             Inline::Code(text) => {
@@ -306,19 +318,19 @@ fn render_inlines(out: &mut String, inlines: &[Inline]) {
                 escape_html(out, text);
                 out.push_str("</code>");
             }
-            Inline::Link { label, target } => match safe_link_url(target) {
+            Inline::Link { label, target } => match safe_link_url_with_policy(policy, target) {
                 Some(safe) => {
                     out.push_str("<a href=\"");
                     escape_attr(out, &safe);
                     out.push_str("\" rel=\"noopener noreferrer\">");
-                    render_inlines(out, label);
+                    render_inlines(out, label, policy);
                     out.push_str("</a>");
                 }
                 None => {
                     out.push_str("<a class=\"nodx-blocked-link\" data-blocked=\"");
                     escape_attr(out, target);
                     out.push_str("\" title=\"Blocked unsafe URL\">");
-                    render_inlines(out, label);
+                    render_inlines(out, label, policy);
                     out.push_str("</a>");
                 }
             },
@@ -357,22 +369,22 @@ fn render_inlines(out: &mut String, inlines: &[Inline]) {
                     out.push('"');
                 }
                 out.push('>');
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</span>");
             }
             Inline::Mark(children) => {
                 out.push_str("<mark>");
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</mark>");
             }
             Inline::Sub(children) => {
                 out.push_str("<sub>");
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</sub>");
             }
             Inline::Sup(children) => {
                 out.push_str("<sup>");
-                render_inlines(out, children);
+                render_inlines(out, children, policy);
                 out.push_str("</sup>");
             }
             Inline::Var { namespace, name } => {
@@ -423,119 +435,32 @@ fn escape_html(out: &mut String, input: &str) {
     }
 }
 
-const ALLOWED_LINK_SCHEMES: &[&str] = &["http", "https", "mailto"];
-const ALLOWED_IMAGE_SCHEMES: &[&str] = &["http", "https"];
-const ALLOWED_IMAGE_DATA: &[&str] = &[
-    "data:image/png",
-    "data:image/jpeg",
-    "data:image/webp",
-    "data:image/svg+xml",
-];
-
 pub fn safe_link_url(raw: &str) -> Option<String> {
-    classify_url(raw, ALLOWED_LINK_SCHEMES, &[])
+    safe_link_url_with_policy(ResourcePolicy::default(), raw)
 }
 
 pub fn safe_image_url(raw: &str) -> Option<String> {
-    classify_url(raw, ALLOWED_IMAGE_SCHEMES, ALLOWED_IMAGE_DATA)
-}
-
-fn is_relative_asset(raw: &str) -> bool {
-    is_safe_asset_ref(raw)
+    safe_image_url_with_policy(ResourcePolicy::default(), raw)
 }
 
 pub fn is_safe_asset_ref(raw: &str) -> bool {
-    let trimmed = raw.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with('/')
-        || trimmed.contains('\\')
-        || trimmed
-            .chars()
-            .any(|c| (c as u32) < 0x20 || c == '\u{007f}')
-    {
-        return false;
-    }
-    if trimmed.starts_with('#') {
-        return true;
-    }
-    let scheme_end = trimmed.find(|c: char| !is_scheme_char(c));
-    if matches!(scheme_end, Some(i) if i > 0 && trimmed[i..].starts_with(':')) {
-        return false;
-    }
-    trimmed
-        .split('/')
-        .all(|part| !part.is_empty() && part != "." && part != "..")
+    ResourcePolicy::default()
+        .classify_uri(ReferenceKind::Asset, raw)
+        .is_ok()
 }
 
-fn classify_url(raw: &str, schemes: &[&str], data_prefixes: &[&str]) -> Option<String> {
-    let trimmed = raw.trim_matches(|c: char| c.is_ascii_whitespace());
-    if trimmed.is_empty() {
-        return None;
-    }
-    if trimmed
-        .chars()
-        .any(|c| (c as u32) < 0x20 || c == '\u{007f}')
-    {
-        return None;
-    }
-    if trimmed.starts_with('#') || trimmed.starts_with('/') {
-        return Some(trimmed.to_string());
-    }
-    let scheme_end = trimmed.find(|c: char| !is_scheme_char(c));
-    let has_scheme = matches!(scheme_end, Some(i) if i > 0 && trimmed[i..].starts_with(':'));
-    if !has_scheme {
-        return Some(trimmed.to_string());
-    }
-    let scheme_decoded = percent_decode_ascii(&trimmed[..scheme_end.unwrap()]).to_ascii_lowercase();
-    if scheme_decoded.is_empty() {
-        return None;
-    }
-    if schemes.iter().any(|s| *s == scheme_decoded) {
-        return Some(trimmed.to_string());
-    }
-    if scheme_decoded == "data" {
-        let lower = trimmed.to_ascii_lowercase();
-        if data_prefixes.iter().any(|p| lower.starts_with(p)) {
-            return Some(trimmed.to_string());
-        }
-    }
-    None
+fn safe_link_url_with_policy(policy: ResourcePolicy, raw: &str) -> Option<String> {
+    policy
+        .classify_uri(ReferenceKind::Link, raw)
+        .ok()
+        .map(|uri| uri.raw)
 }
 
-fn is_scheme_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.' | '%')
-}
-
-fn percent_decode_ascii(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out = String::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hi = hex_value(bytes[i + 1]);
-            let lo = hex_value(bytes[i + 2]);
-            if let (Some(h), Some(l)) = (hi, lo) {
-                let v = (h << 4) | l;
-                if v < 0x80 {
-                    out.push(v as char);
-                    i += 3;
-                    continue;
-                }
-            }
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-fn hex_value(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
+fn safe_image_url_with_policy(policy: ResourcePolicy, raw: &str) -> Option<String> {
+    policy
+        .classify_uri(ReferenceKind::Asset, raw)
+        .ok()
+        .map(|uri| uri.raw)
 }
 
 fn escape_attr(out: &mut String, input: &str) {
@@ -551,9 +476,14 @@ fn escape_attr(out: &mut String, input: &str) {
     }
 }
 
-fn escape_style(out: &mut String, input: &str) {
+fn escape_style(out: &mut String, input: &str, policy: ResourcePolicy) {
     let lower = input.to_ascii_lowercase();
-    if lower.contains("</style") || lower.contains("expression(") || lower.contains("javascript:") {
+    if lower.contains("</style")
+        || lower.contains("expression(")
+        || style_urls(input)
+            .iter()
+            .any(|url| policy.classify_uri(ReferenceKind::Style, url).is_err())
+    {
         out.push_str("/* nodx: blocked unsafe style content */");
         return;
     }
