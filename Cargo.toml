@@ -8,6 +8,7 @@ members = [
   "crates/nodx-render-html",
   "crates/nodx-sign",
   "crates/nodx-agent-sdk",
+  "crates/nodx-cst",
   "crates/nodx-cli",
 ]
 resolver = "3"

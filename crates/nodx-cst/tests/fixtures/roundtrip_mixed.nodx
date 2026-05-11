@@ -1,0 +1,18 @@
+---
+schema: nodx/1.0
+title: CST Fixture
+---
+# Title {#title .b .a data-z="last" data-a="first"}
+
+Paragraph with **inline** text.
+
+:::note {#note tone="info" owner="docs"}
+Child paragraph.
+
+:::warning {#child}
+Nested body.
+:::
+:::
+
+:::broken {#bad}
+This recoverable invalid block is intentionally unclosed.

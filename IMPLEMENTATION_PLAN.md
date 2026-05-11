@@ -21,6 +21,7 @@ crates/
   nodx-render-html/
   nodx-sign/
   nodx-agent-sdk/
+  nodx-cst/
   nodx-cli/
 packages/
   nodx-js/
@@ -46,6 +47,8 @@ Current crates and packages:
   verification.
 - `crates/nodx-agent-sdk`: NODX Agent Mutate 1.1 local validated mutation SDK,
   including atomic batches and JSONL change records.
+- `crates/nodx-cst`: NODX Editor 1.2 byte-preserving CST state, AST path
+  mapping, local patch primitives, and minimal agent attribute rewrites.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
 - `packages/nodx-js`: independent JavaScript parser, canonical serializer,
@@ -85,6 +88,10 @@ Implemented now:
 - Local validated agent mutations over parsed AST documents, with target
   resolution by ID/path/hash, required `beforeHash`, per-operation validation,
   atomic rollback, and deterministic `nodx/change/1.1` records.
+- Byte-identical CST parse/emit for editor workflows, recoverable syntax
+  preservation, CST-to-AST path mapping, local source patches, and
+  validation-backed minimal source rewrites for supported agent attribute
+  mutations.
 
 ## Known Gaps Against 1.0
 
@@ -94,8 +101,8 @@ Not implemented yet:
 - Separate NCP crate.
 - Deflated ZIP entries and advanced package policy.
 - Full NODS cascade and computed style.
-- Lossless CST, source maps, signature trust store UX, LLM mutation integration,
-  and native PDF/DOCX/PPTX exporters.
+- Signature trust store UX, LLM mutation integration, and native PDF/DOCX/PPTX
+  exporters.
 - Full security corpus and fuzz targets.
 
 ## Wave 00 Contract Cleanup
@@ -206,3 +213,20 @@ Completed by this wave:
 
 No parser, renderer, canonical JSON, NCP, diagnostic, or CLI exit-code behavior
 is changed by Wave 09.
+
+## Wave 10 Editor CST Profile
+
+Completed by this wave:
+
+1. Added `crates/nodx-cst`.
+2. Preserved source bytes, line endings, delimiters, whitespace, attribute
+   order, and recoverable invalid syntax as editor CST state.
+3. Added CST node byte spans and AST path mapping.
+4. Added parse-to-emit byte-identical round-trip behavior.
+5. Added local patch primitives for replace, insert, delete, and named
+   attribute updates that preserve surrounding source bytes.
+6. Added CST-backed integration for `nodx-agent-sdk` attribute operations when
+   they can be represented as minimal source patches.
+
+No canonical AST hash, NCP semantic output, diagnostic, or CLI exit-code
+behavior is changed by Wave 10.

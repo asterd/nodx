@@ -1,0 +1,15 @@
+[package]
+name = "nodx-cst"
+version = "0.1.0"
+edition = "2024"
+description = "NODX Editor 1.2 byte-preserving CST and local patch primitives"
+license = "MIT"
+
+[lib]
+name = "nodx_cst"
+path = "src/lib.rs"
+
+[dependencies]
+nodx-agent-sdk = { path = "../nodx-agent-sdk" }
+nodx-core = { path = "../nodx-core" }
+nodx-validate = { path = "../nodx-validate" }

@@ -200,6 +200,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nodx-cst"
+version = "0.1.0"
+dependencies = [
+ "nodx-agent-sdk",
+ "nodx-core",
+ "nodx-validate",
+]
+
+[[package]]
 name = "nodx-package"
 version = "0.1.0"
 dependencies = [
