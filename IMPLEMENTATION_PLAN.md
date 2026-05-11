@@ -17,6 +17,8 @@ crates/
   nodx-package/
   nodx-url/
   nodx-validate/
+  nodx-style/
+  nodx-render-html/
   nodx-cli/
 packages/
   nodx-js/
@@ -29,21 +31,22 @@ apps/desktop/
 Current crates and packages:
 
 - `crates/nodx-core`: Rust parser, canonical AST serializer, shared navigation
-  graph resolver, HTML renderer, TUI renderer, and NCP projection.
+  graph resolver, TUI renderer, and NCP projection.
 - `crates/nodx-package`: safe stored-ZIP package reader, manifest verifier, and
   read-only `PackageFs`.
 - `crates/nodx-url`: centralized URL classification, package-relative path
   normalization, `ResourcePolicy`, and shared `ResourceLimits`.
 - `crates/nodx-validate`: semantic validator, profile handling, and stable
   diagnostic JSON helpers.
+- `crates/nodx-style`: safe NODS subset validator and sanitizer.
+- `crates/nodx-render-html`: safe standalone HTML renderer.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
 - `packages/nodx-js`: independent JavaScript parser and canonical serializer
   used for conformance parity.
 
-The repository does not yet have separate `nodx-style`, `nodx-ncp`,
-`nodx-render-html`, fuzz, or golden corpus directories. Those are 1.0 roadmap
-work items.
+The repository does not yet have a separate `nodx-ncp` crate, fuzz targets, or
+complete golden corpus directories. Those are 1.0 roadmap work items.
 
 ## Implemented Behavior
 
@@ -61,7 +64,10 @@ Implemented now:
 - Deterministic canonical JSON with sorted object keys.
 - Focused semantic validation for common Core/Rich correctness and safety
   issues.
-- Safe HTML escaping and centralized context-aware URL and asset checks.
+- Safe HTML escaping, CSP emission, and centralized context-aware URL and asset
+  checks.
+- Safe NODS subset validation with deterministic `NODX-E027` diagnostics and
+  renderer-side omission of unsafe style rules.
 - Recursive NCP semantic projection with deterministic SHA-256 hashes.
 - Safe stored-ZIP package reader with manifest size/digest verification, CRC
   checks, package path validation, ZIP bomb controls, and read-only virtual FS.
@@ -71,9 +77,9 @@ Implemented now:
 Not implemented yet:
 
 - Full package-level 1.0 profile declaration enforcement.
-- Separate package, style, NCP, and HTML renderer crates.
+- Separate NCP crate.
 - Deflated ZIP entries and advanced package policy.
-- Full NODS allowlist parser and cascade.
+- Full NODS cascade and computed style.
 - Lossless CST, source maps, signatures, mutation SDK, and native PDF/DOCX/PPTX
   exporters.
 - Security corpus and fuzz targets.

@@ -21,6 +21,8 @@ Implemented today:
 - Rust reference crate: `crates/nodx-core`
 - Rust URL policy crate: `crates/nodx-url`
 - Rust validator crate: `crates/nodx-validate`
+- Rust style safety crate: `crates/nodx-style`
+- Rust HTML renderer crate: `crates/nodx-render-html`
 - Rust package reader crate: `crates/nodx-package`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
@@ -33,12 +35,13 @@ The implemented behavior covers UTF-8 parsing, Plain/Core syntax, a practical
 Rich subset, front matter, delimited blocks, headings, paragraphs, lists, pipe
 tables, literal blocks, attributes, common inline nodes, deterministic
 canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
-rendering, centralized URL/resource policy, TUI rendering, semantic NCP
+rendering in `nodx-render-html`, safe NODS subset validation in `nodx-style`,
+centralized URL/resource policy, TUI rendering, semantic NCP
 projection, and a safe stored-ZIP package reader with manifest digest
 verification and read-only virtual filesystem access.
 
-The workspace does not yet contain separate `nodx-style`, `nodx-ncp`, or
-`nodx-render-html` crates. Those are roadmap targets, not current modules.
+The workspace does not yet contain a separate `nodx-ncp` crate. That remains a
+roadmap target.
 
 ## Verify
 
@@ -115,7 +118,7 @@ PDF/DOCX/PPTX exporters, stable 1.0 profile enforcement, and complete YAML 1.2
 safe-subset validation are not implemented yet. These are security-sensitive
 surfaces and should be added as separately tested milestones.
 
-Current inline `:::style` blocks are processed by a textual safety lexer that
-detects forbidden NODS constructs, emits `NODX-E027`, and strips offending CSS
-from rendered HTML. A full NODS parser and allowlist validator remains future
-work.
+Current inline `:::style` blocks are processed by the `nodx-style` allowlist
+validator. Forbidden NODS constructs emit deterministic `NODX-E027`
+diagnostics, and unsafe rules are omitted from rendered HTML. Full cascade and
+computed style remain future work.

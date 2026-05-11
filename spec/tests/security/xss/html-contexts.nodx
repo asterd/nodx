@@ -1,0 +1,17 @@
+---
+schema: nodx/1.0
+title: XSS HTML Contexts
+---
+
+# <img src=x onerror=alert(1)> {#title}
+
+[Blocked script URL](javascript:alert(1))
+
+[Safe local link](#title)
+
+:::image {src="data:text/html,<script>alert(1)</script>" alt="<script>alert(1)</script>"}
+:::
+
+:::style
+body { color: red; } </style><script>alert(1)</script>
+:::

@@ -1,0 +1,10 @@
+---
+schema: nodx/1.0
+title: Safe NODS Subset
+---
+
+:::style
+h1, .lead { color: #0f766e; font-size: 24pt; }
+p { line-height: 1.6; margin-block: 12pt; }
+@page { size: A4 portrait; margin: 22mm; }
+:::

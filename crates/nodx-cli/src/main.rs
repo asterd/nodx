@@ -1,6 +1,7 @@
 use std::{env, fs, process};
 
-use nodx_core::{canonical_json, is_packaged_nodx, ncp_json, parse_bytes, render_html, render_tui};
+use nodx_core::{canonical_json, is_packaged_nodx, ncp_json, parse_bytes, render_tui};
+use nodx_render_html::render_html;
 use nodx_validate::{Validator, diagnostics_json, exit_code_for};
 
 fn main() {

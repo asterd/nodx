@@ -1,0 +1,20 @@
+---
+schema: nodx/1.0
+title: Navigation Rendering
+---
+
+:::toc {#primary-nav role="primary" source="document" depth="2" title="Contents"}
+:::
+
+# First {#first}
+
+## First Child {#first-child}
+
+:::section {#second-section}
+# Second {#second}
+
+:::toc {#local-nav role="local" scope="#second-section" min-level="1" max-level="2"}
+:::
+
+## Second Child {#second-child}
+:::

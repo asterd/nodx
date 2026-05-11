@@ -1,15 +1,15 @@
 [package]
-name = "nodx-core"
+name = "nodx-render-html"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Minimal NODX 0.1 reference parser, canonicalizer, and renderers"
+description = "Safe HTML renderer for NODX documents"
 
 [lib]
-name = "nodx_core"
+name = "nodx_render_html"
 path = "src/lib.rs"
 
 [dependencies]
-nodx-package = { path = "../nodx-package" }
+nodx-core = { path = "../nodx-core" }
 nodx-style = { path = "../nodx-style" }
 nodx-url = { path = "../nodx-url" }

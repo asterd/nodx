@@ -7,6 +7,7 @@ name = "nodx"
 version = "0.1.0"
 dependencies = [
  "nodx-core",
+ "nodx-render-html",
  "nodx-validate",
 ]
 
@@ -15,11 +16,28 @@ name = "nodx-core"
 version = "0.1.0"
 dependencies = [
  "nodx-package",
+ "nodx-style",
  "nodx-url",
 ]
 
 [[package]]
 name = "nodx-package"
+version = "0.1.0"
+dependencies = [
+ "nodx-url",
+]
+
+[[package]]
+name = "nodx-render-html"
+version = "0.1.0"
+dependencies = [
+ "nodx-core",
+ "nodx-style",
+ "nodx-url",
+]
+
+[[package]]
+name = "nodx-style"
 version = "0.1.0"
 dependencies = [
  "nodx-url",

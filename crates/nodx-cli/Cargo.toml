@@ -6,4 +6,5 @@ license = "MIT"
 
 [dependencies]
 nodx-core = { path = "../nodx-core" }
+nodx-render-html = { path = "../nodx-render-html" }
 nodx-validate = { path = "../nodx-validate" }

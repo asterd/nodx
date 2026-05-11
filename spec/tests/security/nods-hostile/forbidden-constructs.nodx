@@ -1,0 +1,13 @@
+---
+schema: nodx/1.0
+title: Forbidden NODS Constructs
+---
+
+:::style
+a:hover { color: red; }
+.fixed { position: fixed; }
+.motion { animation: spin 1s infinite; }
+@keyframes spin { from { color: red; } to { color: blue; } }
+.remote { background-image: url(https://example.test/a.png); }
+.script { width: expression(alert(1)); }
+:::
