@@ -53,8 +53,9 @@ rtk sh scripts/run_conformance.sh
 rtk git diff --check
 ```
 
-The conformance script compares canonical AST output from the Rust parser and
-the independent JavaScript parser for every fixture and example.
+The conformance script compares canonical AST output and semantic NCP output
+from the Rust parser and the independent JavaScript implementation for every
+text fixture and example. It writes `target/conformance-report.json`.
 
 ## CLI
 

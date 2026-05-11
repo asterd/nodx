@@ -1,0 +1,10 @@
+---
+schema: nodx/1.0
+title: Link Scheme Security
+---
+
+# Link Scheme Security
+
+[blocked](javascript:alert(1))
+
+[allowed](https://example.com)

@@ -1,0 +1,18 @@
+---
+schema: nodx/1.0
+title: Document And Local TOC
+---
+
+:::toc {#primary-toc role="primary" source="document" depth="2" title="Document contents"}
+:::
+
+# Overview {#overview}
+
+:::section {#chapter-a}
+# Chapter A {#chapter-a-title}
+
+:::toc {#chapter-a-toc role="local" scope="#chapter-a" min-level="1" max-level="2" title="Chapter A contents"}
+:::
+
+## Chapter A Details {#chapter-a-details}
+:::

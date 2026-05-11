@@ -1,0 +1,21 @@
+---
+schema: nodx/1.0
+title: Plain Core Rich Mix
+vars:
+  product: NODX
+---
+
+# Plain Core Rich Mix {#mix}
+
+Plain text with escaped \*stars\*, a `code` span, and {{vars.product}}.
+
+:::figure {#fig alt="Small diagram" src="assets/reference-engine.svg"}
+:::caption
+Reference engine.
+:::
+:::
+
+| Feature | Status |
+| --- | --- |
+| Parser | Stable |
+| NCP | Checked |

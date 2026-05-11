@@ -1,0 +1,8 @@
+---
+schema: nodx/1.0
+title: Unsafe Link
+---
+
+# Unsafe Link {#unsafe-link}
+
+[bad](javascript:alert(1))

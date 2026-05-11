@@ -42,8 +42,9 @@ Current crates and packages:
 - `crates/nodx-render-html`: safe standalone HTML renderer.
 - `crates/nodx-cli`: command line facade for `ast`, `html`, `tui`, `ncp`,
   `diagnostics`, `validate`, and `inspect`.
-- `packages/nodx-js`: independent JavaScript parser and canonical serializer
-  used for conformance parity.
+- `packages/nodx-js`: independent JavaScript parser, canonical serializer,
+  semantic NCP projector, and shared diagnostics subset used for conformance
+  parity.
 
 The repository does not yet have a separate `nodx-ncp` crate, fuzz targets, or
 complete golden corpus directories. Those are 1.0 roadmap work items.
@@ -68,7 +69,8 @@ Implemented now:
   checks.
 - Safe NODS subset validation with deterministic `NODX-E027` diagnostics and
   renderer-side omission of unsafe style rules.
-- Recursive NCP semantic projection with deterministic SHA-256 hashes.
+- Recursive Rust and JavaScript NCP semantic projection with deterministic
+  SHA-256 hashes and resolved `toc` navigation entries.
 - Safe stored-ZIP package reader with manifest size/digest verification, CRC
   checks, package path validation, ZIP bomb controls, and read-only virtual FS.
 
@@ -82,7 +84,7 @@ Not implemented yet:
 - Full NODS cascade and computed style.
 - Lossless CST, source maps, signatures, mutation SDK, and native PDF/DOCX/PPTX
   exporters.
-- Security corpus and fuzz targets.
+- Full security corpus and fuzz targets.
 
 ## Wave 00 Contract Cleanup
 
@@ -130,3 +132,16 @@ Follow `NODX_1.0_Evolution_Plan.md`:
 5. M5: style safety.
 6. M6: JavaScript parity and NCP.
 7. M7: release readiness, fixtures, security corpus, and documentation.
+
+## Wave 06 JavaScript Parity
+
+Completed by this wave:
+
+1. Split `packages/nodx-js` into the target `src/` modules while preserving the
+   existing `parser.mjs` import facade.
+2. Added JavaScript semantic NCP output with resolved `toc` navigation entries.
+3. Added a JavaScript diagnostics subset for parser-owned and shared validator
+   errors covered by the public negative corpus.
+4. Expanded conformance, NCP, navigation, negative, and security fixtures.
+5. Expanded `scripts/run_conformance.sh` to compare Rust/JS canonical AST and
+   Rust/JS semantic NCP output and write `target/conformance-report.json`.

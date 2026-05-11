@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Basic
+---
+
+# NCP Semantic Basic {#ncp-basic}
+
+Paragraph with **strong** text and a [link](https://example.com).
+
+:::note {#ncp-note type="info"}
+Nested note text.
+:::

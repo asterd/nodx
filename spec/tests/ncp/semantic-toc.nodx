@@ -1,0 +1,20 @@
+---
+schema: nodx/1.0
+title: NCP Semantic TOC
+---
+
+:::toc {#doc-toc role="primary" depth="2" title="Contents"}
+:::
+
+# Chapter One {#chapter-one}
+
+## Chapter One Child {#chapter-one-child}
+
+:::section {#chapter-two}
+# Chapter Two {#chapter-two-title}
+
+:::toc {#chapter-two-toc role="local" scope="#chapter-two" min-level="1" max-level="2"}
+:::
+
+## Chapter Two Child {#chapter-two-child}
+:::

@@ -684,6 +684,7 @@ mod tests {
             "e013-undeclared-var",
             "e014-custom-component",
             "e016-toc-default-label",
+            "e020-unsafe-link",
             "e022-heading-jump",
             "e023-unsupported-optional-profile",
             "e024-unsupported-required-profile",

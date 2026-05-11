@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { canonicalJson, parse } from "../parser.mjs";
+import { canonicalJson, diagnosticsJson, exitCodeFor, ncpJson, parse, validate } from "../src/index.mjs";
 
 const [, , command, file] = process.argv;
-if (command !== "ast" || !file) {
-  console.error("usage: nodx-js ast <file.nodx>");
+if (!["ast", "ncp", "diagnostics"].includes(command) || !file) {
+  console.error("usage: nodx-js <ast|ncp|diagnostics> <file.nodx>");
   process.exit(2);
 }
-process.stdout.write(canonicalJson(parse(readFileSync(file, "utf8"))) + "\n");
+
+const doc = parse(readFileSync(file, "utf8"));
+if (command === "ast") process.stdout.write(canonicalJson(doc) + "\n");
+else if (command === "ncp") process.stdout.write(ncpJson(doc) + "\n");
+else {
+  const diagnostics = validate(doc);
+  process.stdout.write(diagnosticsJson(diagnostics) + "\n");
+  process.exit(exitCodeFor(diagnostics));
+}
