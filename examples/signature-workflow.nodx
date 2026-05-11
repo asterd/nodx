@@ -1,0 +1,117 @@
+---
+schema: nodx/1.0
+type: document
+id: nodx-signature-demo
+title: NODX 1.0 Signature Workflow
+language: en
+dir: ltr
+authors:
+  - name: NODX Working Group
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - package
+    - agent-read
+vars:
+  digest_algorithm: sha256-BASE64URL_NOPAD
+  jws_algorithm: ES256
+---
+
+:::toc {#main role="primary" title="Contents"}
+:::
+
+# NODX 1.0 Signature Workflow {#title}
+
+NODX 1.0 verifies signatures over the **frozen canonical AST contract**. CST
+trivia (whitespace, attribute order, comments preserved by the editor profile)
+never affects the digest, so two byte-different sources with identical AST
+yield the same digest.
+
+::::section {#digest}
+## Digest
+
+The canonical digest is `sha256-BASE64URL_WITHOUT_PADDING` over the canonical
+JSON serialization produced by `nodx ast file.nodx`:
+
+:::code {lang="sh"}
+nodx ast doc.nodx | shasum -a 256
+:::
+
+In Rust:
+
+:::code {lang="rust"}
+use nodx_core::{canonical_json, parse_bytes, sha256_base64url};
+let bytes = std::fs::read("doc.nodx")?;
+let doc = parse_bytes(&bytes)?;
+let digest = sha256_base64url(canonical_json(&doc).as_bytes());
+:::
+::::
+
+::::section {#jws}
+## JWS verification
+
+`nodx-sign` accepts detached and packaged JWS signatures with **ES256
+mandatory**. The protected header rejects `crit`, `jwk`, `jku`, `x5u`, `x5c`,
+`x5t`, and `x5t#S256` smuggling, and enforces `signature_header_bytes` from
+`ResourceLimits` to prevent header DoS.
+
+:::table {caption="Verifier policy at a glance"}
+:::row
+:::cell {header="true" scope="col"}
+Header field
+:::
+:::cell {header="true" scope="col"}
+Policy
+:::
+:::
+:::row
+:::cell
+`alg`
+:::
+:::cell
+must be `ES256` (EdDSA reserved for future profile work)
+:::
+:::
+:::row
+:::cell
+`crit`
+:::
+:::cell
+must be absent or empty array; non-empty rejected
+:::
+:::
+:::row
+:::cell
+`jwk`/`jku`/`x5u`/`x5c`/`x5t`
+:::
+:::cell
+rejected (trust is host-bound, not header-bound)
+:::
+:::
+:::row
+:::cell
+header size
+:::
+:::cell
+bounded by `ResourceLimits::signature_header_bytes` (default 8 KiB)
+:::
+:::
+:::
+::::
+
+::::section {#trust}
+## Trust separation
+
+Cryptographic validity and trust are decoupled. `TrustPolicy::evaluate(header)`
+returns the public key (or `untrusted_without_key()`); the verifier reports
+`CryptographicStatus::Valid` independently of `TrustStatus::Trusted`.
+
+:::note {type="info"}
+A document with a tampered body but a still-trusted signer key returns
+`CryptographicStatus::Invalid` + `TrustStatus::Trusted`. A valid signature
+from an unknown key returns `Valid` + `Untrusted`. Hosts must combine both
+fields before accepting a document.
+:::
+::::

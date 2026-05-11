@@ -1,8 +1,9 @@
 [workspace]
 members = [
   "crates/nodx-core",
-  "crates/nodx-package",
   "crates/nodx-url",
+  "crates/nodx-ncp",
+  "crates/nodx-package",
   "crates/nodx-validate",
   "crates/nodx-style",
   "crates/nodx-render-html",

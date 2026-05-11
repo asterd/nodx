@@ -1,9 +1,9 @@
 [package]
 name = "nodx-validate"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
-description = "NODX semantic validator and profile support"
+description = "NODX 1.0 semantic validator, profile resolver, and stable diagnostic JSON"
 
 [lib]
 name = "nodx_validate"
@@ -11,4 +11,5 @@ path = "src/lib.rs"
 
 [dependencies]
 nodx-core = { path = "../nodx-core" }
+nodx-style = { path = "../nodx-style" }
 nodx-url = { path = "../nodx-url" }

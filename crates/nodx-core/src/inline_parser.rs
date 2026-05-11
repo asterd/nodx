@@ -145,7 +145,7 @@ fn push_text(out: &mut Vec<Inline>, text: &str) {
     }
 }
 
-pub(crate) fn plain_node_text(node: &Node) -> String {
+pub fn plain_node_text(node: &Node) -> String {
     let mut out = plain_inlines(&node.inlines);
     for child in &node.children {
         if !out.is_empty() {
@@ -156,7 +156,7 @@ pub(crate) fn plain_node_text(node: &Node) -> String {
     out
 }
 
-pub(crate) fn plain_inlines(inlines: &[Inline]) -> String {
+pub fn plain_inlines(inlines: &[Inline]) -> String {
     let mut out = String::new();
     for item in inlines {
         match item {

@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 3
+---
+
+# H3 {#h3}
+
+Body with **strong** and a [link](#h3).
+
+:::section {#s3}
+## Section 3
+:::

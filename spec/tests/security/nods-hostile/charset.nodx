@@ -1,0 +1,7 @@
+---
+schema: nodx/1.0
+---
+:::style
+@charset "utf-8";
+.x { color: red; }
+:::

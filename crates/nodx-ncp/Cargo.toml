@@ -1,0 +1,13 @@
+[package]
+name = "nodx-ncp"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+description = "NODX 1.0 Canonical Projection semantic serializer and shared node hashing"
+
+[lib]
+name = "nodx_ncp"
+path = "src/lib.rs"
+
+[dependencies]
+nodx-core = { path = "../nodx-core" }

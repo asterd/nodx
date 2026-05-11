@@ -1,0 +1,6 @@
+---
+schema: nodx/1.0
+---
+:::style
+.menu > & a { color: red; }
+:::

@@ -1,18 +1,30 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: nodx-enterprise-handbook
 title: NODX Enterprise Handbook
 subtitle: Long-form semantic source document
 language: en
 dir: ltr
-authors: [NODX Working Group, Example Corp]
-keywords: [documents, agents, compliance, rendering]
+authors:
+  - name: NODX Working Group
+  - name: Example Corp
+keywords:
+  - documents
+  - agents
+  - compliance
+  - rendering
 vars:
   company: Example Corp
   owner: Knowledge Systems
-requires: [rich-tables, math]
-optional: [presentation, package]
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - package
+    - agent-read
 ---
 
 # NODX Enterprise Handbook {#handbook}

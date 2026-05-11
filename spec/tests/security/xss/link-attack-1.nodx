@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+[click 1](javascript:alert(1))

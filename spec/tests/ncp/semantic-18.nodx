@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 18
+---
+
+# H18 {#h18}
+
+Body with **strong** and a [link](#h18).
+
+:::section {#s18}
+## Section 18
+:::

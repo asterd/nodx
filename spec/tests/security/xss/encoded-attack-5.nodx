@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+[encoded 5](ja%76ascript:alert(5))

@@ -1,0 +1,14 @@
+---
+schema: nodx/1.0
+title: Frontmatter Demo
+language: en
+dir: ltr
+authors:
+  - name: Alice
+    email: alice@example.test
+profiles:
+  requires:
+    - core
+---
+
+Body.

@@ -5,8 +5,7 @@ use crate::ast::{Attrs, Document, Node, Value};
 use crate::attrs::{parse_close, parse_heading, parse_opener, valid_name};
 use crate::diagnostic::{Diagnostic, diag};
 use crate::front_matter::parse_front_matter;
-use crate::inline_parser::{parse_inlines, plain_inlines};
-use crate::style_baseline::audit_nods;
+use crate::inline_parser::parse_inlines;
 
 pub fn parse_str(input: &str) -> Document {
     parse_str_with_limits(input, ResourceLimits::default())
@@ -65,7 +64,7 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         }
     }
     meta.entry("schema".to_string())
-        .or_insert(Value::String("nodx/0.1".to_string()));
+        .or_insert(Value::String("nodx/1.0".to_string()));
     meta.entry("type".to_string())
         .or_insert(Value::String("document".to_string()));
     meta.entry("dir".to_string())
@@ -80,19 +79,10 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         limits,
     };
     let body = parser.parse_until(None);
-    if !meta.contains_key("title") {
-        if let Some(title) = first_heading_text(&body) {
-            meta.insert("title".to_string(), Value::String(title));
-        } else {
-            meta.insert("title".to_string(), Value::String("Untitled".to_string()));
-        }
-    }
-
-    let mut diagnostics = parser.diagnostics;
-    audit_nods(&body, &mut diagnostics, limits);
+    let diagnostics = parser.diagnostics;
 
     Document {
-        schema: "nodx/0.1".to_string(),
+        schema: "nodx/1.0".to_string(),
         meta,
         body,
         diagnostics,
@@ -377,15 +367,4 @@ fn table_row(cells: Vec<String>, header: bool) -> Node {
         })
         .collect();
     Node::container("row", Attrs::default(), children)
-}
-pub(crate) fn first_heading_text(nodes: &[Node]) -> Option<String> {
-    for node in nodes {
-        if node.node_type == "heading" {
-            return Some(plain_inlines(&node.inlines));
-        }
-        if let Some(found) = first_heading_text(&node.children) {
-            return Some(found);
-        }
-    }
-    None
 }

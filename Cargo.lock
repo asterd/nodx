@@ -174,35 +174,33 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "nodx"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
  "nodx-export",
+ "nodx-ncp",
+ "nodx-package",
  "nodx-render-html",
+ "nodx-sign",
  "nodx-validate",
 ]
 
 [[package]]
 name = "nodx-agent-sdk"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
- "nodx-package",
+ "nodx-ncp",
  "nodx-validate",
 ]
 
 [[package]]
 name = "nodx-core"
-version = "0.1.0"
-dependencies = [
- "nodx-package",
- "nodx-style",
- "nodx-url",
-]
+version = "1.0.0"
 
 [[package]]
 name = "nodx-cst"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-agent-sdk",
  "nodx-core",
@@ -211,22 +209,30 @@ dependencies = [
 
 [[package]]
 name = "nodx-export"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
  "nodx-render-html",
 ]
 
 [[package]]
-name = "nodx-package"
-version = "0.1.0"
+name = "nodx-ncp"
+version = "1.0.0"
 dependencies = [
+ "nodx-core",
+]
+
+[[package]]
+name = "nodx-package"
+version = "1.0.0"
+dependencies = [
+ "nodx-core",
  "nodx-url",
 ]
 
 [[package]]
 name = "nodx-render-html"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
  "nodx-style",
@@ -235,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "nodx-sign"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
  "nodx-package",
@@ -246,20 +252,24 @@ dependencies = [
 
 [[package]]
 name = "nodx-style"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-url",
 ]
 
 [[package]]
 name = "nodx-url"
-version = "0.1.0"
+version = "1.0.0"
+dependencies = [
+ "nodx-core",
+]
 
 [[package]]
 name = "nodx-validate"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "nodx-core",
+ "nodx-style",
  "nodx-url",
 ]
 

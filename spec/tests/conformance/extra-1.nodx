@@ -1,0 +1,11 @@
+---
+schema: nodx/1.0
+---
+
+# Section 1 {#extra1}
+
+:::note
+Note in section 1.
+:::
+
+`code-1`

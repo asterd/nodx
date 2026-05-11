@@ -1,0 +1,6 @@
+---
+schema: nodx/1.0
+---
+:::style
+body { color: red; } </style><script>alert(1)</script>
+:::

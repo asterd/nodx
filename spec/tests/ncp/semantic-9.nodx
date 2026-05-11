@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 9
+---
+
+# H9 {#h9}
+
+Body with **strong** and a [link](#h9).
+
+:::section {#s9}
+## Section 9
+:::

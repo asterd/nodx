@@ -1,0 +1,9 @@
+# Page {#page}
+
+:::section {#intro}
+## Intro {#intro-h}
+Paragraph **bold** in section.
+
+- item one with `code`
+- item two with [link](#page)
+:::

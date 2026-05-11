@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 15
+---
+
+# H15 {#h15}
+
+Body with **strong** and a [link](#h15).
+
+:::section {#s15}
+## Section 15
+:::

@@ -1,51 +1,6 @@
 #![forbid(unsafe_code)]
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ResourceLimits {
-    pub source_bytes: usize,
-    pub front_matter_bytes: usize,
-    pub line_length: usize,
-    pub attribute_value_bytes: usize,
-    pub id_bytes: usize,
-    pub block_nesting_depth: usize,
-    pub inline_nesting_depth: usize,
-    pub nodes_per_document: usize,
-    pub data_uri_bytes: usize,
-    pub expanded_ast_bytes: usize,
-    pub include_depth: usize,
-    pub package_uncompressed_bytes: usize,
-    pub package_file_count: usize,
-    pub package_entry_bytes: usize,
-    pub package_compression_ratio: usize,
-    pub package_nested_zip_depth: usize,
-    pub url_bytes: usize,
-    pub manifest_entries: usize,
-}
-
-impl Default for ResourceLimits {
-    fn default() -> Self {
-        Self {
-            source_bytes: 64 * 1024 * 1024,
-            front_matter_bytes: 64 * 1024,
-            line_length: 1024 * 1024,
-            attribute_value_bytes: 64 * 1024,
-            id_bytes: 256,
-            block_nesting_depth: 32,
-            inline_nesting_depth: 32,
-            nodes_per_document: 100_000,
-            data_uri_bytes: 5 * 1024 * 1024,
-            expanded_ast_bytes: 64 * 1024 * 1024,
-            include_depth: 8,
-            package_uncompressed_bytes: 256 * 1024 * 1024,
-            package_file_count: 1_024,
-            package_entry_bytes: 64 * 1024 * 1024,
-            package_compression_ratio: 100,
-            package_nested_zip_depth: 0,
-            url_bytes: 4 * 1024,
-            manifest_entries: 1_024,
-        }
-    }
-}
+pub use nodx_core::ResourceLimits;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReferenceKind {
@@ -190,14 +145,22 @@ pub fn normalize_package_path(raw: &str, limits: ResourceLimits) -> Result<Strin
     if scheme_prefix(trimmed)?.is_some() {
         return Err(UrlError::UnsafeScheme);
     }
+    if trimmed.len() > limits.package_path_bytes {
+        return Err(UrlError::InvalidPackagePath);
+    }
 
-    let mut parts = Vec::new();
-    for part in trimmed.split('/') {
-        if part.is_empty() || part == "." {
+    let parts: Vec<&str> = trimmed.split('/').collect();
+    if parts.len() > limits.package_path_segments {
+        return Err(UrlError::InvalidPackagePath);
+    }
+
+    let mut normalized = Vec::with_capacity(parts.len());
+    for part in &parts {
+        if part.is_empty() || *part == "." {
             return Err(UrlError::InvalidPackagePath);
         }
         let decoded = percent_decode_ascii(part)?;
-        if part == ".." || decoded == ".." {
+        if *part == ".." || decoded == ".." {
             return Err(UrlError::PathTraversal);
         }
         if decoded.contains(':')
@@ -209,9 +172,9 @@ pub fn normalize_package_path(raw: &str, limits: ResourceLimits) -> Result<Strin
         {
             return Err(UrlError::InvalidPackagePath);
         }
-        parts.push(part);
+        normalized.push(*part);
     }
-    Ok(parts.join("/"))
+    Ok(normalized.join("/"))
 }
 
 fn reject_control_or_backslash(input: &str) -> Result<(), UrlError> {
@@ -358,11 +321,6 @@ mod tests {
         );
         assert!(
             policy
-                .classify_uri(ReferenceKind::Link, "http://example.test")
-                .is_ok()
-        );
-        assert!(
-            policy
                 .classify_uri(ReferenceKind::Link, "mailto:a@example.test")
                 .is_ok()
         );
@@ -487,5 +445,21 @@ mod tests {
             );
             assert!(policy.classify_uri(kind, "#frag").is_err());
         }
+    }
+
+    #[test]
+    fn package_path_limits_are_enforced() {
+        let policy = ResourcePolicy::new(ResourceLimits {
+            package_path_bytes: 20,
+            package_path_segments: 3,
+            ..ResourceLimits::default()
+        });
+        assert!(
+            policy
+                .classify_uri(ReferenceKind::Asset, "a/b/c/d.png")
+                .is_err()
+        );
+        let long = format!("{}/x.png", "a".repeat(30));
+        assert!(policy.classify_uri(ReferenceKind::Asset, &long).is_err());
     }
 }

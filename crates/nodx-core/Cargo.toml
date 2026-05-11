@@ -1,15 +1,10 @@
 [package]
 name = "nodx-core"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
-description = "Minimal NODX 0.1 reference parser, canonicalizer, and renderers"
+description = "NODX 1.0 reference AST, parser, canonical JSON, navigation graph, and resource limits"
 
 [lib]
 name = "nodx_core"
 path = "src/lib.rs"
-
-[dependencies]
-nodx-package = { path = "../nodx-package" }
-nodx-style = { path = "../nodx-style" }
-nodx-url = { path = "../nodx-url" }

@@ -1,9 +1,9 @@
 [package]
 name = "nodx-cst"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
-description = "NODX Editor 1.2 byte-preserving CST and local patch primitives"
 license = "MIT"
+description = "NODX 1.0 byte-preserving CST and local patch primitives"
 
 [lib]
 name = "nodx_cst"

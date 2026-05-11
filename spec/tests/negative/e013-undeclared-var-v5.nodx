@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+Hello {{vars.missing5}}.

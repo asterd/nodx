@@ -1,9 +1,9 @@
 [package]
 name = "nodx-style"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
-description = "Safe NODS subset validator and sanitizer for NODX"
+description = "NODX 1.0 safe NODS subset auditor and sanitizer"
 
 [lib]
 name = "nodx_style"

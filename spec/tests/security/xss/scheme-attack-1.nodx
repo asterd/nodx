@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+[scheme 1](vbscript:alert(1))

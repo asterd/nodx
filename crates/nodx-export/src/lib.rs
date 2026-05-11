@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use nodx_core::{Document, Inline, Node, Value};
+use nodx_core::{Document, Inline, Node, ResourceLimits, Value, crc32 as core_crc32};
 use nodx_render_html::render_html;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,10 +41,18 @@ pub fn presentation_profile() -> &'static str {
 }
 
 pub fn export_document(doc: &Document, format: ExportFormat) -> Exported {
+    export_document_with_limits(doc, format, ResourceLimits::default())
+}
+
+pub fn export_document_with_limits(
+    doc: &Document,
+    format: ExportFormat,
+    limits: ResourceLimits,
+) -> Exported {
     match format {
         ExportFormat::Pdf => export_pdf_bridge(doc),
-        ExportFormat::Docx => export_docx(doc),
-        ExportFormat::Pptx => export_pptx(doc),
+        ExportFormat::Docx => export_docx_with_limits(doc, limits),
+        ExportFormat::Pptx => export_pptx_with_limits(doc, limits),
     }
 }
 
@@ -64,6 +72,10 @@ pub fn export_pdf_bridge(doc: &Document) -> Exported {
 }
 
 pub fn export_docx(doc: &Document) -> Exported {
+    export_docx_with_limits(doc, ResourceLimits::default())
+}
+
+pub fn export_docx_with_limits(doc: &Document, limits: ResourceLimits) -> Exported {
     let mut report = base_report(doc, "docx");
     collect_common_losses(&doc.body, "$.body", &mut report);
     report.losses.push(loss(
@@ -74,7 +86,7 @@ pub fn export_docx(doc: &Document) -> Exported {
     ));
     let document_xml = docx_document_xml(doc);
     Exported {
-        bytes: office_zip(vec![
+        bytes: office_zip(limits, vec![
             (
                 "[Content_Types].xml".to_string(),
                 br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#.to_vec(),
@@ -90,6 +102,10 @@ pub fn export_docx(doc: &Document) -> Exported {
 }
 
 pub fn export_pptx(doc: &Document) -> Exported {
+    export_pptx_with_limits(doc, ResourceLimits::default())
+}
+
+pub fn export_pptx_with_limits(doc: &Document, limits: ResourceLimits) -> Exported {
     let mut report = base_report(doc, "pptx");
     collect_common_losses(&doc.body, "$.body", &mut report);
     report.losses.push(loss(
@@ -100,7 +116,7 @@ pub fn export_pptx(doc: &Document) -> Exported {
     ));
     let slides = presentation_slides(doc);
     Exported {
-        bytes: office_zip(vec![
+        bytes: office_zip(limits, vec![
             (
                 "[Content_Types].xml".to_string(),
                 pptx_content_types(slides.len()).into_bytes(),
@@ -509,12 +525,19 @@ fn pptx_slide_xml(slide: &Slide) -> String {
     out
 }
 
-fn office_zip(entries: Vec<(String, Vec<u8>)>) -> Vec<u8> {
+fn office_zip(limits: ResourceLimits, entries: Vec<(String, Vec<u8>)>) -> Vec<u8> {
+    if entries.len() > limits.export_entry_count {
+        return Vec::new();
+    }
+    let total: usize = entries.iter().map(|(_, d)| d.len()).sum();
+    if total > limits.export_bytes {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     let mut central = Vec::new();
     for (name, data) in entries {
         let local_offset = out.len() as u32;
-        let crc = crc32(&data);
+        let crc = core_crc32(&data);
         write_u32(&mut out, 0x0403_4b50);
         write_u16(&mut out, 20);
         write_u16(&mut out, 0);
@@ -578,20 +601,18 @@ fn write_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in data {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = (crc & 1).wrapping_neg();
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
-}
-
 fn escape_xml(out: &mut String, input: &str) {
     for ch in input.chars() {
+        // XML 1.0 only allows tab, LF, CR, and characters >= 0x20 (plus broader
+        // unicode planes). Strip anything else so external validators do not
+        // reject the output.
+        let code = ch as u32;
+        if code < 0x20 && ch != '\t' && ch != '\n' && ch != '\r' {
+            continue;
+        }
+        if code == 0xfffe || code == 0xffff {
+            continue;
+        }
         match ch {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),

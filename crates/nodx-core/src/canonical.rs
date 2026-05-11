@@ -182,7 +182,7 @@ fn write_value(out: &mut String, value: &Value) {
     }
 }
 
-pub(crate) fn write_str_map(out: &mut String, map: &BTreeMap<String, String>) {
+pub fn write_str_map(out: &mut String, map: &BTreeMap<String, String>) {
     out.push('{');
     for (i, (k, v)) in map.iter().enumerate() {
         if i > 0 {
@@ -206,7 +206,7 @@ fn write_str_list(out: &mut String, items: &[String]) {
     out.push(']');
 }
 
-pub(crate) fn write_json_string(out: &mut String, input: &str) {
+pub fn write_json_string(out: &mut String, input: &str) {
     out.push('"');
     escape_json(out, input);
     out.push('"');

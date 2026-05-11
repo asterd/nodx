@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 14
+---
+
+# H14 {#h14}
+
+Body with **strong** and a [link](#h14).
+
+:::section {#s14}
+## Section 14
+:::

@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 1
+---
+
+# H1 {#h1}
+
+Body with **strong** and a [link](#h1).
+
+:::section {#s1}
+## Section 1
+:::

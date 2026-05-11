@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 16
+---
+
+# H16 {#h16}
+
+Body with **strong** and a [link](#h16).
+
+:::section {#s16}
+## Section 16
+:::

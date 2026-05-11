@@ -1,0 +1,3 @@
+:::code {lang="rust"}
+fn main() { println!("hi"); }
+:::

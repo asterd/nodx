@@ -1,7 +1,8 @@
 ---
 schema: nodx/1.0
 profiles:
-  requires: [signature]
+  requires:
+    - signature
 ---
 
 # Required

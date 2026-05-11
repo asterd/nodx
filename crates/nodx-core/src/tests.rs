@@ -1,5 +1,4 @@
 use super::*;
-use crate::bytes::sha256_base64url;
 
 #[test]
 fn parses_core_blocks() {
@@ -64,6 +63,13 @@ fn front_matter_preserves_unknown_nested_metadata() {
 }
 
 #[test]
+fn front_matter_numbers_are_canonicalized() {
+    let doc = parse_str("---\nschema: nodx/1.0\nvars:\n  release: 1.0\n---\n\nBody\n");
+    assert_eq!(canonical_json(&doc).matches("\"release\":1").count(), 1);
+    assert!(!canonical_json(&doc).contains("\"release\":1.0"));
+}
+
+#[test]
 fn front_matter_rejects_hostile_yaml_constructs() {
     for source in [
         "---\nschema: nodx/0.1\nbase: &base x\n---\n",
@@ -87,6 +93,42 @@ fn front_matter_rejects_hostile_yaml_constructs() {
 }
 
 #[test]
+fn yaml_hostile_corpus_all_emit_e019() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = root.join("spec/tests/security/yaml-hostile");
+    let mut count = 0;
+    for entry in std::fs::read_dir(&dir).expect("read yaml-hostile dir") {
+        let entry = entry.expect("dirent");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("nodx") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).expect("read fixture");
+        let doc = parse_str(&source);
+        assert!(
+            doc.diagnostics.iter().any(|d| d.code == "NODX-E019"),
+            "missing NODX-E019 for {:?}: {:?}",
+            path.file_name(),
+            doc.diagnostics
+        );
+        count += 1;
+    }
+    assert!(count >= 30, "expected at least 30 hostile YAML fixtures, found {count}");
+}
+
+#[test]
+fn front_matter_block_scalar_allows_literal_specials() {
+    // `&`/`*`/`!` inside a literal block scalar are normal scalar bytes and must
+    // not trigger NODX-E019.
+    let doc = parse_str("---\nschema: nodx/1.0\nnotice: |\n  & anchor\n  * bullet text\n  !important call-out\n---\n\n# A\n");
+    assert!(
+        doc.diagnostics.iter().all(|d| d.code != "NODX-E019"),
+        "got: {:?}",
+        doc.diagnostics
+    );
+}
+
+#[test]
 fn labelled_close_produces_same_ast_as_plain() {
     let plain = parse_str(":::note\nBody.\n:::\n");
     let labelled = parse_str(":::note\nBody.\n::: note\n");
@@ -104,34 +146,11 @@ fn labelled_close_mismatch_emits_diagnostic_but_recovers() {
 }
 
 #[test]
-fn style_block_is_literal_and_emits_style_tag() {
+fn style_block_text_is_preserved_verbatim() {
+    // NODS audit/sanitization is the validator's responsibility; the parser only
+    // captures the raw block contents.
     let doc = parse_str(":::style\nh1 { color: red; }\n:::\n");
-    assert_eq!(doc.body[0].node_type, "style");
     assert_eq!(doc.body[0].text.as_deref(), Some("h1 { color: red; }"));
-}
-
-#[test]
-fn forbidden_nods_emits_e027_and_strips_rule() {
-    let doc = parse_str(
-        ":::style\na:hover { color: red; }\n.x { transform: scale(2); }\np { color: blue; }\n:::\n",
-    );
-    let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
-    assert!(codes.contains(&"NODX-E027"));
-}
-
-#[test]
-fn style_url_policy_blocks_remote_urls() {
-    let doc = parse_str(":::style\n.hero { background: url(https://example.test/a.png); }\n:::\n");
-    let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
-    assert!(codes.contains(&"NODX-E027"));
-}
-
-#[test]
-fn allowed_nods_passes_without_e027() {
-    let doc = parse_str(
-        ":::style\nh1 { color: #0f766e; font-size: 24pt; }\n@page { size: A4 portrait; margin: 22mm; }\n:::\n",
-    );
-    assert!(doc.diagnostics.iter().all(|d| d.code != "NODX-E027"));
 }
 
 #[test]
@@ -144,10 +163,11 @@ fn opener_is_not_confused_with_labelled_close() {
 }
 
 #[test]
-fn package_rejects_duplicate_paths() {
+fn parse_rejects_zip_inputs() {
+    // Packaged inputs must go through `nodx-package` first.
     let bytes = build_zip_with_duplicate_path();
-    let err = parse_bytes(&bytes).expect_err("should reject duplicate ZIP paths");
-    assert!(err.message.contains("Duplicate"));
+    let err = parse_bytes(&bytes).expect_err("zip bytes should not reach the parser");
+    assert_eq!(err.code, "NODX-E001");
 }
 
 #[test]
@@ -169,25 +189,6 @@ fn parses_mark_sub_and_sup() {
     assert!(json.contains("\"type\":\"mark\""));
     assert!(json.contains("\"type\":\"sub\""));
     assert!(json.contains("\"type\":\"sup\""));
-}
-
-#[test]
-fn ncp_is_recursive_and_hashes_source() {
-    let doc = parse_str(":::section {#s}\n# Title {#t}\n:::\n");
-    let ncp = ncp_json(&doc);
-    assert!(ncp.contains("\"sourceHash\":\"sha256-"));
-    assert!(ncp.contains("\"sha256\":\"sha256-"));
-    assert!(ncp.contains("\"path\":\"0.0\""));
-    assert!(ncp.contains("\"id\":\"t\""));
-}
-
-#[test]
-fn ncp_includes_resolved_toc_entries() {
-    let doc = parse_str(":::toc\n:::\n\n# Title {#t}\n");
-    let ncp = ncp_json(&doc);
-    assert!(ncp.contains("\"navigationEntries\""));
-    assert!(ncp.contains("\"id\":\"t\""));
-    assert!(ncp.contains("\"title\":\"Title\""));
 }
 
 #[test]

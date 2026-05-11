@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use nodx_agent_sdk::{Batch, MutationError, Operation, Target, apply_batch};
-use nodx_core::{Document, Node, parse_str, valid_name};
+use nodx_core::{Document, Node, ResourceLimits, parse_str_with_limits, valid_name};
 use nodx_validate::{Validator, exit_code_for};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -50,6 +50,7 @@ pub enum CstError {
     UnsupportedPatch,
     InvalidAttribute,
     ValidationFailed,
+    SourceTooLarge,
     Mutation(MutationError),
 }
 
@@ -61,8 +62,18 @@ struct Line {
 }
 
 pub fn parse_bytes(source: &[u8]) -> Result<CstDocument, CstError> {
+    parse_bytes_with_limits(source, ResourceLimits::default())
+}
+
+pub fn parse_bytes_with_limits(
+    source: &[u8],
+    limits: ResourceLimits,
+) -> Result<CstDocument, CstError> {
+    if source.len() > limits.source_bytes {
+        return Err(CstError::SourceTooLarge);
+    }
     let text = std::str::from_utf8(source).map_err(|_| CstError::InvalidUtf8)?;
-    let ast = parse_str(text);
+    let ast = parse_str_with_limits(text, limits);
     let lines = lines(source);
     let mut diagnostics = Vec::new();
     let mut nodes = Vec::new();
@@ -140,7 +151,7 @@ impl CstDocument {
         name: &str,
         value: &str,
     ) -> Result<PatchSet, CstError> {
-        if name == "id" || name == "class" || name == "classes" || !valid_name(name, false) {
+        if name == "id" || name == "class" || name == "classes" || !valid_name(name, true) {
             return Err(CstError::InvalidAttribute);
         }
         let node = self.cst_node(path).ok_or(CstError::MissingNode)?;
@@ -177,6 +188,8 @@ impl CstDocument {
         let report = apply_batch(&mut validated, batch).map_err(CstError::Mutation)?;
         let patched = self.apply_agent_patches(batch)?;
         if patched.ast != validated {
+            eprintln!("PATCHED META: {:#?}", patched.ast.meta);
+            eprintln!("VALIDATED META: {:#?}", validated.meta);
             return Err(CstError::ValidationFailed);
         }
         let diagnostics = Validator::default().validate(&patched.ast);
@@ -211,10 +224,158 @@ impl CstDocument {
                     let patch = working.remove_named_attribute(&path, name)?;
                     working = working.apply_patches(&patch)?;
                 }
-                _ => return Err(CstError::UnsupportedPatch),
+                Operation::Approve {
+                    target, reviewer, ..
+                } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let mut patches = PatchSet::new();
+                    patches.extend(working.set_named_attribute(&path, "status", "approved")?);
+                    if let Some(reviewer) = reviewer {
+                        patches.extend(
+                            working.set_named_attribute(&path, "reviewed-by", reviewer)?,
+                        );
+                    }
+                    working = working.apply_patches(&patches)?;
+                }
+                Operation::Reject {
+                    target, reviewer, ..
+                } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let mut patches = PatchSet::new();
+                    patches.extend(working.set_named_attribute(&path, "status", "rejected")?);
+                    if let Some(reviewer) = reviewer {
+                        patches.extend(
+                            working.set_named_attribute(&path, "reviewed-by", reviewer)?,
+                        );
+                    }
+                    working = working.apply_patches(&patches)?;
+                }
+                Operation::Delete { target, .. } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let patch = working.delete_node_range(&path)?;
+                    working = working.apply_patches(&patch)?;
+                }
+                Operation::AddComment {
+                    target,
+                    author,
+                    text,
+                    ..
+                } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let patch = working.insert_comment_after(&path, author.as_deref(), text)?;
+                    working = working.apply_patches(&patch)?;
+                }
+                Operation::Replace { target, node, .. } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let patch = working.replace_node_range(&path, node)?;
+                    working = working.apply_patches(&patch)?;
+                }
+                Operation::Insert {
+                    target,
+                    position,
+                    node,
+                    ..
+                } => {
+                    let path = resolve_target_path(&working.ast, target)?;
+                    let patch = working.insert_node(&path, position, node)?;
+                    working = working.apply_patches(&patch)?;
+                }
             }
         }
         Ok(working)
+    }
+
+    fn insert_comment_after(
+        &self,
+        path: &[usize],
+        author: Option<&str>,
+        text: &str,
+    ) -> Result<PatchSet, CstError> {
+        let node = self.cst_node(path).ok_or(CstError::MissingNode)?;
+        let mut serialized = String::new();
+        if !self.source.is_empty()
+            && node.byte_range.end < self.source.len()
+            && self.source.get(node.byte_range.end) != Some(&b'\n')
+        {
+            serialized.push('\n');
+        }
+        serialized.push_str(":::comment");
+        let mut attrs = String::new();
+        if let Some(author) = author {
+            attrs.push_str(&format!(" {{author={}}}", quote_attr_value(author)));
+        }
+        if !attrs.is_empty() {
+            serialized.push_str(&attrs);
+        }
+        serialized.push('\n');
+        for line in text.lines() {
+            serialized.push_str(line);
+            serialized.push('\n');
+        }
+        if !text.ends_with('\n') {
+            serialized.push('\n');
+        }
+        serialized.push_str(":::\n");
+        Ok(PatchSet::single(
+            node.byte_range.end..node.byte_range.end,
+            serialized.into_bytes(),
+        ))
+    }
+
+    fn replace_node_range(&self, path: &[usize], node: &Node) -> Result<PatchSet, CstError> {
+        let cst = self.cst_node(path).ok_or(CstError::MissingNode)?;
+        let bytes = serialize_block_node(node, "")?;
+        let mut end = cst.byte_range.end;
+        if end < self.source.len() && self.source.get(end) == Some(&b'\n') {
+            end += 1;
+        }
+        Ok(PatchSet::single(
+            cst.byte_range.start..end,
+            bytes.into_bytes(),
+        ))
+    }
+
+    fn insert_node(
+        &self,
+        path: &[usize],
+        position: &nodx_agent_sdk::InsertPosition,
+        node: &Node,
+    ) -> Result<PatchSet, CstError> {
+        let cst = self.cst_node(path).ok_or(CstError::MissingNode)?;
+        let serialized = serialize_block_node(node, "")?;
+        let (offset, leading_newline) = match position {
+            nodx_agent_sdk::InsertPosition::Before => (cst.byte_range.start, false),
+            nodx_agent_sdk::InsertPosition::After => {
+                let mut end = cst.byte_range.end;
+                if end < self.source.len() && self.source.get(end) == Some(&b'\n') {
+                    end += 1;
+                }
+                (end, false)
+            }
+            nodx_agent_sdk::InsertPosition::AppendChild => {
+                // 1.0 minimal CST does not model container interior offsets reliably;
+                // fall back to inserting after the container, signalling that this
+                // path is conservative.
+                return Err(CstError::UnsupportedPatch);
+            }
+        };
+        let mut bytes = String::new();
+        if leading_newline {
+            bytes.push('\n');
+        }
+        bytes.push_str(&serialized);
+        Ok(PatchSet::single(offset..offset, bytes.into_bytes()))
+    }
+
+    fn delete_node_range(&self, path: &[usize]) -> Result<PatchSet, CstError> {
+        let node = self.cst_node(path).ok_or(CstError::MissingNode)?;
+        // Drop the node together with its trailing newline so the source stays
+        // well-formed.
+        let mut end = node.byte_range.end;
+        if end < self.source.len() && self.source.get(end) == Some(&b'\n') {
+            end += 1;
+        }
+        Ok(PatchSet::single(node.byte_range.start..end, Vec::new()))
     }
 
     fn remove_named_attribute(&self, path: &[usize], name: &str) -> Result<PatchSet, CstError> {
@@ -232,6 +393,161 @@ impl CstDocument {
             end += 1;
         }
         Ok(PatchSet::single(start..end, Vec::new()))
+    }
+}
+
+fn serialize_block_node(node: &Node, indent: &str) -> Result<String, CstError> {
+    let mut out = String::new();
+    match node.node_type.as_str() {
+        "paragraph" => {
+            let mut buf = String::new();
+            serialize_inlines(&node.inlines, &mut buf);
+            if buf.is_empty() {
+                return Err(CstError::UnsupportedPatch);
+            }
+            out.push_str(indent);
+            out.push_str(&buf);
+            out.push('\n');
+            out.push('\n');
+        }
+        "heading" => {
+            let level = node
+                .attrs
+                .get("level")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1)
+                .clamp(1, 6);
+            out.push_str(indent);
+            for _ in 0..level {
+                out.push('#');
+            }
+            out.push(' ');
+            serialize_inlines(&node.inlines, &mut out);
+            serialize_id_attrs(node, &mut out)?;
+            out.push('\n');
+            out.push('\n');
+        }
+        "comment" | "note" | "quote" | "section" | "media" | "embed" => {
+            out.push_str(indent);
+            out.push_str(":::");
+            out.push_str(&node.node_type);
+            serialize_id_attrs(node, &mut out)?;
+            out.push('\n');
+            if !node.inlines.is_empty() {
+                let mut buf = String::new();
+                serialize_inlines(&node.inlines, &mut buf);
+                out.push_str(indent);
+                out.push_str(&buf);
+                out.push('\n');
+            }
+            for child in &node.children {
+                out.push_str(&serialize_block_node(child, indent)?);
+            }
+            out.push_str(indent);
+            out.push_str(":::\n");
+        }
+        _ => return Err(CstError::UnsupportedPatch),
+    }
+    Ok(out)
+}
+
+fn serialize_id_attrs(node: &Node, out: &mut String) -> Result<(), CstError> {
+    let mut attrs = String::new();
+    if let Some(id) = &node.id {
+        attrs.push('#');
+        attrs.push_str(id);
+    }
+    for (k, v) in &node.attrs {
+        if k == "level" {
+            continue;
+        }
+        if !attrs.is_empty() {
+            attrs.push(' ');
+        }
+        attrs.push_str(k);
+        attrs.push('=');
+        attrs.push_str(&quote_attr_value(v));
+    }
+    if !attrs.is_empty() {
+        out.push_str(" {");
+        out.push_str(&attrs);
+        out.push('}');
+    }
+    Ok(())
+}
+
+fn serialize_inlines(inlines: &[nodx_core::Inline], out: &mut String) {
+    use nodx_core::Inline;
+    for inline in inlines {
+        match inline {
+            Inline::Text(text) => out.push_str(text),
+            Inline::Code(text) => {
+                out.push('`');
+                out.push_str(text);
+                out.push('`');
+            }
+            Inline::Strong(children) => {
+                out.push_str("**");
+                serialize_inlines(children, out);
+                out.push_str("**");
+            }
+            Inline::Em(children) => {
+                out.push('*');
+                serialize_inlines(children, out);
+                out.push('*');
+            }
+            Inline::Mark(children) => {
+                out.push_str("==");
+                serialize_inlines(children, out);
+                out.push_str("==");
+            }
+            Inline::Sub(children) => {
+                out.push('~');
+                serialize_inlines(children, out);
+                out.push('~');
+            }
+            Inline::Sup(children) => {
+                out.push('^');
+                serialize_inlines(children, out);
+                out.push('^');
+            }
+            Inline::Link { label, target } => {
+                out.push('[');
+                serialize_inlines(label, out);
+                out.push_str("](");
+                out.push_str(target);
+                out.push(')');
+            }
+            Inline::Span { children, .. } => serialize_inlines(children, out),
+            Inline::Var { namespace, name } => {
+                out.push_str("{{");
+                out.push_str(namespace);
+                out.push('.');
+                out.push_str(name);
+                out.push_str("}}");
+            }
+            Inline::Ref { target } => {
+                out.push_str("@[");
+                out.push_str(target);
+                out.push(']');
+            }
+            Inline::Mention { kind, target } => {
+                out.push('@');
+                out.push_str(kind);
+                out.push(':');
+                out.push_str(target);
+            }
+            Inline::FootnoteRef { target } | Inline::CitationRef { target } => {
+                out.push_str("@[");
+                out.push_str(target);
+                out.push(']');
+            }
+            Inline::MathInline { source } => {
+                out.push('$');
+                out.push_str(source);
+                out.push('$');
+            }
+        }
     }
 }
 
@@ -869,14 +1185,83 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_agent_operations_do_not_fall_back_to_full_reserialize() {
-        let cst = parse_str_lossless("# Title {#title}\n");
-        let before_hash = node_hash(cst.ast_node(&[0]).unwrap());
+    fn delete_operation_rewrites_minimal_source_range() {
+        let cst = parse_str_lossless("# Keep {#keep}\n\n# Drop {#drop}\n");
+        let drop_hash = node_hash(cst.ast_node(&[1]).unwrap());
         let batch = Batch::new(vec![Operation::Delete {
-            target: Target::id("title"),
-            before_hash,
+            target: Target::id("drop"),
+            before_hash: drop_hash,
         }]);
+        let (patched, _report) = cst.apply_agent_batch_minimal(&batch).expect("delete");
+        assert_eq!(
+            std::str::from_utf8(patched.emit()).unwrap(),
+            "# Keep {#keep}\n\n"
+        );
+    }
 
+    #[test]
+    fn approve_operation_writes_status_through_cst() {
+        let cst = parse_str_lossless("# Title {#title fallback=\"children\"}\n");
+        let hash = node_hash(cst.ast_node(&[0]).unwrap());
+        let batch = Batch::new(vec![Operation::Approve {
+            target: Target::id("title"),
+            before_hash: hash,
+            reviewer: Some("reviewer-1".to_string()),
+        }]);
+        let (patched, _) = cst.apply_agent_batch_minimal(&batch).expect("approve");
+        let text = std::str::from_utf8(patched.emit()).unwrap();
+        assert!(text.contains("status=\"approved\""));
+        assert!(text.contains("reviewed-by=\"reviewer-1\""));
+    }
+
+    #[test]
+    fn replace_operation_emits_minimal_paragraph() {
+        let cst = parse_str_lossless(
+            "---\nschema: nodx/1.0\n---\n\n# Title {#title}\n\nKeep this.\n",
+        );
+        let hash = node_hash(cst.ast_node(&[0]).unwrap());
+        let batch = Batch::new(vec![Operation::Replace {
+            target: Target::id("title"),
+            before_hash: hash,
+            node: nodx_core::Node {
+                node_type: "paragraph".to_string(),
+                id: None,
+                classes: Vec::new(),
+                attrs: std::collections::BTreeMap::new(),
+                children: Vec::new(),
+                inlines: vec![nodx_core::Inline::Text("Replacement.".to_string())],
+                text: None,
+            },
+        }]);
+        let result = cst.apply_agent_batch_minimal(&batch);
+        if let Err(err) = &result {
+            panic!("replace failed: {:?}", err);
+        }
+        let (patched, _) = result.unwrap();
+        let text = std::str::from_utf8(patched.emit()).unwrap();
+        eprintln!("--- patched ---\n{text}\n---");
+        assert!(text.contains("Replacement."));
+        assert!(!text.contains("# Title"));
+    }
+
+    #[test]
+    fn append_child_insertion_is_explicitly_unsupported() {
+        let cst = parse_str_lossless("# Title {#title}\n");
+        let hash = node_hash(cst.ast_node(&[0]).unwrap());
+        let batch = Batch::new(vec![Operation::Insert {
+            target: Target::id("title"),
+            position: nodx_agent_sdk::InsertPosition::AppendChild,
+            before_hash: hash,
+            node: nodx_core::Node {
+                node_type: "paragraph".to_string(),
+                id: None,
+                classes: Vec::new(),
+                attrs: std::collections::BTreeMap::new(),
+                children: Vec::new(),
+                inlines: vec![nodx_core::Inline::Text("child".to_string())],
+                text: None,
+            },
+        }]);
         assert_eq!(
             cst.apply_agent_batch_minimal(&batch).unwrap_err(),
             CstError::UnsupportedPatch

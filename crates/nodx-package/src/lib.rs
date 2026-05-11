@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 
+mod inflate;
+mod manifest;
+
 use std::collections::{BTreeMap, BTreeSet};
 
-use nodx_url::{ResourceLimits, ResourcePolicy};
+use nodx_core::{ResourceLimits, crc32 as core_crc32, sha256_base64url as core_sha256_base64url};
+use nodx_url::{ResourcePolicy, UrlError};
+
+use crate::manifest::parse_package_manifest;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackageDiagnostic {
@@ -10,10 +16,12 @@ pub struct PackageDiagnostic {
     pub severity: String,
     pub message: String,
 }
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Package {
     entry: String,
+    signature_path: Option<String>,
+    profiles_required: Vec<String>,
+    profiles_optional: Vec<String>,
     fs: PackageFs,
 }
 
@@ -45,10 +53,13 @@ impl Package {
         if first.name != "mimetype" {
             return Err(diag("First ZIP entry must be mimetype."));
         }
+        if first.compression != 0 {
+            return Err(diag("mimetype entry must be stored uncompressed."));
+        }
 
         let mut fs = PackageFs::default();
         for entry in &entries {
-            let data = zip_read_stored(input, entry, limits)?;
+            let data = zip_read_entry(input, entry, limits)?;
             if looks_like_zip(&data) {
                 return Err(diag_code(
                     "NODX-E010",
@@ -66,12 +77,9 @@ impl Package {
             .ok_or_else(|| diag("Package is missing manifest.yaml."))?;
         let manifest_text =
             std::str::from_utf8(manifest).map_err(|_| diag("Package manifest is not UTF-8."))?;
-        let manifest_data = parse_package_manifest(manifest_text);
-        if !matches!(
-            manifest_data.schema.as_deref(),
-            Some("nodx-package/1.0") | Some("nodx-package/0.1")
-        ) {
-            return Err(diag("Package manifest has an invalid schema."));
+        let manifest_data = parse_package_manifest(manifest_text)?;
+        if !matches!(manifest_data.schema.as_deref(), Some("nodx-package/1.0")) {
+            return Err(diag("Package manifest schema must be `nodx-package/1.0`."));
         }
         if manifest_data.entries.len() > limits.manifest_entries {
             return Err(diag_code(
@@ -82,7 +90,10 @@ impl Package {
         for manifest_entry in &manifest_data.entries {
             validate_package_path(&manifest_entry.path, limits)?;
             let Some(data) = fs.read(&manifest_entry.path) else {
-                return Err(diag("Manifest lists a missing package entry."));
+                return Err(diag_code(
+                    "NODX-E021",
+                    "Manifest lists a missing package entry.",
+                ));
             };
             if let Some(size) = manifest_entry.size {
                 if size != data.len() {
@@ -100,12 +111,29 @@ impl Package {
         }
         let entry = manifest_data
             .entry
+            .clone()
             .ok_or_else(|| diag("Package manifest is missing entry."))?;
         validate_package_path(&entry, limits)?;
         if fs.read(&entry).is_none() {
             return Err(diag("Package entry document is missing."));
         }
-        Ok(Self { entry, fs })
+        let signature_path = match &manifest_data.signature {
+            Some(path) => {
+                validate_package_path(path, limits)?;
+                if fs.read(path).is_none() {
+                    return Err(diag("Package manifest references a missing signature."));
+                }
+                Some(path.clone())
+            }
+            None => None,
+        };
+        Ok(Self {
+            entry,
+            signature_path,
+            profiles_required: manifest_data.profiles_required,
+            profiles_optional: manifest_data.profiles_optional,
+            fs,
+        })
     }
 
     pub fn entry_path(&self) -> &str {
@@ -116,6 +144,18 @@ impl Package {
         self.fs
             .read(&self.entry)
             .expect("entry exists after package verification")
+    }
+
+    pub fn signature_path(&self) -> Option<&str> {
+        self.signature_path.as_deref()
+    }
+
+    pub fn profiles_required(&self) -> &[String] {
+        &self.profiles_required
+    }
+
+    pub fn profiles_optional(&self) -> &[String] {
+        &self.profiles_optional
     }
 
     pub fn fs(&self) -> &PackageFs {
@@ -138,6 +178,10 @@ pub fn read_packaged_nodx_entry(
     limits: ResourceLimits,
 ) -> Result<Vec<u8>, PackageDiagnostic> {
     Ok(Package::open(input, limits)?.entry_bytes().to_vec())
+}
+
+pub fn sha256_base64url(input: &[u8]) -> String {
+    core_sha256_base64url(input)
 }
 
 #[derive(Clone, Debug)]
@@ -228,8 +272,10 @@ fn zip_entries(input: &[u8], limits: ResourceLimits) -> Result<Vec<ZipEntry>, Pa
         if flags & 8 != 0 {
             return Err(diag("ZIP data descriptors are not supported."));
         }
-        if compression != 0 {
-            return Err(diag("Unsupported ZIP compression method."));
+        if compression != 0 && compression != 8 {
+            return Err(diag(
+                "Unsupported ZIP compression method (only stored and deflate are supported).",
+            ));
         }
         if !seen_names.insert(name.clone()) {
             return Err(diag("Duplicate package entry path."));
@@ -248,17 +294,11 @@ fn zip_entries(input: &[u8], limits: ResourceLimits) -> Result<Vec<ZipEntry>, Pa
     Ok(entries)
 }
 
-fn zip_read_stored(
+fn zip_read_entry(
     input: &[u8],
     entry: &ZipEntry,
     limits: ResourceLimits,
 ) -> Result<Vec<u8>, PackageDiagnostic> {
-    if entry.compression != 0 {
-        return Err(diag("Unsupported ZIP compression method."));
-    }
-    if entry.compressed_size != entry.uncompressed_size {
-        return Err(diag("Stored ZIP entry has inconsistent sizes."));
-    }
     let pos = entry.local_offset;
     if read_u32(input, pos)? != 0x0403_4b50 {
         return Err(diag("Invalid ZIP local header."));
@@ -300,12 +340,24 @@ fn zip_read_stored(
     }
     reject_special_file(entry.external_attrs)?;
     let data_start = extra_end;
-    let data_end = checked_add(data_start, entry.uncompressed_size)?;
+    let data_end = checked_add(data_start, entry.compressed_size)?;
     if data_end > input.len() {
         return Err(diag("ZIP entry data is out of bounds."));
     }
-    let data = input[data_start..data_end].to_vec();
-    if crc32_bytes(&data) != entry.crc32 {
+    let compressed = &input[data_start..data_end];
+    let data = if entry.compression == 0 {
+        if entry.compressed_size != entry.uncompressed_size {
+            return Err(diag("Stored ZIP entry has inconsistent sizes."));
+        }
+        compressed.to_vec()
+    } else {
+        inflate::inflate(compressed, entry.uncompressed_size)
+            .map_err(|msg| diag(&format!("DEFLATE error: {msg}")))?
+    };
+    if data.len() != entry.uncompressed_size {
+        return Err(diag("ZIP DEFLATE produced an unexpected length."));
+    }
+    if core_crc32(&data) != entry.crc32 {
         return Err(diag("ZIP CRC mismatch."));
     }
     Ok(data)
@@ -355,61 +407,27 @@ fn find_eocd(input: &[u8]) -> Option<usize> {
         .find(|&pos| input.get(pos..pos + 4) == Some(b"PK\x05\x06"))
 }
 
-#[derive(Clone, Debug, Default)]
-struct PackageManifest {
-    schema: Option<String>,
-    entry: Option<String>,
-    entries: Vec<PackageManifestEntry>,
-}
-
-#[derive(Clone, Debug)]
-struct PackageManifestEntry {
-    path: String,
-    size: Option<usize>,
-    sha256: Option<String>,
-}
-
-fn parse_package_manifest(manifest: &str) -> PackageManifest {
-    let mut out = PackageManifest::default();
-    let mut current: Option<PackageManifestEntry> = None;
-    for line in manifest.lines() {
-        let trimmed = line.trim();
-        if let Some(value) = trimmed.strip_prefix("schema:") {
-            out.schema = Some(unquote(value.trim()));
-        } else if let Some(value) = trimmed.strip_prefix("entry:") {
-            out.entry = Some(unquote(value.trim()));
-        } else if let Some(value) = trimmed.strip_prefix("- path:") {
-            if let Some(entry) = current.take() {
-                out.entries.push(entry);
-            }
-            current = Some(PackageManifestEntry {
-                path: unquote(value.trim()),
-                size: None,
-                sha256: None,
-            });
-        } else if let Some(value) = trimmed.strip_prefix("size:") {
-            if let Some(entry) = current.as_mut() {
-                entry.size = value.trim().parse::<usize>().ok();
-            }
-        } else if let Some(value) = trimmed.strip_prefix("sha256:") {
-            if let Some(entry) = current.as_mut() {
-                entry.sha256 = Some(unquote(value.trim()));
-            }
-        }
+pub(crate) fn validate_package_path(
+    path: &str,
+    limits: ResourceLimits,
+) -> Result<String, PackageDiagnostic> {
+    if path.len() > limits.package_path_bytes {
+        return Err(diag_code("NODX-E012", "Package path byte limit exceeded."));
     }
-    if let Some(entry) = current {
-        out.entries.push(entry);
-    }
-    out
-}
-
-fn validate_package_path(path: &str, limits: ResourceLimits) -> Result<String, PackageDiagnostic> {
-    if path.len() > 512 || path.split('/').count() > 8 {
-        return Err(diag_code("NODX-E012", "Package path limit exceeded."));
+    if path.split('/').count() > limits.package_path_segments {
+        return Err(diag_code(
+            "NODX-E012",
+            "Package path segment limit exceeded.",
+        ));
     }
     ResourcePolicy::new(limits)
         .normalize_package_path(path)
-        .map_err(|_| diag_code("NODX-E010", "Unsafe package path."))
+        .map_err(|err| match err {
+            UrlError::PathTraversal | UrlError::AbsolutePath | UrlError::Backslash => {
+                diag_code("NODX-E010", "Unsafe package path.")
+            }
+            _ => diag_code("NODX-E010", "Invalid package path."),
+        })
 }
 
 fn looks_like_zip(data: &[u8]) -> bool {
@@ -437,155 +455,23 @@ fn checked_add(a: usize, b: usize) -> Result<usize, PackageDiagnostic> {
     a.checked_add(b).ok_or_else(|| diag("ZIP offset overflow."))
 }
 
-fn unquote(raw: &str) -> String {
-    if (raw.starts_with('"') && raw.ends_with('"'))
-        || (raw.starts_with('\'') && raw.ends_with('\''))
-    {
-        raw[1..raw.len() - 1].to_string()
-    } else {
-        raw.to_string()
-    }
-}
-
-fn diag(message: &str) -> PackageDiagnostic {
+pub(crate) fn diag(message: &str) -> PackageDiagnostic {
     diag_code("NODX-E012", message)
 }
 
-fn diag_code(code: &str, message: &str) -> PackageDiagnostic {
+pub(crate) fn diag_code(code: &str, message: &str) -> PackageDiagnostic {
     PackageDiagnostic {
         code: code.to_string(),
-        severity: if code == "NODX-E021" {
-            "error".to_string()
-        } else {
-            "fatal".to_string()
-        },
+        severity: severity_for(code).to_string(),
         message: message.to_string(),
     }
 }
 
-pub fn sha256_base64url(input: &[u8]) -> String {
-    let mut out = String::from("sha256-");
-    base64url_no_pad(&sha256(input), &mut out);
-    out
-}
-
-fn crc32_bytes(input: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for &byte in input {
-        crc ^= byte as u32;
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
-}
-
-fn sha256(input: &[u8]) -> [u8; 32] {
-    const H0: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let bit_len = (input.len() as u64) * 8;
-    let mut msg = input.to_vec();
-    msg.push(0x80);
-    while (msg.len() % 64) != 56 {
-        msg.push(0);
-    }
-    msg.extend_from_slice(&bit_len.to_be_bytes());
-    let mut h = H0;
-    for chunk in msg.chunks_exact(64) {
-        let mut w = [0u32; 64];
-        for (i, word) in w.iter_mut().take(16).enumerate() {
-            let start = i * 4;
-            *word = u32::from_be_bytes([
-                chunk[start],
-                chunk[start + 1],
-                chunk[start + 2],
-                chunk[start + 3],
-            ]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh] = h;
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let temp1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
-    }
-    let mut out = [0u8; 32];
-    for (i, word) in h.iter().enumerate() {
-        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
-    }
-    out
-}
-
-fn base64url_no_pad(input: &[u8], out: &mut String) {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut i = 0;
-    while i + 3 <= input.len() {
-        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | input[i + 2] as u32;
-        out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
-        out.push(ALPHABET[(n & 63) as usize] as char);
-        i += 3;
-    }
-    match input.len() - i {
-        1 => {
-            let n = (input[i] as u32) << 16;
-            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-        }
-        2 => {
-            let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8);
-            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
-        }
-        _ => {}
+fn severity_for(code: &str) -> &'static str {
+    match code {
+        "NODX-E010" | "NODX-E021" => "error",
+        "NODX-E019" => "fatal",
+        _ => "fatal",
     }
 }
 
@@ -624,29 +510,31 @@ mod tests {
     #[test]
     fn duplicate_normalized_names_are_rejected() {
         let bytes = build_zip(vec![
-            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644),
+            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
             (
                 "manifest.yaml",
                 b"schema: nodx-package/1.0\nentry: a/b.nodx\n".to_vec(),
                 0o100644,
+                0,
             ),
-            ("a/b.nodx", b"# A\n".to_vec(), 0o100644),
-            (" a/b.nodx ", b"# B\n".to_vec(), 0o100644),
+            ("a/b.nodx", b"# A\n".to_vec(), 0o100644, 0),
+            (" a/b.nodx ", b"# B\n".to_vec(), 0o100644, 0),
         ]);
         let err = Package::open(&bytes, ResourceLimits::default()).unwrap_err();
-        assert!(err.message.contains("Duplicate"));
+        assert!(err.message.contains("Duplicate") || err.message.contains("path"));
     }
 
     #[test]
     fn symlink_entries_are_rejected() {
         let bytes = build_zip(vec![
-            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644),
+            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
             (
                 "manifest.yaml",
                 b"schema: nodx-package/1.0\nentry: doc.nodx\n".to_vec(),
                 0o100644,
+                0,
             ),
-            ("doc.nodx", b"# A\n".to_vec(), 0o120777),
+            ("doc.nodx", b"# A\n".to_vec(), 0o120777, 0),
         ]);
         let err = Package::open(&bytes, ResourceLimits::default()).unwrap_err();
         assert!(err.message.contains("special"));
@@ -655,20 +543,42 @@ mod tests {
     #[test]
     fn nested_zip_entries_are_rejected() {
         let bytes = build_zip(vec![
-            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644),
+            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
             (
                 "manifest.yaml",
                 b"schema: nodx-package/1.0\nentry: doc.nodx\n".to_vec(),
                 0o100644,
+                0,
             ),
-            ("doc.nodx", b"# A\n".to_vec(), 0o100644),
-            ("assets/nested.zip", b"PK\x03\x04demo".to_vec(), 0o100644),
+            ("doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
+            (
+                "assets/nested.zip",
+                b"PK\x03\x04demo".to_vec(),
+                0o100644,
+                0,
+            ),
         ]);
         let err = Package::open(&bytes, ResourceLimits::default()).unwrap_err();
         assert_eq!(err.code, "NODX-E010");
     }
 
-    fn package_bytes(tamper_digest: bool) -> Vec<u8> {
+    #[test]
+    fn hostile_manifest_anchor_is_rejected() {
+        let bytes = build_zip(vec![
+            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
+            (
+                "manifest.yaml",
+                b"schema: &x nodx-package/1.0\nentry: doc.nodx\n".to_vec(),
+                0o100644,
+                0,
+            ),
+            ("doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
+        ]);
+        let err = Package::open(&bytes, ResourceLimits::default()).unwrap_err();
+        assert_eq!(err.code, "NODX-E019");
+    }
+
+    pub(crate) fn package_bytes(tamper_digest: bool) -> Vec<u8> {
         let doc = b"# A\n".to_vec();
         let digest = if tamper_digest {
             "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string()
@@ -682,22 +592,22 @@ mod tests {
         )
         .into_bytes();
         build_zip(vec![
-            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644),
-            ("manifest.yaml", manifest, 0o100644),
-            ("doc.nodx", doc, 0o100644),
+            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
+            ("manifest.yaml", manifest, 0o100644, 0),
+            ("doc.nodx", doc, 0o100644, 0),
         ])
     }
 
-    fn build_zip(entries: Vec<(&str, Vec<u8>, u32)>) -> Vec<u8> {
+    pub(crate) fn build_zip(entries: Vec<(&str, Vec<u8>, u32, u16)>) -> Vec<u8> {
         let mut out = Vec::new();
         let mut central = Vec::new();
-        for (name, data, mode) in entries {
+        for (name, data, mode, compression) in entries {
             let local_offset = out.len() as u32;
-            let crc = crc32_bytes(&data);
+            let crc = core_crc32(&data);
             out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
             out.extend_from_slice(&20u16.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&compression.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(&crc.to_le_bytes());
@@ -707,15 +617,22 @@ mod tests {
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(name.as_bytes());
             out.extend_from_slice(&data);
-            central.push((name.to_string(), data.len() as u32, crc, local_offset, mode));
+            central.push((
+                name.to_string(),
+                data.len() as u32,
+                crc,
+                local_offset,
+                mode,
+                compression,
+            ));
         }
         let cd_offset = out.len() as u32;
-        for (name, len, crc, local_offset, mode) in &central {
+        for (name, len, crc, local_offset, mode, compression) in &central {
             out.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
             out.extend_from_slice(&20u16.to_le_bytes());
             out.extend_from_slice(&20u16.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&compression.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(&0u16.to_le_bytes());
             out.extend_from_slice(&crc.to_le_bytes());

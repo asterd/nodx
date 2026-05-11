@@ -1,5 +1,5 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: arabic-rtl-example
 title: مثال على وثيقة عربية

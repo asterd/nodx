@@ -1,11 +1,15 @@
-use crate::ast::{Document, Node, Value};
+use crate::ast::{Document, Inline, Node, Value};
 use crate::inline_parser::{plain_inlines, plain_node_text};
 
 pub fn render_tui(doc: &Document) -> String {
     let mut out = String::new();
     let ansi = ansi_enabled();
-    if let Some(Value::String(title)) = doc.meta.get("title") {
-        out.push_str(&paint(ansi, "1;36", title));
+    let title = match doc.meta.get("title") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => derive_title(&doc.body),
+    };
+    if let Some(title) = title {
+        out.push_str(&paint(ansi, "1;36", &title));
         out.push_str("\n");
         out.push_str(&paint(ansi, "2", &"═".repeat(title.chars().count().max(8))));
         out.push_str("\n\n");
@@ -14,6 +18,26 @@ pub fn render_tui(doc: &Document) -> String {
         render_tui_node(&mut out, node, 0, ansi);
     }
     out
+}
+
+fn derive_title(nodes: &[Node]) -> Option<String> {
+    for node in nodes {
+        if node.node_type == "heading" {
+            let mut acc = String::new();
+            for inline in &node.inlines {
+                if let Inline::Text(t) = inline {
+                    acc.push_str(t);
+                }
+            }
+            if !acc.trim().is_empty() {
+                return Some(acc);
+            }
+        }
+        if let Some(t) = derive_title(&node.children) {
+            return Some(t);
+        }
+    }
+    None
 }
 
 fn render_tui_node(out: &mut String, node: &Node, indent: usize, ansi: bool) {

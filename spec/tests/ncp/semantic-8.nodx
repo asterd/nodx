@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 8
+---
+
+# H8 {#h8}
+
+Body with **strong** and a [link](#h8).
+
+:::section {#s8}
+## Section 8
+:::

@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+# Payload 2: `<script>alert(2)</script>` {#h2}

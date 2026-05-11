@@ -42,11 +42,13 @@ fn yaml_events(lines: &[&str], diagnostics: &mut Vec<Diagnostic>) -> Vec<YamlEve
         if line.trim().is_empty() || line.trim_start().starts_with('#') {
             continue;
         }
-        check_yaml_safety(line, line_no, diagnostics);
         let indent = line.chars().take_while(|c| *c == ' ').count();
         let trimmed = &line[indent..];
         if let Some(block_indent) = block_scalar_indent {
             if indent >= block_indent {
+                // Inside a block scalar, content is opaque text — do not apply
+                // mapping/sequence safety heuristics or we will reject literal
+                // `&`/`*`/`!` characters that are valid scalar content.
                 events.push(YamlEvent::Scalar {
                     indent,
                     text: line[block_indent.min(line.len())..].to_string(),
@@ -55,6 +57,7 @@ fn yaml_events(lines: &[&str], diagnostics: &mut Vec<Diagnostic>) -> Vec<YamlEve
             }
             block_scalar_indent = None;
         }
+        check_yaml_safety(line, line_no, diagnostics);
         if let Some(rest) = trimmed.strip_prefix("- ") {
             events.push(YamlEvent::Sequence {
                 indent,
@@ -242,6 +245,15 @@ fn check_yaml_safety(line: &str, line_no: usize, diagnostics: &mut Vec<Diagnosti
     {
         diagnostics.push(forbidden(line_no, "Forbidden YAML indentation."));
     }
+    if line
+        .chars()
+        .any(|c| ((c as u32) < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == '\u{007f}')
+    {
+        diagnostics.push(forbidden(
+            line_no,
+            "Forbidden control character in YAML front matter.",
+        ));
+    }
     if unquoted.contains('&') || unquoted.contains('*') || unquoted.contains('!') {
         diagnostics.push(forbidden(line_no, "Forbidden YAML safe-subset construct."));
     }
@@ -258,9 +270,23 @@ fn check_yaml_safety(line: &str, line_no: usize, diagnostics: &mut Vec<Diagnosti
         {
             diagnostics.push(forbidden(line_no, "Forbidden YAML mapping key."));
         }
-        check_scalar_safety(value.trim(), line_no, diagnostics);
+        let value_trimmed = value.trim();
+        if value_trimmed.starts_with('[') || value_trimmed.starts_with('{') {
+            diagnostics.push(forbidden(
+                line_no,
+                "Flow-style YAML collections are not allowed.",
+            ));
+        }
+        check_scalar_safety(value_trimmed, line_no, diagnostics);
     } else if let Some(value) = trimmed.strip_prefix("- ") {
-        check_scalar_safety(value.trim(), line_no, diagnostics);
+        let value_trimmed = value.trim();
+        if value_trimmed.starts_with('[') || value_trimmed.starts_with('{') {
+            diagnostics.push(forbidden(
+                line_no,
+                "Flow-style YAML collections are not allowed.",
+            ));
+        }
+        check_scalar_safety(value_trimmed, line_no, diagnostics);
     }
 }
 
@@ -280,6 +306,18 @@ fn check_scalar_safety(raw: &str, line_no: usize, diagnostics: &mut Vec<Diagnost
     }
     if lower.starts_with("0b") || lower.starts_with("+0b") || lower.starts_with("-0b") {
         diagnostics.push(forbidden(line_no, "Forbidden YAML numeric special."));
+    }
+    if lower.starts_with("0o") || lower.starts_with("+0o") || lower.starts_with("-0o") {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML numeric special."));
+    }
+    if matches!(
+        lower.as_str(),
+        "yes" | "no" | "on" | "off" | "y" | "n"
+    ) {
+        diagnostics.push(forbidden(
+            line_no,
+            "Forbidden YAML boolean alias; use true/false.",
+        ));
     }
     if is_native_timestamp(raw) {
         diagnostics.push(forbidden(
@@ -318,11 +356,22 @@ fn scalar(raw: &str) -> Value {
                 .map(|s| scalar(s.trim()))
                 .collect(),
         )
-    } else if raw.parse::<f64>().is_ok() && raw.chars().any(|c| c.is_ascii_digit()) {
-        Value::Number(raw.to_string())
+    } else if let Some(number) = canonical_number(raw) {
+        Value::Number(number)
     } else {
         Value::String(unquote(raw))
     }
+}
+
+fn canonical_number(raw: &str) -> Option<String> {
+    if !raw.chars().any(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let value = raw.parse::<f64>().ok()?;
+    if !value.is_finite() {
+        return None;
+    }
+    Some(value.to_string())
 }
 
 fn unquoted_view(input: &str) -> String {

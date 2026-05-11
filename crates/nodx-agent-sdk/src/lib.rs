@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use nodx_core::{Document, Inline, Node, canonical_json, valid_name};
+use nodx_core::{Document, Inline, Node, valid_name};
+// `Inline` is used in the public `Operation::AddComment` variant body construction.
+use nodx_ncp::{document_hash as ncp_document_hash, node_hash as ncp_node_hash};
 use nodx_validate::{Validator, exit_code_for};
 
 const CHANGE_SCHEMA: &str = "nodx/change/1.1";
@@ -205,11 +207,11 @@ pub fn apply_batch(doc: &mut Document, batch: &Batch) -> Result<MutationReport, 
 }
 
 pub fn node_hash(node: &Node) -> String {
-    nodx_package::sha256_base64url(node_hash_input(node).as_bytes())
+    ncp_node_hash(node)
 }
 
 pub fn document_hash(doc: &Document) -> String {
-    nodx_package::sha256_base64url(canonical_json(doc).as_bytes())
+    ncp_document_hash(doc)
 }
 
 fn apply_operation(
@@ -558,7 +560,7 @@ fn get_node_mut<'a>(doc: &'a mut Document, path: &[usize]) -> Option<&'a mut Nod
 }
 
 fn validate_attr_name(name: &str) -> Result<(), MutationError> {
-    if name == "id" || name == "class" || name == "classes" || !valid_name(name, false) {
+    if name == "id" || name == "class" || name == "classes" || !valid_name(name, true) {
         return Err(err(
             MutationErrorCode::InvalidAttribute,
             "Attribute name is invalid or reserved.",
@@ -578,55 +580,6 @@ fn validate_document(doc: &Document) -> Result<(), MutationError> {
         return Err(err(MutationErrorCode::ValidationFailed, &message));
     }
     Ok(())
-}
-
-fn node_hash_input(node: &Node) -> String {
-    let mut out = String::new();
-    out.push_str(&node.node_type);
-    out.push('\n');
-    if let Some(id) = &node.id {
-        out.push_str(id);
-    }
-    out.push('\n');
-    write_str_map(&mut out, &node.attrs);
-    out.push('\n');
-    out.push_str(node.text.as_deref().unwrap_or(""));
-    out.push_str(&plain_inlines(&node.inlines));
-    for child in &node.children {
-        out.push('\n');
-        out.push_str(&node_hash_input(child));
-    }
-    out
-}
-
-fn plain_inlines(inlines: &[Inline]) -> String {
-    let mut out = String::new();
-    for inline in inlines {
-        match inline {
-            Inline::Text(text)
-            | Inline::Code(text)
-            | Inline::MathInline { source: text }
-            | Inline::Var {
-                namespace: _,
-                name: text,
-            }
-            | Inline::Ref { target: text }
-            | Inline::Mention {
-                kind: _,
-                target: text,
-            }
-            | Inline::FootnoteRef { target: text }
-            | Inline::CitationRef { target: text } => out.push_str(text),
-            Inline::Strong(children)
-            | Inline::Em(children)
-            | Inline::Mark(children)
-            | Inline::Sub(children)
-            | Inline::Sup(children)
-            | Inline::Span { children, attrs: _ } => out.push_str(&plain_inlines(children)),
-            Inline::Link { label, target: _ } => out.push_str(&plain_inlines(label)),
-        }
-    }
-    out
 }
 
 fn path_to_string(path: &[usize]) -> String {
@@ -660,19 +613,6 @@ fn write_option_string(out: &mut String, name: &str, value: Option<&str>) {
         out.push_str(name);
         write_json_string(out, value);
     }
-}
-
-fn write_str_map(out: &mut String, map: &BTreeMap<String, String>) {
-    out.push('{');
-    for (i, (key, value)) in map.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        write_json_string(out, key);
-        out.push(':');
-        write_json_string(out, value);
-    }
-    out.push('}');
 }
 
 fn write_json_string(out: &mut String, input: &str) {
@@ -710,7 +650,7 @@ impl MutationError {
 mod tests {
     use std::collections::BTreeMap;
 
-    use nodx_core::{Inline, Node, parse_str};
+    use nodx_core::{Inline, Node, parse_str, plain_inlines};
 
     use super::*;
 

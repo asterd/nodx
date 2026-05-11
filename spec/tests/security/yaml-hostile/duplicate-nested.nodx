@@ -1,0 +1,10 @@
+---
+schema: nodx/1.0
+profiles:
+  requires:
+    - core
+  requires:
+    - rich
+---
+
+Body

@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 12
+---
+
+# H12 {#h12}
+
+Body with **strong** and a [link](#h12).
+
+:::section {#s12}
+## Section 12
+:::

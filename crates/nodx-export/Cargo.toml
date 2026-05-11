@@ -1,8 +1,13 @@
 [package]
 name = "nodx-export"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
+description = "NODX 1.0 PDF (paged HTML bridge), DOCX, and PPTX exporters with loss reports"
+
+[lib]
+name = "nodx_export"
+path = "src/lib.rs"
 
 [dependencies]
 nodx-core = { path = "../nodx-core" }

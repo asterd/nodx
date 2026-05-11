@@ -1,41 +1,68 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: nodx-extended-showcase
-title: NODX Extended Showcase
+title: NODX 1.0 Extended Showcase
 subtitle: Rich document with package-style resources, styles, components, media, and keys
 language: en
 dir: ltr
-authors: [NODX Working Group, Example Corp]
-styles: [styles/editorial.nods]
-components: [components/editorial-components.nodc]
-keys: [keys/editor-public.jwk]
-signatures: [signatures/document.jws]
-history: [history/changes.jsonl]
-requires: [rich-tables, media, custom-components]
-optional: [style, package, signature, agent]
+authors:
+  - name: NODX Working Group
+  - name: Example Corp
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - package
+    - agent-read
 vars:
   company: Example Corp
-  release: 0.1-public
+  release: 1.0
+components:
+  - name: legal-clause
+    fallback: children
+  - name: agent-review
+    fallback: children
+  - name: approval-card
+    fallback: children
 ---
 
-# NODX Extended Showcase {#showcase-title .hero}
-
-This document is intentionally richer than the minimal examples. It declares
-style sheets, component manifests, local media assets, a public verification key,
-signature placeholders, and agent change history while remaining readable as
-plain text.
-
-:::toc {#toc}
+:::toc {#main-nav role="primary" title="Contents" depth="3"}
 :::
+
+# NODX 1.0 Extended Showcase {#showcase-title}
+
+This document exercises the NODX 1.0 reference contract: declarative TOCs,
+explicit `profiles`, safe NODS styling, custom components with fallbacks, safe
+asset references, and agent-readable IDs and hashes.
 
 ::::section {#identity}
 ## Document Identity
 
+:::toc {#identity-nav role="local" title="On this page"}
+:::
+
 :::note {#scope type="info"}
-This is still a source document. The renderer may use styles from
-`styles/editorial.nods` when bundled, but the semantic AST does not depend on
-those presentation rules.
+This is a source document. Renderers may use the inline NODS block below; the
+canonical AST and NCP semantic projection do **not** depend on those rules.
+:::
+
+:::style
+:root {
+  --ink: #1f2937;
+  --accent: #0f766e;
+}
+body { color: var(--ink); font: 16px/1.6 system-ui; }
+h1, h2, h3 { color: var(--accent); }
+[lang="ar"] { direction: rtl; font-feature-settings: "kern" 1; }
+[data-tone="warn"] { background: #fff8e6; padding: 8px 12px; }
+@page { size: A4; margin: 22mm; }
+@media print {
+  nav { display: none; }
+  hr.pagebreak { break-before: page; }
+}
 :::
 
 :::table {#resource-table caption="Declared resource files"}
@@ -52,7 +79,7 @@ Purpose
 styles/editorial.nods
 :::
 :::cell
-Declarative style hints for headings, notes, tables, and custom components.
+Declarative style hints for headings, notes, tables, custom components.
 :::
 :::
 :::row
@@ -60,89 +87,105 @@ Declarative style hints for headings, notes, tables, and custom components.
 components/editorial-components.nodc
 :::
 :::cell
-Component manifest for `legal-clause`, `agent-review`, and `approval-card`.
+Component manifest for `legal-clause`, `agent-review`, `approval-card`.
 :::
 :::
 :::row
 :::cell
-keys/editor-public.jwk
+signatures/document.jws
 :::
 :::cell
-Example public key metadata for future signature validation.
+Detached ES256 JWS over the canonical AST digest.
 :::
 :::
 :::
 ::::
 
-::::section {#custom-components}
+::::section {#components}
 ## Custom Components
 
 :::legal-clause {#legal-it jurisdiction="IT" fallback="children"}
-The legal-clause component renders as ordinary text when unsupported. The
+The `legal-clause` component renders as ordinary text when unsupported. The
 component manifest can add schema and rendering hints without changing the
-fallback.
+fallback semantics.
 :::
 
 :::approval-card {#approval release="{{vars.release}}" status="pending" fallback="children"}
-Approval is pending security review. Agents must create a change record before
-modifying this block.
+Approval is pending security review. Agents must create a change record
+through the Agent SDK before modifying this block.
 :::
 
 :::agent-review {#agent-findings sensitivity="internal" fallback="children"}
-- [x] Stable IDs are present for critical sections
+- [x] Stable IDs on critical sections
 - [x] Unknown components preserve children
-- [ ] Package signature is illustrative only
+- [x] Manifest digests verified at package open
+- [ ] Trust policy bound at host integration time
 :::
 ::::
 
+::::section {#i18n}
+## Internationalisation
+
+NODX 1.0 propagates `lang` and `dir` from front matter and inline spans:
+
+- Latin: The quick brown fox jumps over the lazy dog.
+- [Arabic]{lang="ar" dir="rtl"} (right-to-left): [٩٨ ريال — استعراض]{lang="ar" dir="rtl"}
+- [Chinese]{lang="zh-Hans"}: 国际化展示。
+- [Hebrew]{lang="he" dir="rtl"} (block-level fallback in body): שלום.
+
+Inline switches keep the surrounding paragraph LTR while marking the run with
+`lang`, `dir`, and `title` attributes — the renderer emits matching HTML.
+::::
+
 ::::section {#media}
-## Media And Embeds
+## Media and embeds
 
 :::figure {#fig-architecture}
-:::image {src="assets/reference-pipeline.svg" alt="Pipeline diagram showing parser, validator, canonical AST, and renderers"}
+:::image {src="assets/reference-pipeline.svg" alt="Pipeline diagram: parser, validator, canonical AST, renderers"}
 :::
 :::caption
 Local SVG asset rendered by safe viewers or shown through fallback text.
 :::
 :::
 
-:::media {#demo-video src="assets/demo-placeholder.txt" type="text/plain" alt="Demo transcript placeholder"}
+:::media {#demo-video src="assets/demo-placeholder.txt" alt="Demo transcript placeholder"}
 Media playback is disabled by default. This fallback explains what a video or
 audio renderer would expose in a safe host.
 :::
 
-:::embed {#external-report src="reports/compliance.pdf" type="application/pdf" alt="Compliance report"}
+:::embed {#external-report src="reports/compliance.pdf" alt="Compliance report"}
 This embed points at a package-local report. Renderers that cannot display PDF
 should keep this fallback.
 :::
 ::::
 
-::::section {#citations-and-breaks}
-## Citations, Bibliography, And Print Hints
+::::section {#agent}
+## Agent surface
 
-NODX supports citation references such as [@nodx-wd] and explicit page breaks.
+Agents see resolved IDs and shared `sha256-…` hashes in the NCP semantic
+projection (`nodx ncp doc.nodx`). Mutations go through the Agent SDK, which
+requires `beforeHash`, validates after every operation, and rolls back failed
+batches atomically.
+
+:::code {#sample-change-record lang="jsonl"}
+{"schema":"nodx/change/1.0","op":"set-attribute","target":"#approval","beforeHash":"sha256-…","afterHash":"sha256-…","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Mark approval state","path":"3.2"}
+:::
+::::
+
+::::section {#print}
+## Print, page breaks, bibliography
+
+NODX supports citation references such as @[nodx-wd] and explicit page breaks.
 
 :::pagebreak {#print-break}
 :::
 
 :::bibliography {#bibliography}
-:::citation-entry {#nodx-wd title="NODX 0.1 Working Draft" href="NODX_0.1_Working_Draft.md"}
-NODX Working Group. NODX 0.1 Working Draft. 2026-05-10.
+:::citation-entry {#nodx-wd}
+NODX Working Group. NODX 1.0 Working Draft. 2026-05-10.
 :::
-:::citation-entry {#engine-note title="Reference Engine Technical Note" href="NODX_0.1_Reference_Engine_Note.md"}
+:::citation-entry {#engine-note}
 NODX Working Group. Reference Engine Technical Note. 2026-05-10.
 :::
-:::
-::::
-
-::::section {#agent-history}
-## Agent And Signature Metadata
-
-:::code {#change-jsonl lang="jsonl"}
-{"schema":"nodx/change/0.1","op":"set-attribute","target":"#approval","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Mark approval state","beforeHash":"sha256-demo-before","afterHash":"sha256-demo-after","requiresApproval":true}
-:::
-
-:::code {#jwk lang="json"}
-{"kty":"EC","crv":"P-256","kid":"example-editor-key","use":"sig","alg":"ES256"}
 :::
 ::::

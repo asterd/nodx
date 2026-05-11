@@ -1,0 +1,4 @@
+---
+schema: nodx/1.0
+---
+[data 1](data:image/svg+xml,<svg onload=alert(1)/>)

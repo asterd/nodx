@@ -1,0 +1,15 @@
+---
+schema: nodx/1.0
+title: Variant 6
+---
+
+# Variant 6 {#v6}
+
+Paragraph 6 with **bold** and *em* and `code`.
+
+- item 6
+- bullet
+
+| col1 | col2 |
+| - | - |
+| a | b |

@@ -1,13 +1,57 @@
-use crate::ast::{Document, Node};
-use crate::bytes::sha256_base64url;
-use crate::canonical::{canonical_json, write_json_string, write_str_map};
-use crate::inline_parser::plain_inlines;
-use crate::navigation::{NavigationGraph, resolve_navigation};
+#![forbid(unsafe_code)]
+
+use nodx_core::{
+    Document, NavigationGraph, Node, canonical::write_json_string, canonical::write_str_map,
+    canonical_json, plain_inlines, resolve_navigation, sha256_base64url,
+};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NcpMode {
+    Semantic,
+}
 
 pub fn ncp_json(doc: &Document) -> String {
+    ncp_json_with_mode(doc, NcpMode::Semantic)
+}
+
+pub fn ncp_json_with_mode(doc: &Document, mode: NcpMode) -> String {
+    match mode {
+        NcpMode::Semantic => render_semantic(doc),
+    }
+}
+
+pub fn node_hash(node: &Node) -> String {
+    sha256_base64url(node_hash_input(node).as_bytes())
+}
+
+pub fn document_hash(doc: &Document) -> String {
+    sha256_base64url(canonical_json(doc).as_bytes())
+}
+
+pub fn node_hash_input(node: &Node) -> String {
+    let mut out = String::new();
+    out.push_str(&node.node_type);
+    out.push('\n');
+    if let Some(id) = &node.id {
+        out.push_str(id);
+    }
+    out.push('\n');
+    write_str_map(&mut out, &node.attrs);
+    out.push('\n');
+    out.push_str(node.text.as_deref().unwrap_or(""));
+    out.push_str(&plain_inlines(&node.inlines));
+    for child in &node.children {
+        out.push('\n');
+        out.push_str(&node_hash_input(child));
+    }
+    out
+}
+
+fn render_semantic(doc: &Document) -> String {
     let canonical = canonical_json(doc);
     let ids = collect_node_ids(&doc.body);
     let chunk_hash = sha256_base64url(ids.join("\n").as_bytes());
+    let navigation = resolve_navigation(doc);
     let mut out = String::from("{\"chunks\":[{\"id\":\"chunk-1\",\"nodes\":[");
     for (i, id) in ids.iter().enumerate() {
         if i > 0 {
@@ -18,7 +62,6 @@ pub fn ncp_json(doc: &Document) -> String {
     out.push_str("],\"sha256\":");
     write_json_string(&mut out, &chunk_hash);
     out.push_str("}],\"loss\":[],\"mode\":\"semantic\",\"nodes\":");
-    let navigation = resolve_navigation(doc);
     write_ncp_nodes(&mut out, &doc.body, "", &navigation);
     out.push_str(",\"schema\":\"nodx-ncp/1.0\",\"sourceHash\":");
     write_json_string(&mut out, &sha256_base64url(canonical.as_bytes()));
@@ -70,7 +113,7 @@ fn write_ncp_node(out: &mut String, node: &Node, path: &str, navigation: &Naviga
     out.push_str(",\"path\":");
     write_json_string(out, path);
     out.push_str(",\"sha256\":");
-    write_json_string(out, &sha256_base64url(ncp_node_hash_input(node).as_bytes()));
+    write_json_string(out, &node_hash(node));
     out.push_str(",\"text\":");
     let text = node
         .text
@@ -111,21 +154,24 @@ fn write_navigation_entries(out: &mut String, path: &str, navigation: &Navigatio
     out.push(']');
 }
 
-fn ncp_node_hash_input(node: &Node) -> String {
-    let mut out = String::new();
-    out.push_str(&node.node_type);
-    out.push('\n');
-    if let Some(id) = &node.id {
-        out.push_str(id);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nodx_core::parse_str;
+
+    #[test]
+    fn semantic_projection_is_stable() {
+        let doc = parse_str("---\nschema: nodx/1.0\n---\n# Hello {#h}\n");
+        let json = ncp_json(&doc);
+        assert!(json.contains("\"schema\":\"nodx-ncp/1.0\""));
+        assert!(json.contains("\"id\":\"h\""));
     }
-    out.push('\n');
-    write_str_map(&mut out, &node.attrs);
-    out.push('\n');
-    out.push_str(node.text.as_deref().unwrap_or(""));
-    out.push_str(&plain_inlines(&node.inlines));
-    for child in &node.children {
-        out.push('\n');
-        out.push_str(&ncp_node_hash_input(child));
+
+    #[test]
+    fn node_hash_is_deterministic() {
+        let doc = parse_str("---\nschema: nodx/1.0\n---\n# A {#a}\n");
+        let a = node_hash(&doc.body[0]);
+        let b = node_hash(&doc.body[0]);
+        assert_eq!(a, b);
     }
-    out
 }

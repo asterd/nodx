@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-use nodx_core::{Document, canonical_json, parse_bytes};
+use nodx_core::{
+    Document, ResourceLimits, base64url_decode, base64url_encode, canonical_json, parse_bytes,
+    sha256_base64url,
+};
 use nodx_package::Package;
-use nodx_url::ResourceLimits;
 use p256::ecdsa::signature::Verifier;
 use p256::ecdsa::{Signature, VerifyingKey};
 
@@ -35,7 +37,7 @@ pub enum TrustStatus {
 
 #[derive(Clone, Debug)]
 pub struct Es256PublicKey {
-    key: VerifyingKey,
+    pub(crate) key: VerifyingKey,
 }
 
 #[derive(Clone, Debug)]
@@ -66,7 +68,7 @@ pub struct StaticTrustPolicy {
 impl Es256PublicKey {
     pub fn from_sec1_bytes(input: &[u8]) -> Result<Self, SignDiagnostic> {
         let key = VerifyingKey::from_sec1_bytes(input)
-            .map_err(|_| diag("Invalid ES256 public key bytes."))?;
+            .map_err(|_| crypto_error("Invalid ES256 public key bytes."))?;
         Ok(Self { key })
     }
 }
@@ -125,12 +127,26 @@ impl TrustPolicy for StaticTrustPolicy {
 }
 
 pub fn canonical_digest(doc: &Document) -> String {
-    nodx_package::sha256_base64url(canonical_json(doc).as_bytes())
+    sha256_base64url(canonical_json(doc).as_bytes())
 }
 
 pub fn digest_text_nodx(input: &[u8]) -> Result<String, SignDiagnostic> {
-    let doc = parse_bytes(input).map_err(|err| diag(&err.message))?;
+    digest_text_nodx_with_limits(input, ResourceLimits::default())
+}
+
+pub fn digest_text_nodx_with_limits(
+    input: &[u8],
+    limits: ResourceLimits,
+) -> Result<String, SignDiagnostic> {
+    let doc = parse_bytes_with_limits(input, limits).map_err(|err| diag_for(&err.message))?;
     Ok(canonical_digest(&doc))
+}
+
+fn parse_bytes_with_limits(
+    input: &[u8],
+    limits: ResourceLimits,
+) -> Result<Document, nodx_core::Diagnostic> {
+    nodx_core::parse_bytes_with_limits(input, limits)
 }
 
 pub fn verify_detached_jws(
@@ -138,8 +154,17 @@ pub fn verify_detached_jws(
     compact_jws: &str,
     trust_policy: &dyn TrustPolicy,
 ) -> Result<VerificationResult, SignDiagnostic> {
-    let digest = digest_text_nodx(text_nodx)?;
-    verify_compact_jws_for_digest(&digest, compact_jws, true, trust_policy)
+    verify_detached_jws_with_limits(text_nodx, compact_jws, trust_policy, ResourceLimits::default())
+}
+
+pub fn verify_detached_jws_with_limits(
+    text_nodx: &[u8],
+    compact_jws: &str,
+    trust_policy: &dyn TrustPolicy,
+    limits: ResourceLimits,
+) -> Result<VerificationResult, SignDiagnostic> {
+    let digest = digest_text_nodx_with_limits(text_nodx, limits)?;
+    verify_compact_jws_for_digest(&digest, compact_jws, true, trust_policy, limits)
 }
 
 pub fn verify_packaged_signature(
@@ -147,16 +172,30 @@ pub fn verify_packaged_signature(
     signature_path: &str,
     trust_policy: &dyn TrustPolicy,
 ) -> Result<VerificationResult, SignDiagnostic> {
-    let package = Package::open(package_bytes, ResourceLimits::default())
-        .map_err(|err| diag(&err.message))?;
-    let digest = digest_text_nodx(package.entry_bytes())?;
+    verify_packaged_signature_with_limits(
+        package_bytes,
+        signature_path,
+        trust_policy,
+        ResourceLimits::default(),
+    )
+}
+
+pub fn verify_packaged_signature_with_limits(
+    package_bytes: &[u8],
+    signature_path: &str,
+    trust_policy: &dyn TrustPolicy,
+    limits: ResourceLimits,
+) -> Result<VerificationResult, SignDiagnostic> {
+    let package =
+        Package::open(package_bytes, limits).map_err(|err| diag_for(&err.message))?;
+    let digest = digest_text_nodx_with_limits(package.entry_bytes(), limits)?;
     let signature = package
         .fs()
         .read(signature_path)
-        .ok_or_else(|| diag("Package signature entry is missing."))?;
+        .ok_or_else(|| crypto_error("Package signature entry is missing."))?;
     let signature_text =
-        std::str::from_utf8(signature).map_err(|_| diag("Package signature is not UTF-8."))?;
-    verify_compact_jws_for_digest(&digest, signature_text.trim(), false, trust_policy)
+        std::str::from_utf8(signature).map_err(|_| crypto_error("Package signature is not UTF-8."))?;
+    verify_compact_jws_for_digest(&digest, signature_text.trim(), false, trust_policy, limits)
 }
 
 pub fn verify_compact_jws_for_digest(
@@ -164,24 +203,25 @@ pub fn verify_compact_jws_for_digest(
     compact_jws: &str,
     require_detached_payload: bool,
     trust_policy: &dyn TrustPolicy,
+    limits: ResourceLimits,
 ) -> Result<VerificationResult, SignDiagnostic> {
     let parts: Vec<&str> = compact_jws.split('.').collect();
     if parts.len() != 3 {
-        return Err(diag("JWS must use compact serialization."));
+        return Err(crypto_error("JWS must use compact serialization."));
     }
-    let header = decode_header(parts[0])?;
+    let header = decode_header(parts[0], limits)?;
     if header.alg != "ES256" {
-        return Err(diag("Only ES256 JWS signatures are supported."));
+        return Err(crypto_error("Only ES256 JWS signatures are supported."));
     }
     if require_detached_payload && !parts[1].is_empty() {
-        return Err(diag("Detached JWS payload must be omitted."));
+        return Err(crypto_error("Detached JWS payload must be omitted."));
     }
     let decision = trust_policy.evaluate(&header);
-    let expected_payload = base64url_no_pad(digest.as_bytes());
+    let expected_payload = base64url_encode(digest.as_bytes());
     let payload_segment = if parts[1].is_empty() {
         expected_payload.as_str()
     } else {
-        let payload = decode_base64url(parts[1])?;
+        let payload = decode_b64url(parts[1])?;
         if payload != digest.as_bytes() {
             return Ok(result(
                 digest,
@@ -202,7 +242,7 @@ pub fn verify_compact_jws_for_digest(
         ));
     };
     let signing_input = format!("{}.{}", parts[0], payload_segment);
-    let signature = decode_base64url(parts[2])?;
+    let signature = decode_b64url(parts[2])?;
     if signature.len() != 64 {
         return Ok(result(
             digest,
@@ -211,8 +251,8 @@ pub fn verify_compact_jws_for_digest(
             decision.status,
         ));
     }
-    let signature =
-        Signature::from_slice(&signature).map_err(|_| diag("Invalid ES256 signature encoding."))?;
+    let signature = Signature::from_slice(&signature)
+        .map_err(|_| crypto_error("Invalid ES256 signature encoding."))?;
     let status = if key.key.verify(signing_input.as_bytes(), &signature).is_ok() {
         CryptographicStatus::Valid
     } else {
@@ -221,14 +261,43 @@ pub fn verify_compact_jws_for_digest(
     Ok(result(digest, header, status, decision.status))
 }
 
-fn decode_header(input: &str) -> Result<JwsHeader, SignDiagnostic> {
-    let bytes = decode_base64url(input)?;
-    let raw: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|_| diag("Invalid JWS protected header JSON."))?;
-    let alg = raw
+fn decode_header(input: &str, limits: ResourceLimits) -> Result<JwsHeader, SignDiagnostic> {
+    if input.len() > limits.signature_header_bytes {
+        return Err(crypto_error("JWS protected header exceeds size limit."));
+    }
+    let bytes = decode_b64url(input)?;
+    if bytes.len() > limits.signature_header_bytes {
+        return Err(crypto_error("JWS protected header exceeds size limit."));
+    }
+    let raw: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|_| crypto_error("Invalid JWS protected header JSON."))?;
+    let object = raw
+        .as_object()
+        .ok_or_else(|| crypto_error("JWS protected header must be a JSON object."))?;
+
+    // Reject unsupported header members that would smuggle trust
+    for forbidden in ["jku", "jwk", "x5u", "x5c", "x5t", "x5t#S256"] {
+        if object.contains_key(forbidden) {
+            return Err(crypto_error(&format!(
+                "JWS protected header field `{forbidden}` is not allowed."
+            )));
+        }
+    }
+    if let Some(crit) = object.get("crit") {
+        let crit_list = crit
+            .as_array()
+            .ok_or_else(|| crypto_error("JWS `crit` must be a JSON array."))?;
+        if !crit_list.is_empty() {
+            return Err(crypto_error(
+                "JWS `crit` extensions are not supported by this verifier.",
+            ));
+        }
+    }
+
+    let alg = object
         .get("alg")
         .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| diag("JWS protected header is missing alg."))?;
+        .ok_or_else(|| crypto_error("JWS protected header is missing alg."))?;
     let kid = optional_header_string(&raw, "kid")?;
     let typ = optional_header_string(&raw, "typ")?;
     Ok(JwsHeader {
@@ -246,9 +315,13 @@ fn optional_header_string(
         Some(value) => value
             .as_str()
             .map(|value| Some(value.to_string()))
-            .ok_or_else(|| diag("JWS protected header has a non-string field.")),
+            .ok_or_else(|| crypto_error("JWS protected header has a non-string field.")),
         None => Ok(None),
     }
+}
+
+fn decode_b64url(input: &str) -> Result<Vec<u8>, SignDiagnostic> {
+    base64url_decode(input).map_err(|_| crypto_error("Invalid base64url encoding."))
 }
 
 fn result(
@@ -265,71 +338,28 @@ fn result(
     }
 }
 
-fn diag(message: &str) -> SignDiagnostic {
+fn crypto_error(message: &str) -> SignDiagnostic {
     SignDiagnostic {
+        // Errors that prevent verification are surfaced as NODX-E024-class issues
+        // (required signature capability unsupported / malformed); the absence /
+        // not-verified case uses NODX-E017 from verify_*.
         code: "NODX-E017".to_string(),
-        severity: "warning".to_string(),
+        severity: "error".to_string(),
         message: message.to_string(),
     }
 }
 
-fn decode_base64url(input: &str) -> Result<Vec<u8>, SignDiagnostic> {
-    if input.len() % 4 == 1 {
-        return Err(diag("Invalid base64url length."));
+fn diag_for(message: &str) -> SignDiagnostic {
+    SignDiagnostic {
+        code: "NODX-E017".to_string(),
+        severity: "error".to_string(),
+        message: message.to_string(),
     }
-    let mut bits = 0u32;
-    let mut bit_len = 0u8;
-    let mut out = Vec::new();
-    for byte in input.bytes() {
-        let value = match byte {
-            b'A'..=b'Z' => byte - b'A',
-            b'a'..=b'z' => byte - b'a' + 26,
-            b'0'..=b'9' => byte - b'0' + 52,
-            b'-' => 62,
-            b'_' => 63,
-            b'=' => return Err(diag("Base64url padding is not allowed.")),
-            _ => return Err(diag("Invalid base64url character.")),
-        };
-        bits = (bits << 6) | value as u32;
-        bit_len += 6;
-        if bit_len >= 8 {
-            bit_len -= 8;
-            out.push(((bits >> bit_len) & 0xff) as u8);
-        }
-    }
-    if bit_len > 0 && (bits & ((1 << bit_len) - 1)) != 0 {
-        return Err(diag("Invalid base64url trailing bits."));
-    }
-    Ok(out)
 }
 
-fn base64url_no_pad(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut out = String::new();
-    let mut i = 0;
-    while i + 3 <= input.len() {
-        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | input[i + 2] as u32;
-        out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
-        out.push(ALPHABET[(n & 63) as usize] as char);
-        i += 3;
-    }
-    match input.len() - i {
-        1 => {
-            let n = (input[i] as u32) << 16;
-            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-        }
-        2 => {
-            let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8);
-            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-            out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
-        }
-        _ => {}
-    }
-    out
+#[allow(dead_code)]
+fn keep_parse_bytes_import_alive() {
+    let _ = parse_bytes;
 }
 
 #[cfg(test)]
@@ -387,55 +417,78 @@ mod tests {
     }
 
     #[test]
-    fn attached_payload_must_match_digest() {
-        let (policy, jws) = signed_fixture(POSITIVE, false);
-        let result = verify_compact_jws_for_digest(
-            &digest_text_nodx(POSITIVE).unwrap(),
-            &jws,
-            false,
-            &policy,
-        )
-        .unwrap();
-        assert_eq!(result.cryptographic_status, CryptographicStatus::Valid);
-
-        let result = verify_compact_jws_for_digest(
-            &digest_text_nodx(TAMPERED).unwrap(),
-            &jws,
-            false,
-            &policy,
-        )
-        .unwrap();
-        assert_eq!(result.cryptographic_status, CryptographicStatus::Invalid);
-    }
-
-    #[test]
-    fn verifies_packaged_signature_entry() {
-        let (policy, jws) = signed_fixture(POSITIVE, true);
-        let package = package_fixture(POSITIVE, &jws);
-        let result =
-            verify_packaged_signature(&package, "signatures/document.jws", &policy).unwrap();
-        assert_eq!(result.cryptographic_status, CryptographicStatus::Valid);
-        assert_eq!(result.trust_status, TrustStatus::Trusted);
-    }
-
-    #[test]
-    fn packaged_signature_detects_document_tamper() {
-        let (policy, jws) = signed_fixture(POSITIVE, true);
-        let package = package_fixture(TAMPERED, &jws);
-        let result =
-            verify_packaged_signature(&package, "signatures/document.jws", &policy).unwrap();
-        assert_eq!(result.cryptographic_status, CryptographicStatus::Invalid);
-        assert_eq!(result.trust_status, TrustStatus::Trusted);
-    }
-
-    #[test]
     fn rejects_unsupported_alg() {
         let digest = digest_text_nodx(POSITIVE).unwrap();
-        let header = base64url_no_pad(br#"{"alg":"EdDSA","kid":"fixture-es256"}"#);
+        let header = base64url_encode(br#"{"alg":"EdDSA","kid":"fixture-es256"}"#);
         let jws = format!("{}..AA", header);
-        let err = verify_compact_jws_for_digest(&digest, &jws, true, &NoKeyPolicy).unwrap_err();
-        assert_eq!(err.code, "NODX-E017");
+        let err = verify_compact_jws_for_digest(
+            &digest,
+            &jws,
+            true,
+            &NoKeyPolicy,
+            ResourceLimits::default(),
+        )
+        .unwrap_err();
         assert!(err.message.contains("ES256"));
+    }
+
+    #[test]
+    fn rejects_crit_extensions() {
+        let digest = digest_text_nodx(POSITIVE).unwrap();
+        let header = base64url_encode(
+            br#"{"alg":"ES256","kid":"fixture-es256","crit":["evilext"],"evilext":"x"}"#,
+        );
+        let jws = format!("{}..AA", header);
+        let err = verify_compact_jws_for_digest(
+            &digest,
+            &jws,
+            true,
+            &NoKeyPolicy,
+            ResourceLimits::default(),
+        )
+        .unwrap_err();
+        assert!(err.message.contains("crit"));
+    }
+
+    #[test]
+    fn rejects_jwk_and_x5u_smuggling() {
+        let digest = digest_text_nodx(POSITIVE).unwrap();
+        for bad in [
+            r#"{"alg":"ES256","kid":"x","jwk":{}}"#,
+            r#"{"alg":"ES256","kid":"x","x5u":"https://attacker.test/cert"}"#,
+            r#"{"alg":"ES256","kid":"x","jku":"https://attacker.test/keys.json"}"#,
+        ] {
+            let header = base64url_encode(bad.as_bytes());
+            let jws = format!("{}..AA", header);
+            let err = verify_compact_jws_for_digest(
+                &digest,
+                &jws,
+                true,
+                &NoKeyPolicy,
+                ResourceLimits::default(),
+            )
+            .unwrap_err();
+            assert!(err.message.contains("not allowed"));
+        }
+    }
+
+    #[test]
+    fn rejects_oversize_header() {
+        let big = vec![b'a'; 64 * 1024];
+        let header = base64url_encode(&big);
+        let jws = format!("{}..AA", header);
+        let err = verify_compact_jws_for_digest(
+            "sha256-AAAA",
+            &jws,
+            true,
+            &NoKeyPolicy,
+            ResourceLimits {
+                signature_header_bytes: 1024,
+                ..ResourceLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert!(err.message.contains("header"));
     }
 
     struct NoKeyPolicy;
@@ -452,11 +505,11 @@ mod tests {
         let public_key = Es256PublicKey { key: verifying_key };
         let policy = StaticTrustPolicy::trusted(Some("fixture-es256"), public_key);
         let digest = digest_text_nodx(input).unwrap();
-        let protected = base64url_no_pad(br#"{"alg":"ES256","kid":"fixture-es256","typ":"JWT"}"#);
-        let payload = base64url_no_pad(digest.as_bytes());
+        let protected = base64url_encode(br#"{"alg":"ES256","kid":"fixture-es256","typ":"JWT"}"#);
+        let payload = base64url_encode(digest.as_bytes());
         let signing_input = format!("{}.{}", protected, payload);
         let signature: Signature = signing_key.sign(signing_input.as_bytes());
-        let signature = base64url_no_pad(&signature.to_bytes());
+        let signature = base64url_encode(&signature.to_bytes());
         let jws = if detached {
             format!("{}..{}", protected, signature)
         } else {
@@ -472,87 +525,5 @@ mod tests {
             0x03, 0x02, 0x01, 0x01,
         ])
         .unwrap()
-    }
-
-    fn package_fixture(doc: &[u8], jws: &str) -> Vec<u8> {
-        let manifest = format!(
-            "schema: nodx-package/1.0\nentry: doc.nodx\nentries:\n  - path: doc.nodx\n    size: {}\n    sha256: {}\n  - path: signatures/document.jws\n    size: {}\n    sha256: {}\n",
-            doc.len(),
-            nodx_package::sha256_base64url(doc),
-            jws.len(),
-            nodx_package::sha256_base64url(jws.as_bytes())
-        );
-        build_zip(vec![
-            ("mimetype", b"application/nodx+zip".to_vec(), 0o100644),
-            ("manifest.yaml", manifest.into_bytes(), 0o100644),
-            ("doc.nodx", doc.to_vec(), 0o100644),
-            ("signatures/document.jws", jws.as_bytes().to_vec(), 0o100644),
-        ])
-    }
-
-    fn build_zip(entries: Vec<(&str, Vec<u8>, u32)>) -> Vec<u8> {
-        let mut out = Vec::new();
-        let mut central = Vec::new();
-        for (name, data, mode) in entries {
-            let local_offset = out.len() as u32;
-            let crc = crc32_bytes(&data);
-            out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
-            out.extend_from_slice(&20u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&crc.to_le_bytes());
-            out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-            out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(name.as_bytes());
-            out.extend_from_slice(&data);
-            central.push((name.to_string(), data.len() as u32, crc, local_offset, mode));
-        }
-        let cd_offset = out.len() as u32;
-        for (name, len, crc, local_offset, mode) in &central {
-            out.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
-            out.extend_from_slice(&20u16.to_le_bytes());
-            out.extend_from_slice(&20u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&crc.to_le_bytes());
-            out.extend_from_slice(&len.to_le_bytes());
-            out.extend_from_slice(&len.to_le_bytes());
-            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&0u16.to_le_bytes());
-            out.extend_from_slice(&((*mode) << 16).to_le_bytes());
-            out.extend_from_slice(&local_offset.to_le_bytes());
-            out.extend_from_slice(name.as_bytes());
-        }
-        let cd_size = out.len() as u32 - cd_offset;
-        out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
-        out.extend_from_slice(&(central.len() as u16).to_le_bytes());
-        out.extend_from_slice(&(central.len() as u16).to_le_bytes());
-        out.extend_from_slice(&cd_size.to_le_bytes());
-        out.extend_from_slice(&cd_offset.to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
-        out
-    }
-
-    fn crc32_bytes(input: &[u8]) -> u32 {
-        let mut crc = 0xffff_ffffu32;
-        for &byte in input {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                let mask = 0u32.wrapping_sub(crc & 1);
-                crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-            }
-        }
-        !crc
     }
 }

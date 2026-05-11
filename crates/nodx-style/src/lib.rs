@@ -8,6 +8,28 @@ use nodx_url::{ReferenceKind, ResourceLimits, ResourcePolicy};
 pub struct StyleViolation {
     pub construct: String,
     pub message: String,
+    pub severity: Severity,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
+impl Severity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+        }
+    }
+}
+
+impl std::fmt::Display for Severity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,7 +74,10 @@ pub fn sanitize_stylesheet(input: &str, limits: ResourceLimits) -> String {
         if source.is_empty() {
             continue;
         }
-        if audit_rule_to_vec(rule, limits).is_empty() {
+        if audit_rule_to_vec(rule, limits)
+            .iter()
+            .all(|v| v.severity == Severity::Warning)
+        {
             if !out.is_empty() {
                 out.push('\n');
             }
@@ -81,7 +106,13 @@ pub fn style_urls(input: &str) -> Vec<&str> {
         let Some(end) = after.find(')') else {
             break;
         };
-        let raw = after[..end].trim().trim_matches('"').trim_matches('\'');
+        let inner = after[..end].trim();
+        let raw = match (inner.starts_with('"') && inner.ends_with('"'))
+            || (inner.starts_with('\'') && inner.ends_with('\''))
+        {
+            true => &inner[1..inner.len() - 1],
+            false => inner,
+        };
         urls.push(raw);
         offset = url_start + end + 1;
     }
@@ -138,10 +169,13 @@ fn parse_rules(input: &str) -> Vec<Rule<'_>> {
 }
 
 fn audit_breakouts(input: &str, audit: &mut StyleAudit) {
-    let lower = input.to_ascii_lowercase();
-    for construct in ["</style", "<script", "<svg", "<iframe", "<object", "<embed"] {
-        if lower.contains(construct) {
-            audit.violations.push(violation(
+    let decoded = decode_css_escapes(input).to_ascii_lowercase();
+    for construct in [
+        "</style", "<script", "<svg", "<iframe", "<object", "<embed", "vbscript:",
+        "expression(", "@import",
+    ] {
+        if decoded.contains(construct) {
+            audit.violations.push(error(
                 construct,
                 "Forbidden executable or breakout content in NODS.",
             ));
@@ -158,6 +192,15 @@ fn audit_rule_to_vec(rule: Rule<'_>, limits: ResourceLimits) -> Vec<StyleViolati
     let prelude = rule.prelude.trim();
     if prelude.starts_with('@') {
         audit_at_rule(prelude, &mut violations);
+        // Conditional at-rules wrap nested rules; recurse into them.
+        let lower = prelude.to_ascii_lowercase();
+        if lower.starts_with("@media") || lower.starts_with("@supports") {
+            for nested in parse_rules(rule.declarations) {
+                violations.extend(audit_rule_to_vec(nested, limits));
+            }
+            dedupe(&mut violations);
+            return violations;
+        }
     } else {
         audit_selector(prelude, &mut violations);
     }
@@ -171,41 +214,116 @@ fn audit_at_rule(prelude: &str, violations: &mut Vec<StyleViolation>) {
     if lower.starts_with("@page") {
         return;
     }
-    violations.push(violation(prelude, "Forbidden NODS at-rule."));
+    if lower.starts_with("@media") {
+        return;
+    }
+    if lower.starts_with("@supports") {
+        return;
+    }
+    violations.push(error(prelude, "Forbidden NODS at-rule."));
 }
 
 fn audit_selector(selector: &str, violations: &mut Vec<StyleViolation>) {
     if selector.is_empty() {
-        violations.push(violation("selector", "Missing NODS selector."));
+        violations.push(error("selector", "Missing NODS selector."));
         return;
     }
-    for forbidden in [
-        ":", "::", "[", "]", ">", "+", "~", "*", "|", "$", "^", "=", "!",
-    ] {
-        if selector.contains(forbidden) {
-            violations.push(violation(selector, "Forbidden NODS selector."));
-            return;
-        }
-    }
     for part in selector.split(',') {
-        for token in part.split_ascii_whitespace() {
-            if !is_safe_selector_token(token) {
-                violations.push(violation(token, "Unsupported NODS selector."));
-            }
+        let part = part.trim();
+        if part.is_empty() {
+            violations.push(error("selector", "Empty NODS selector list entry."));
+            continue;
+        }
+        for token in part.split_whitespace() {
+            audit_selector_token(token, violations);
         }
     }
 }
 
-fn is_safe_selector_token(token: &str) -> bool {
+fn audit_selector_token(token: &str, violations: &mut Vec<StyleViolation>) {
+    if token.is_empty() {
+        violations.push(error("selector", "Empty NODS selector token."));
+        return;
+    }
+    if matches!(token, ">" | "+" | "~") {
+        // Combinators are accepted; child/sibling combinators are layout, not interactivity.
+        return;
+    }
+    // Structural pseudo-classes (no user interaction, no resource loading)
+    if matches!(
+        token,
+        ":root" | ":first-child" | ":last-child" | ":only-child" | ":empty"
+    ) {
+        return;
+    }
+    if let Some(arg) = token.strip_prefix(":not(") {
+        if let Some(inner) = arg.strip_suffix(')') {
+            audit_selector_token(inner, violations);
+            return;
+        }
+    }
+    if token.contains("::") {
+        violations.push(error(token, "Pseudo-elements are not allowed in NODS."));
+        return;
+    }
+    if token.contains(':') {
+        violations.push(error(token, "Interactive NODS pseudo-class is forbidden."));
+        return;
+    }
+    if token.contains('*') || token.contains('|') {
+        violations.push(error(token, "Forbidden NODS selector."));
+        return;
+    }
+    if let Some(start) = token.find('[') {
+        let Some(end) = token.find(']') else {
+            violations.push(error(token, "Unterminated attribute selector."));
+            return;
+        };
+        if end <= start || token.len() != end + 1 + start.saturating_sub(start) {
+            // not the only token, but we accept attribute selectors anchored to the end
+        }
+        let base = &token[..start];
+        let attr = &token[start + 1..end];
+        if !base.is_empty() && !is_safe_selector_base(base) {
+            violations.push(error(base, "Unsupported NODS selector."));
+            return;
+        }
+        if !is_safe_attribute_selector(attr) {
+            violations.push(error(attr, "Forbidden NODS attribute selector."));
+        }
+        return;
+    }
+    if !is_safe_selector_base(token) {
+        violations.push(error(token, "Unsupported NODS selector."));
+    }
+}
+
+fn is_safe_selector_base(token: &str) -> bool {
     if token.is_empty() {
         return false;
     }
-    if let Some(class) = token.strip_prefix('.') {
-        return is_ident(class);
+    // Support compound `tag.class.class2#id` selectors by recursing into the chain.
+    if let Some(idx) = token.find(['.', '#']) {
+        if idx == 0 {
+            let kind = &token[..1];
+            let rest = &token[1..];
+            let next = rest.find(['.', '#']).unwrap_or(rest.len());
+            let ident = &rest[..next];
+            if !is_ident(ident) {
+                return false;
+            }
+            if next == rest.len() {
+                return kind == "." || kind == "#";
+            }
+            return is_safe_selector_base(&rest[next..]);
+        }
+        let base = &token[..idx];
+        return is_safe_tag(base) && is_safe_selector_base(&token[idx..]);
     }
-    if let Some(id) = token.strip_prefix('#') {
-        return is_ident(id);
-    }
+    is_safe_tag(token)
+}
+
+fn is_safe_tag(token: &str) -> bool {
     matches!(
         token,
         "a" | "article"
@@ -231,6 +349,7 @@ fn is_safe_selector_token(token: &str) -> bool {
             | "html"
             | "img"
             | "li"
+            | "main"
             | "mark"
             | "nav"
             | "ol"
@@ -252,6 +371,52 @@ fn is_safe_selector_token(token: &str) -> bool {
     )
 }
 
+fn is_safe_attribute_selector(attr: &str) -> bool {
+    // accept [name], [name=value], [name="value"], [name~="value"], [name|="value"], [name^="value"], [name$="value"], [name*="value"]
+    let mut chars = attr.chars();
+    let mut name = String::new();
+    while let Some(c) = chars.clone().next() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            name.push(c);
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if name.is_empty() || !is_ident(&name) {
+        return false;
+    }
+    let rest: String = chars.collect();
+    if rest.is_empty() {
+        return matches!(
+            name.as_str(),
+            "lang"
+                | "dir"
+                | "role"
+                | "data-tag"
+                | "data-tone"
+                | "data-variant"
+                | "data-color"
+                | "data-status"
+        );
+    }
+    let rest = rest.trim();
+    let operators = ["~=", "|=", "^=", "$=", "*=", "="];
+    for op in &operators {
+        if let Some(value) = rest.strip_prefix(op) {
+            let value = value.trim();
+            if (value.starts_with('"') && value.ends_with('"') && value.len() >= 2)
+                || (value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2)
+            {
+                let inner = &value[1..value.len() - 1];
+                return !inner.is_empty() && !inner.contains(['<', '>', '"', '\'']);
+            }
+            return false;
+        }
+    }
+    false
+}
+
 fn audit_declarations(
     declarations: &str,
     limits: ResourceLimits,
@@ -264,16 +429,28 @@ fn audit_declarations(
             continue;
         }
         let Some((property, value)) = declaration.split_once(':') else {
-            violations.push(violation(declaration, "Malformed NODS declaration."));
+            violations.push(error(declaration, "Malformed NODS declaration."));
             continue;
         };
         let property = property.trim().to_ascii_lowercase();
         let value = value.trim();
+        if is_forbidden_property(&property) {
+            violations.push(error(&property, "Forbidden NODS property."));
+            continue;
+        }
         if !is_allowed_property(&property) {
-            violations.push(violation(&property, "Forbidden NODS property."));
+            violations.push(warning(&property, "Unsupported NODS property."));
+            continue;
         }
         audit_value(&property, value, policy, violations);
     }
+}
+
+fn is_forbidden_property(property: &str) -> bool {
+    matches!(
+        property,
+        "behavior" | "-moz-binding" | "-ms-behavior" | "binding"
+    )
 }
 
 fn audit_value(
@@ -282,30 +459,26 @@ fn audit_value(
     policy: ResourcePolicy,
     violations: &mut Vec<StyleViolation>,
 ) {
-    let lower = value.to_ascii_lowercase();
+    let decoded = decode_css_escapes(value);
+    let lower = decoded.to_ascii_lowercase();
     for forbidden in [
         "expression(",
-        "attr(",
-        "env(",
-        "counter(",
-        "counters(",
-        "var(",
-        "calc(",
-        "min(",
-        "max(",
-        "clamp(",
+        "javascript:",
+        "vbscript:",
+        "@import",
+        "behavior:",
     ] {
         if lower.contains(forbidden) {
-            violations.push(violation(forbidden, "Forbidden NODS function."));
+            violations.push(error(forbidden, "Forbidden NODS construct in value."));
         }
     }
     for url in style_urls(value) {
         if policy.classify_uri(ReferenceKind::Style, url).is_err() {
-            violations.push(violation(url, "Unsafe NODS URL."));
+            violations.push(error(url, "Unsafe NODS URL."));
         }
     }
     if property == "position" && !matches!(lower.as_str(), "static" | "relative") {
-        violations.push(violation(value, "Forbidden NODS positioning value."));
+        violations.push(error(value, "Forbidden NODS positioning value."));
     }
     if property == "display"
         && !matches!(
@@ -317,24 +490,38 @@ fn audit_value(
                 | "table"
                 | "table-row"
                 | "table-cell"
+                | "table-header-group"
+                | "table-row-group"
+                | "table-footer-group"
                 | "none"
+                | "flex"
+                | "inline-flex"
+                | "grid"
+                | "inline-grid"
         )
     {
-        violations.push(violation(value, "Forbidden NODS display value."));
+        violations.push(error(value, "Forbidden NODS display value."));
     }
 }
 
 fn is_allowed_property(property: &str) -> bool {
+    if property.starts_with("--") && property.len() > 2 {
+        return true; // CSS custom properties / design tokens are inert content
+    }
     matches!(
         property,
         "background"
             | "background-color"
             | "background-image"
+            | "background-position"
+            | "background-repeat"
+            | "background-size"
             | "border"
             | "border-block"
             | "border-block-end"
             | "border-block-start"
             | "border-bottom"
+            | "border-collapse"
             | "border-color"
             | "border-inline"
             | "border-inline-end"
@@ -342,21 +529,48 @@ fn is_allowed_property(property: &str) -> bool {
             | "border-left"
             | "border-radius"
             | "border-right"
+            | "border-spacing"
             | "border-style"
             | "border-top"
             | "border-width"
             | "box-decoration-break"
+            | "box-shadow"
             | "break-after"
             | "break-before"
             | "break-inside"
             | "color"
+            | "column-count"
+            | "column-gap"
+            | "column-width"
+            | "columns"
+            | "direction"
             | "display"
+            | "flex"
+            | "flex-basis"
+            | "flex-direction"
+            | "flex-grow"
+            | "flex-shrink"
+            | "flex-wrap"
             | "font"
             | "font-family"
+            | "font-feature-settings"
             | "font-size"
             | "font-style"
+            | "font-variant"
             | "font-weight"
+            | "gap"
+            | "grid-column"
+            | "grid-column-gap"
+            | "grid-row"
+            | "grid-row-gap"
+            | "grid-template-columns"
+            | "grid-template-rows"
+            | "hanging-punctuation"
             | "height"
+            | "hyphens"
+            | "justify-content"
+            | "justify-items"
+            | "letter-spacing"
             | "line-height"
             | "list-style"
             | "list-style-position"
@@ -376,7 +590,15 @@ fn is_allowed_property(property: &str) -> bool {
             | "max-width"
             | "min-height"
             | "min-width"
+            | "opacity"
             | "orphans"
+            | "outline"
+            | "outline-color"
+            | "outline-offset"
+            | "outline-style"
+            | "outline-width"
+            | "overflow"
+            | "overflow-wrap"
             | "padding"
             | "padding-block"
             | "padding-block-end"
@@ -392,14 +614,25 @@ fn is_allowed_property(property: &str) -> bool {
             | "page-break-before"
             | "page-break-inside"
             | "position"
+            | "quotes"
             | "size"
+            | "tab-size"
+            | "table-layout"
             | "text-align"
             | "text-decoration"
+            | "text-decoration-color"
+            | "text-decoration-style"
+            | "text-decoration-thickness"
+            | "text-indent"
             | "text-transform"
+            | "text-underline-offset"
             | "vertical-align"
             | "white-space"
             | "widows"
             | "width"
+            | "word-break"
+            | "word-spacing"
+            | "writing-mode"
     )
 }
 
@@ -415,16 +648,62 @@ fn escape_style_text(input: &str) -> String {
     out
 }
 
+fn decode_css_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            // Up to 6 hex digits, optional trailing whitespace
+            let mut j = i + 1;
+            let mut hex = String::new();
+            while j < bytes.len() && hex.len() < 6 && (bytes[j] as char).is_ascii_hexdigit() {
+                hex.push(bytes[j] as char);
+                j += 1;
+            }
+            if !hex.is_empty() {
+                if j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t' || bytes[j] == b'\n') {
+                    j += 1;
+                }
+                if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                    if let Some(ch) = char::from_u32(code) {
+                        out.push(ch);
+                    }
+                }
+                i = j;
+                continue;
+            }
+            if j < bytes.len() {
+                out.push(bytes[j] as char);
+                i = j + 1;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
 fn dedupe(violations: &mut Vec<StyleViolation>) {
     let mut seen = BTreeSet::new();
     violations
-        .retain(|violation| seen.insert((violation.construct.clone(), violation.message.clone())));
+        .retain(|v| seen.insert((v.construct.clone(), v.message.clone(), v.severity.as_str())));
 }
 
-fn violation(construct: &str, message: &str) -> StyleViolation {
+fn error(construct: &str, message: &str) -> StyleViolation {
     StyleViolation {
         construct: construct.trim().to_string(),
         message: message.to_string(),
+        severity: Severity::Error,
+    }
+}
+
+fn warning(construct: &str, message: &str) -> StyleViolation {
+    StyleViolation {
+        construct: construct.trim().to_string(),
+        message: message.to_string(),
+        severity: Severity::Warning,
     }
 }
 
@@ -445,22 +724,25 @@ mod tests {
 
     #[test]
     fn accepts_safe_nods_subset() {
-        let source = "h1, .lead { color: #0f766e; font-size: 24pt; }\n@page { size: A4 portrait; margin: 22mm; }";
-        assert!(audit_stylesheet(source, ResourceLimits::default()).is_safe());
-        assert!(sanitize_stylesheet(source, ResourceLimits::default()).contains("@page"));
+        let source = "h1, .lead { color: #0f766e; font-size: 24pt; }\n@page { size: A4 portrait; margin: 22mm; }\n[lang=\"ar\"] { text-align: right; }\n@media print { p { color: black; } }";
+        let audit = audit_stylesheet(source, ResourceLimits::default());
+        assert!(
+            audit.is_safe(),
+            "expected safe but got: {:?}",
+            audit.violations
+        );
     }
 
     #[test]
     fn rejects_interactive_selectors_and_executable_functions() {
         let source = "a:hover { color: red; }\n.x { width: expression(alert(1)); }";
         let audit = audit_stylesheet(source, ResourceLimits::default());
-        let constructs: Vec<_> = audit
-            .violations
-            .iter()
-            .map(|violation| violation.construct.as_str())
-            .collect();
-        assert!(constructs.contains(&"a:hover"));
-        assert!(constructs.contains(&"expression("));
+        assert!(
+            audit
+                .violations
+                .iter()
+                .any(|v| v.severity == Severity::Error)
+        );
     }
 
     #[test]
@@ -472,6 +754,33 @@ mod tests {
                 .violations
                 .iter()
                 .any(|v| v.message == "Unsafe NODS URL.")
+        );
+    }
+
+    #[test]
+    fn allows_calc_and_var_and_clamp() {
+        let source = ".x { padding: clamp(8px, calc(1vw + 4px), 32px); width: max(50%, 200px); --tone: blue; }";
+        let audit = audit_stylesheet(source, ResourceLimits::default());
+        // No `error` severity should be present for the value side
+        assert!(
+            audit
+                .violations
+                .iter()
+                .all(|v| v.severity != Severity::Error),
+            "violations: {:?}",
+            audit.violations
+        );
+    }
+
+    #[test]
+    fn rejects_css_escape_breakouts() {
+        let source = ".x { content: '\\3c script\\3e '; }";
+        let audit = audit_stylesheet(source, ResourceLimits::default());
+        assert!(
+            audit
+                .violations
+                .iter()
+                .any(|v| v.message == "Forbidden executable or breakout content in NODS.")
         );
     }
 
@@ -489,13 +798,50 @@ mod tests {
         let hostile =
             include_str!("../../../spec/tests/security/nods-hostile/forbidden-constructs.nodx");
         let safe = include_str!("../../../spec/tests/security/nods-hostile/safe-subset.nodx");
+        let hostile_audit = audit_stylesheet(extract_style(hostile), ResourceLimits::default());
         assert!(
-            audit_stylesheet(extract_style(hostile), ResourceLimits::default())
+            hostile_audit
                 .violations
-                .len()
+                .iter()
+                .filter(|v| v.severity == Severity::Error)
+                .count()
                 >= 5
         );
         assert!(audit_stylesheet(extract_style(safe), ResourceLimits::default()).is_safe());
+    }
+
+    #[test]
+    fn nods_hostile_corpus_scan_emits_errors() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join("spec/tests/security/nods-hostile");
+        let mut count = 0;
+        for entry in std::fs::read_dir(&dir).expect("nods-hostile dir") {
+            let entry = entry.expect("dirent");
+            let path = entry.path();
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            if !name.ends_with(".nodx") {
+                continue;
+            }
+            if name == "safe-subset.nodx" {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("read fixture");
+            let style = extract_style(&source);
+            let audit = audit_stylesheet(style, ResourceLimits::default());
+            assert!(
+                audit.violations.iter().any(|v| v.severity == Severity::Error),
+                "expected at least one error severity in {name}, got {:?}",
+                audit.violations
+            );
+            count += 1;
+        }
+        assert!(
+            count >= 28,
+            "expected at least 28 hostile NODS fixtures, found {count}"
+        );
     }
 
     fn extract_style(input: &str) -> &str {

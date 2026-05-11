@@ -1,0 +1,7 @@
+---
+schema: nodx/1.0
+---
+:::style
+@import url(https://example.test/a.css);
+.x { color: red; }
+:::

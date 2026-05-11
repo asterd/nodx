@@ -1,9 +1,13 @@
 [package]
 name = "nodx-sign"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
-description = "NODX signature profile verification"
 license = "MIT"
+description = "NODX 1.0 signature verifier with strict JWS header processing and trust policy"
+
+[lib]
+name = "nodx_sign"
+path = "src/lib.rs"
 
 [dependencies]
 nodx-core = { path = "../nodx-core" }

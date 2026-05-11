@@ -1,14 +1,23 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: pagination-demo
 title: Pagination, Page Layout, and Box Model
 subtitle: Print-ready NODX with @page rules, page breaks, and spacing
 language: en
 dir: ltr
-authors: [NODX Working Group]
-keywords: [pagination, print, layout]
-requires: [rich-tables, style]
+authors:
+  - name: NODX Working Group
+keywords:
+  - pagination
+  - print
+  - layout
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
 ---
 
 :::style

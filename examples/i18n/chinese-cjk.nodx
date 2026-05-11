@@ -1,5 +1,5 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: chinese-cjk-example
 title: 中文文档示例

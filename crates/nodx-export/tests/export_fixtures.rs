@@ -1,5 +1,8 @@
-use nodx_core::parse_str;
-use nodx_export::{export_docx, export_pdf_bridge, export_pptx, loss_report_json};
+use nodx_core::{ResourceLimits, parse_str};
+use nodx_export::{
+    ExportFormat, export_docx, export_docx_with_limits, export_document_with_limits,
+    export_pdf_bridge, export_pptx, loss_report_json,
+};
 
 #[test]
 fn presentation_fixture_exports_to_pptx() {
@@ -24,6 +27,27 @@ fn lossy_fixture_reports_docx_losses() {
         loss_report_json(&exported.loss_report),
         include_str!("../../../spec/tests/export/lossy-export.docx.loss.json").trim_end()
     );
+}
+
+#[test]
+fn export_resource_limits_are_enforced() {
+    let body = "# Title\n\nLong body. ".repeat(1);
+    let doc = parse_str(&body);
+    let limits = ResourceLimits {
+        export_bytes: 1,
+        ..ResourceLimits::default()
+    };
+    let exported = export_document_with_limits(&doc, ExportFormat::Docx, limits);
+    assert!(exported.bytes.is_empty(), "limits should clamp the export");
+}
+
+#[test]
+fn export_strips_xml_invalid_control_characters() {
+    // \u{0007} (BEL) is not allowed in XML 1.0 — exporter must elide it.
+    let doc = parse_str(":::slide {title=\"a\\u0007b\"}\n# Slide\nBody\n:::\n");
+    let exported = export_docx_with_limits(&doc, ResourceLimits::default());
+    let xml = String::from_utf8_lossy(&exported.bytes);
+    assert!(!xml.contains('\u{0007}'));
 }
 
 #[test]

@@ -1,0 +1,6 @@
+---
+schema: nodx/1.0
+---
+:::style
+.x { background-image: url(javascript:alert(1)); }
+:::

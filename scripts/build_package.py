@@ -114,12 +114,23 @@ def collect_entries() -> list[tuple[str, bytes]]:
 
 def build(out_path: Path) -> None:
     entries = collect_entries()
-    manifest_lines = ["schema: nodx-package/0.1", "entry: content/document.nodx", "entries:"]
+    manifest_lines = [
+        "schema: nodx-package/1.0",
+        "entry: content/document.nodx",
+        "signature: signatures/document.jws",
+        "profiles:",
+        "requires:",
+        "  - core",
+        "  - rich",
+        "  - style",
+        "optional:",
+        "  - package",
+        "entries:",
+    ]
     for path, data in entries:
         manifest_lines.extend(
             [
                 f"  - path: {path}",
-                f"    media-type: {media_type(path)}",
                 f"    size: {len(data)}",
                 f"    sha256: {digest(data)}",
             ]

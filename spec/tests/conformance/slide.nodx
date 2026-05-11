@@ -1,0 +1,9 @@
+:::slide {#s1 title="One"}
+# First Slide
+A point.
+:::
+
+:::slide {#s2 title="Two"}
+# Second Slide
+Another point.
+:::

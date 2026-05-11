@@ -6,7 +6,10 @@ use nodx_core::{
     Diagnostic, Document, Inline, Node, ResourceLimits, Value, default_navigation_label,
     resolve_navigation, valid_name,
 };
+use nodx_style::audit_stylesheet;
 use nodx_url::{ReferenceKind, ResourcePolicy};
+
+pub const SCHEMA_1_0: &str = "nodx/1.0";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSet {
@@ -21,15 +24,7 @@ pub struct Validator {
 
 impl Default for ProfileSet {
     fn default() -> Self {
-        Self::new([
-            "plain",
-            "core",
-            "rich",
-            "style",
-            "package",
-            "agent-read",
-            "presentation",
-        ])
+        Self::new(["plain", "core", "rich", "style", "package", "agent-read"])
     }
 }
 
@@ -45,7 +40,14 @@ impl ProfileSet {
     }
 
     pub fn supports(&self, profile: &str) -> bool {
-        self.supported.contains(profile) || legacy_supported_feature(profile)
+        self.supported.contains(profile)
+    }
+
+    pub fn deferred(profile: &str) -> bool {
+        matches!(
+            profile,
+            "agent-mutate" | "signature" | "editor" | "presentation"
+        )
     }
 }
 
@@ -148,15 +150,15 @@ pub fn diagnostics_json(diagnostics: &[Diagnostic]) -> String {
 }
 
 pub fn exit_code_for(diagnostics: &[Diagnostic]) -> i32 {
-    if diagnostics
+    let has_unsupported_required = diagnostics
         .iter()
-        .any(|d| d.code == "NODX-E024" && (d.severity == "fatal" || d.severity == "error"))
-    {
+        .any(|d| d.code == "NODX-E024" && (d.severity == "fatal" || d.severity == "error"));
+    let has_error = diagnostics
+        .iter()
+        .any(|d| d.severity == "fatal" || d.severity == "error");
+    if has_unsupported_required {
         3
-    } else if diagnostics
-        .iter()
-        .any(|d| d.severity == "fatal" || d.severity == "error")
-    {
+    } else if has_error {
         2
     } else {
         0
@@ -170,7 +172,17 @@ fn validate_meta(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     match doc.meta.get("schema") {
-        Some(Value::String(schema)) if schema == "nodx/0.1" || schema == "nodx/1.0" => {}
+        Some(Value::String(schema)) if schema == SCHEMA_1_0 => {}
+        Some(Value::String(other)) => diagnostics.push(Diagnostic {
+            code: "NODX-E004".to_string(),
+            severity: "error".to_string(),
+            message: format!(
+                "Schema `{other}` is not the frozen NODX 1.0 contract `{SCHEMA_1_0}`."
+            ),
+            line: None,
+            column: None,
+            target: Some("schema".to_string()),
+        }),
         _ => diagnostics.push(Diagnostic {
             code: "NODX-E004".to_string(),
             severity: "error".to_string(),
@@ -183,14 +195,6 @@ fn validate_meta(
 
     if let Some(profile) = requested_profile {
         validate_required_profile(profile, profiles, diagnostics);
-    }
-
-    if let Some(Value::List(required)) = doc.meta.get("requires") {
-        for item in required {
-            if let Value::String(feature) = item {
-                validate_required_profile(feature, profiles, diagnostics);
-            }
-        }
     }
 
     if let Some(Value::Map(map)) = doc.meta.get("profiles") {
@@ -235,13 +239,6 @@ fn validate_required_profile(
             target: Some(format!("profile:{profile}")),
         });
     }
-}
-
-fn legacy_supported_feature(feature: &str) -> bool {
-    matches!(
-        feature,
-        "rich-tables" | "math" | "media" | "custom-components"
-    )
 }
 
 fn component_names(doc: &Document) -> BTreeSet<String> {
@@ -313,6 +310,7 @@ fn validate_nodes(
             "media" | "embed" | "include" => validate_asset_node(node, diagnostics, limits),
             "table" => validate_table(node, diagnostics),
             "toc" => validate_toc(node, diagnostics),
+            "style" => validate_style_block(node, diagnostics, limits),
             _ => {}
         }
         collect_inline_refs(&node.inlines, refs, vars, diagnostics, limits);
@@ -343,7 +341,10 @@ fn validate_common_attrs(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 fn is_standard_node(node_type: &str) -> bool {
-    matches!(node_type, "citation-entry" | "pagebreak" | "speaker-notes")
+    matches!(
+        node_type,
+        "citation-entry" | "pagebreak" | "speaker-notes" | "media-fallback"
+    )
 }
 
 fn validate_heading(node: &Node, previous_heading: &mut usize, diagnostics: &mut Vec<Diagnostic>) {
@@ -500,6 +501,26 @@ fn validate_toc(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
+fn validate_style_block(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
+    let Some(text) = &node.text else {
+        return;
+    };
+    let audit = audit_stylesheet(text, limits);
+    for violation in audit.violations {
+        diagnostics.push(Diagnostic {
+            code: "NODX-E027".to_string(),
+            severity: violation.severity.to_string(),
+            message: format!(
+                "{} `{}` in :::style block.",
+                violation.message, violation.construct
+            ),
+            line: None,
+            column: None,
+            target: node.id.clone(),
+        });
+    }
+}
+
 fn validate_navigation(doc: &Document, ids: &BTreeSet<String>, diagnostics: &mut Vec<Diagnostic>) {
     let _graph = resolve_navigation(doc);
     collect_toc_scopes(&doc.body, ids, diagnostics);
@@ -563,7 +584,7 @@ fn collect_inline_refs(
                 collect_inline_refs(label, refs, vars, diagnostics, limits);
             }
             Inline::Span { children, attrs } => {
-                if let Some(dir) = &attrs.attrs.get("dir") {
+                if let Some(dir) = attrs.attrs.get("dir") {
                     if !matches!(dir.as_str(), "ltr" | "rtl" | "auto") {
                         diagnostics.push(validation_diag(
                             "NODX-E004",
@@ -639,21 +660,40 @@ mod tests {
 
     use nodx_core::parse_str;
 
-    use super::{Validator, diagnostics_json, exit_code_for};
+    use super::{ProfileSet, Validator, diagnostics_json, exit_code_for};
 
     #[test]
     fn unsupported_required_profile_exits_three() {
-        let doc =
-            parse_str("---\nschema: nodx/1.0\nprofiles:\n  requires: [signature]\n---\n\n# A\n");
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nprofiles:\n  requires:\n    - signature\n---\n\n# A\n",
+        );
         let diagnostics = Validator::default().validate(&doc);
         assert!(diagnostics.iter().any(|d| d.code == "NODX-E024"));
         assert_eq!(exit_code_for(&diagnostics), 3);
     }
 
     #[test]
+    fn deferred_presentation_required_profile_exits_three() {
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nprofiles:\n  requires:\n    - presentation\n---\n\n# A\n",
+        );
+        let diagnostics = Validator::default().validate(&doc);
+        assert!(diagnostics.iter().any(|d| d.code == "NODX-E024"));
+        assert_eq!(exit_code_for(&diagnostics), 3);
+    }
+
+    #[test]
+    fn legacy_schema_zero_one_is_rejected() {
+        let doc = parse_str("---\nschema: nodx/0.1\n---\n# A\n");
+        let diagnostics = Validator::default().validate(&doc);
+        assert!(diagnostics.iter().any(|d| d.code == "NODX-E004"));
+    }
+
+    #[test]
     fn unsupported_optional_profile_warns() {
-        let doc =
-            parse_str("---\nschema: nodx/1.0\nprofiles:\n  optional: [signature]\n---\n\n# A\n");
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nprofiles:\n  optional:\n    - signature\n---\n\n# A\n",
+        );
         let diagnostics = Validator::default().validate(&doc);
         assert!(diagnostics.iter().any(|d| d.code == "NODX-E023"));
         assert_eq!(exit_code_for(&diagnostics), 0);
@@ -670,9 +710,26 @@ mod tests {
     }
 
     #[test]
+    fn nods_audit_runs_in_validator() {
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\n---\n:::style\na:hover { color: red; }\n:::\n",
+        );
+        let diagnostics = Validator::default().validate(&doc);
+        assert!(diagnostics.iter().any(|d| d.code == "NODX-E027"));
+    }
+
+    #[test]
+    fn deferred_profile_helper() {
+        assert!(ProfileSet::deferred("presentation"));
+        assert!(ProfileSet::deferred("signature"));
+        assert!(!ProfileSet::deferred("rich"));
+    }
+
+    #[test]
     fn diagnostic_json_shape_is_stable() {
-        let doc =
-            parse_str("---\nschema: nodx/1.0\nprofiles:\n  requires: [signature]\n---\n\n# A\n");
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nprofiles:\n  requires:\n    - signature\n---\n\n# A\n",
+        );
         let diagnostics = Validator::default().validate(&doc);
         let json = diagnostics_json(&diagnostics);
         assert!(json.contains("\"code\":\"NODX-E024\""));
@@ -681,40 +738,87 @@ mod tests {
     }
 
     #[test]
-    fn negative_fixtures_match_golden_diagnostics() {
+    fn negative_corpus_size_meets_release_target() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        for name in [
-            "e004-invalid-schema-and-toc",
-            "e006-duplicate-id",
-            "e007-unresolved-reference-and-toc-scope",
-            "e008-unresolvable-asset",
-            "e009-missing-alt",
-            "e013-undeclared-var",
-            "e014-custom-component",
-            "e016-toc-default-label",
-            "e020-unsafe-link",
-            "e022-heading-jump",
-            "e023-unsupported-optional-profile",
-            "e024-unsupported-required-profile",
-            "e025-invalid-table-grid",
-        ] {
-            let source = fs::read_to_string(
-                root.join("spec/tests/negative")
-                    .join(format!("{name}.nodx")),
-            )
-            .expect("read negative fixture");
-            let expected = fs::read_to_string(
-                root.join("spec/tests/golden")
-                    .join(format!("{name}.diagnostics.json")),
-            )
-            .expect("read golden diagnostics");
+        let dir = root.join("spec/tests/negative");
+        let count = fs::read_dir(&dir)
+            .expect("negative dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("nodx"))
+            .count();
+        assert!(
+            count >= 50,
+            "expected at least 50 negative fixtures, found {count}"
+        );
+    }
+
+    #[test]
+    fn negative_corpus_emits_expected_code_class() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join("spec/tests/negative");
+        for entry in fs::read_dir(&dir).expect("negative dir") {
+            let entry = entry.expect("dirent");
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !name.ends_with(".nodx") {
+                continue;
+            }
+            let stem = name.strip_suffix(".nodx").unwrap();
+            let expected_code = stem
+                .strip_prefix("e004")
+                .map(|_| "NODX-E004")
+                .or_else(|| stem.strip_prefix("e006").map(|_| "NODX-E006"))
+                .or_else(|| stem.strip_prefix("e007").map(|_| "NODX-E007"))
+                .or_else(|| stem.strip_prefix("e008").map(|_| "NODX-E008"))
+                .or_else(|| stem.strip_prefix("e009").map(|_| "NODX-E009"))
+                .or_else(|| stem.strip_prefix("e013").map(|_| "NODX-E013"))
+                .or_else(|| stem.strip_prefix("e014").map(|_| "NODX-E014"))
+                .or_else(|| stem.strip_prefix("e016").map(|_| "NODX-E016"))
+                .or_else(|| stem.strip_prefix("e020").map(|_| "NODX-E020"))
+                .or_else(|| stem.strip_prefix("e022").map(|_| "NODX-E022"))
+                .or_else(|| stem.strip_prefix("e023").map(|_| "NODX-E023"))
+                .or_else(|| stem.strip_prefix("e024").map(|_| "NODX-E024"))
+                .or_else(|| stem.strip_prefix("e025").map(|_| "NODX-E025"));
+            let Some(expected_code) = expected_code else {
+                continue;
+            };
+            let source = fs::read_to_string(&path).expect("read fixture");
             let doc = parse_str(&source);
             let diagnostics = Validator::default().validate(&doc);
-            assert_eq!(
-                diagnostics_json(&diagnostics),
-                expected.trim_end(),
-                "{name}"
+            assert!(
+                diagnostics.iter().any(|d| d.code == expected_code),
+                "{name} should emit {expected_code}; got {:?}",
+                diagnostics
+                    .iter()
+                    .map(|d| d.code.as_str())
+                    .collect::<Vec<_>>()
             );
+        }
+    }
+
+    #[test]
+    fn negative_fixtures_match_golden_diagnostics() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let golden_dir = root.join("spec/tests/golden");
+        for entry in fs::read_dir(&golden_dir).expect("read golden dir") {
+            let entry = entry.expect("dirent");
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let Some(stem) = name.strip_suffix(".diagnostics.json") else {
+                continue;
+            };
+            let source = fs::read_to_string(
+                root.join("spec/tests/negative")
+                    .join(format!("{stem}.nodx")),
+            )
+            .unwrap_or_else(|_| panic!("missing negative source for {stem}"));
+            let expected = fs::read_to_string(entry.path())
+                .unwrap_or_else(|_| panic!("missing golden for {stem}"));
+            let doc = parse_str(&source);
+            let diagnostics = Validator::default().validate(&doc);
+            assert_eq!(diagnostics_json(&diagnostics), expected.trim_end(), "{stem}");
         }
     }
 }

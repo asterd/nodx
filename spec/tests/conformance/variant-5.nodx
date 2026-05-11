@@ -1,0 +1,15 @@
+---
+schema: nodx/1.0
+title: Variant 5
+---
+
+# Variant 5 {#v5}
+
+Paragraph 5 with **bold** and *em* and `code`.
+
+- item 5
+- bullet
+
+| col1 | col2 |
+| - | - |
+| a | b |

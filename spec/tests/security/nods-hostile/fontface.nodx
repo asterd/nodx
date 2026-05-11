@@ -1,0 +1,6 @@
+---
+schema: nodx/1.0
+---
+:::style
+@font-face { font-family: x; src: url(https://example.test/x.woff2); }
+:::

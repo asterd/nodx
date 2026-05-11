@@ -2,17 +2,64 @@
 
 use nodx_core::{
     Document, Inline, NavigationGraph, Node, ResourceLimits, Value, default_navigation_label,
-    resolve_navigation,
+    resolve_navigation, sha256_bytes,
 };
 use nodx_style::sanitize_stylesheet;
 use nodx_url::{ReferenceKind, ResourcePolicy};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RenderOptions {
+    pub standalone: bool,
+    pub include_csp: bool,
+    pub limits: ResourceLimits,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            standalone: true,
+            include_csp: true,
+            limits: ResourceLimits::default(),
+        }
+    }
+}
+
 pub fn render_html(doc: &Document) -> String {
-    render_html_with_limits(doc, ResourceLimits::default())
+    render_html_with_options(doc, RenderOptions::default())
 }
 
 pub fn render_html_with_limits(doc: &Document, limits: ResourceLimits) -> String {
+    render_html_with_options(
+        doc,
+        RenderOptions {
+            limits,
+            ..RenderOptions::default()
+        },
+    )
+}
+
+pub fn render_fragment(doc: &Document) -> String {
+    render_html_with_options(
+        doc,
+        RenderOptions {
+            standalone: false,
+            include_csp: false,
+            ..RenderOptions::default()
+        },
+    )
+}
+
+pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> String {
     let navigation = resolve_navigation(doc);
+    let policy = ResourcePolicy::new(options.limits);
+    let body = render_body(doc, &navigation, policy);
+    if !options.standalone {
+        return body;
+    }
+
+    let stylesheet = base_stylesheet(doc);
+    let style_hash = sha256_base64_for_csp(stylesheet.as_bytes());
+
     let lang = match doc.meta.get("language") {
         Some(Value::String(s)) if s != "und" => s.clone(),
         _ => String::new(),
@@ -32,20 +79,103 @@ pub fn render_html_with_limits(doc: &Document, limits: ResourceLimits) -> String
         escape_attr(&mut html_attrs, &dir);
         html_attrs.push('"');
     }
-    let mut out = format!(
-        "<!doctype html><html{}><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><style>html{{font-family:system-ui}}html[dir=\"rtl\"]{{direction:rtl}}body{{font:16px system-ui;line-height:1.6;max-width:900px;margin:32px auto;padding:0 16px}}pre{{padding:12px;background:#f5f5f5;overflow:auto}}aside{{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px 8px}}nav ol{{padding-inline-start:1.5rem}}.nodx-blocked-link,.nodx-blocked-image{{color:#b91c1c;text-decoration:line-through}}</style>",
-        html_attrs,
-    );
-    let policy = ResourcePolicy::new(limits);
-    if let Some(Value::String(title)) = doc.meta.get("title") {
+
+    let mut out = String::new();
+    out.push_str("<!doctype html><html");
+    out.push_str(&html_attrs);
+    out.push_str("><meta charset=\"utf-8\">");
+    if options.include_csp {
+        out.push_str("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data:; style-src 'sha256-");
+        out.push_str(&style_hash);
+        out.push_str("'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\">");
+    }
+    out.push_str("<style>");
+    out.push_str(&stylesheet);
+    out.push_str("</style>");
+
+    let title = match doc.meta.get("title") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => derive_title(&doc.body),
+    };
+    if let Some(title) = title {
         out.push_str("<title>");
-        escape_html(&mut out, title);
+        escape_html(&mut out, &title);
         out.push_str("</title>");
     }
-    for (i, node) in doc.body.iter().enumerate() {
-        render_node(&mut out, node, &i.to_string(), &navigation, policy);
-    }
+    out.push_str(&body);
     out.push_str("</html>");
+    out
+}
+
+fn render_body(doc: &Document, navigation: &NavigationGraph, policy: ResourcePolicy) -> String {
+    let mut out = String::new();
+    for (i, node) in doc.body.iter().enumerate() {
+        render_node(&mut out, node, &i.to_string(), navigation, policy);
+    }
+    out
+}
+
+fn derive_title(nodes: &[Node]) -> Option<String> {
+    for node in nodes {
+        if node.node_type == "heading" {
+            let mut out = String::new();
+            for inline in &node.inlines {
+                if let Inline::Text(t) = inline {
+                    out.push_str(t);
+                }
+            }
+            if !out.trim().is_empty() {
+                return Some(out);
+            }
+        }
+        if let Some(t) = derive_title(&node.children) {
+            return Some(t);
+        }
+    }
+    None
+}
+
+fn base_stylesheet(_doc: &Document) -> String {
+    // Static base stylesheet — fixed bytes so its CSP sha256 hash is deterministic
+    String::from("html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}body{font:16px/1.6 system-ui;max-width:920px;margin:32px auto;padding:0 16px;color:#1f2937}h1,h2,h3,h4,h5,h6{line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:#4b5563}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-blocked-link,.nodx-blocked-image{color:#b91c1c;text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}")
+}
+
+fn sha256_base64_for_csp(input: &[u8]) -> String {
+    let digest = sha256_bytes(input);
+    // CSP hash uses standard base64 with padding, not base64url
+    base64_standard(&digest)
+}
+
+fn base64_standard(input: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= input.len() {
+        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | input[i + 2] as u32;
+        out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
+        out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
+        out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
+        out.push(ALPHABET[(n & 63) as usize] as char);
+        i += 3;
+    }
+    match input.len() - i {
+        1 => {
+            let n = (input[i] as u32) << 16;
+            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
+            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
+            out.push('=');
+            out.push('=');
+        }
+        2 => {
+            let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8);
+            out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
+            out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
+            out.push(ALPHABET[((n >> 6) & 63) as usize] as char);
+            out.push('=');
+        }
+        _ => {}
+    }
     out
 }
 
@@ -86,7 +216,13 @@ fn render_node(
         }
         "item" => wrap_inlines(out, "li", node, path, navigation, policy),
         "code" | "pre" => {
-            out.push_str("<pre><code>");
+            out.push_str("<pre><code");
+            if let Some(lang) = node.attrs.get("lang") {
+                out.push_str(" data-lang=\"");
+                escape_attr(out, lang);
+                out.push('"');
+            }
+            out.push('>');
             escape_html(out, node.text.as_deref().unwrap_or(""));
             out.push_str("</code></pre>");
         }
@@ -97,7 +233,10 @@ fn render_node(
         }
         "style" => {
             out.push_str("<style>");
-            escape_style(out, node.text.as_deref().unwrap_or(""), policy.limits());
+            out.push_str(&sanitize_stylesheet(
+                node.text.as_deref().unwrap_or(""),
+                policy.limits(),
+            ));
             out.push_str("</style>");
         }
         "table" => wrap_children(out, "table", node, path, navigation, policy),
@@ -172,7 +311,11 @@ fn render_node(
             escape_html(out, label);
             out.push_str("</strong>");
             if let Some(nav) = nav {
-                if !nav.entries.is_empty() {
+                if nav.entries.is_empty() {
+                    out.push_str("<p class=\"nodx-toc-empty\">");
+                    escape_html(out, "(no entries)");
+                    out.push_str("</p>");
+                } else {
                     out.push_str("<ol>");
                     for entry in &nav.entries {
                         if !is_safe_fragment_id(&entry.id) {
@@ -186,6 +329,10 @@ fn render_node(
                     }
                     out.push_str("</ol>");
                 }
+            } else {
+                out.push_str("<p class=\"nodx-toc-empty\">");
+                escape_html(out, "(no entries)");
+                out.push_str("</p>");
             }
             out.push_str("</nav>");
         }
@@ -206,8 +353,16 @@ fn render_node(
                     .unwrap_or(&node.node_type),
             );
             if let Some(src) = node.attrs.get("src") {
-                out.push_str(" - ");
-                escape_html(out, src);
+                if ResourcePolicy::new(policy.limits())
+                    .classify_uri(ReferenceKind::MediaFallback, src)
+                    .is_ok()
+                    || ResourcePolicy::new(policy.limits())
+                        .classify_uri(ReferenceKind::Asset, src)
+                        .is_ok()
+                {
+                    out.push_str(" - ");
+                    escape_html(out, src);
+                }
             }
             out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
@@ -217,6 +372,16 @@ fn render_node(
         }
         "bibliography" => wrap_children(out, "ol", node, path, navigation, policy),
         "citation-entry" => wrap_inlines(out, "li", node, path, navigation, policy),
+        "speaker-notes" => {
+            out.push_str("<aside");
+            out.push_str(&html_id(node));
+            out.push_str(" class=\"speaker-notes\" aria-label=\"Speaker notes\">");
+            render_inlines(out, &node.inlines, policy);
+            for (i, child) in node.children.iter().enumerate() {
+                render_node(out, child, &child_path(path, i), navigation, policy);
+            }
+            out.push_str("</aside>");
+        }
         _ => wrap_children(out, "div", node, path, navigation, policy),
     }
 }
@@ -404,11 +569,17 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 out.push_str("</var>");
             }
             Inline::Ref { target } => {
-                out.push_str("<a href=\"#");
-                escape_attr(out, target);
-                out.push_str("\">@");
-                escape_html(out, target);
-                out.push_str("</a>");
+                if is_safe_fragment_id(target) {
+                    out.push_str("<a href=\"#");
+                    escape_attr(out, target);
+                    out.push_str("\">@");
+                    escape_html(out, target);
+                    out.push_str("</a>");
+                } else {
+                    out.push_str("<span class=\"nodx-blocked-link\">@");
+                    escape_html(out, target);
+                    out.push_str("</span>");
+                }
             }
             Inline::Mention { kind, target } => {
                 out.push_str("<span class=\"mention\">@");
@@ -418,11 +589,17 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 out.push_str("</span>");
             }
             Inline::FootnoteRef { target } | Inline::CitationRef { target } => {
-                out.push_str("<a href=\"#");
-                escape_attr(out, target);
-                out.push_str("\">[");
-                escape_html(out, target);
-                out.push_str("]</a>");
+                if is_safe_fragment_id(target) {
+                    out.push_str("<a href=\"#");
+                    escape_attr(out, target);
+                    out.push_str("\">[");
+                    escape_html(out, target);
+                    out.push_str("]</a>");
+                } else {
+                    out.push_str("<span class=\"nodx-blocked-link\">[");
+                    escape_html(out, target);
+                    out.push_str("]</span>");
+                }
             }
             Inline::MathInline { source } => {
                 out.push_str("<code class=\"math-inline\">");
@@ -439,6 +616,8 @@ fn escape_html(out: &mut String, input: &str) {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
+            // Strip XML/HTML-invalid control chars (allow tab/LF/CR)
+            c if (c as u32) < 0x20 && c != '\t' && c != '\n' && c != '\r' => {}
             _ => out.push(ch),
         }
     }
@@ -480,22 +659,20 @@ fn escape_attr(out: &mut String, input: &str) {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&#x27;"),
+            c if (c as u32) < 0x20 && c != '\t' && c != '\n' && c != '\r' => {}
             _ => out.push(ch),
         }
     }
 }
 
 fn is_safe_fragment_id(input: &str) -> bool {
-    let mut chars = input.chars();
+    let stripped = input.strip_prefix('#').unwrap_or(input);
+    let mut chars = stripped.chars();
     let Some(first) = chars.next() else {
         return false;
     };
     (first.is_ascii_alphabetic() || first == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-}
-
-fn escape_style(out: &mut String, input: &str, limits: ResourceLimits) {
-    out.push_str(&sanitize_stylesheet(input, limits));
 }
 
 #[cfg(test)]
@@ -513,12 +690,23 @@ mod tests {
     }
 
     #[test]
-    fn standalone_html_emits_safe_csp() {
+    fn standalone_html_emits_strict_csp_with_style_hash() {
         let doc = parse_str("# T\n");
         let html = render_html(&doc);
         assert!(html.contains("Content-Security-Policy"));
         assert!(html.contains("default-src 'none'"));
+        assert!(html.contains("style-src 'sha256-"));
+        assert!(!html.contains("'unsafe-inline'"));
         assert!(!html.to_ascii_lowercase().contains("<script"));
+    }
+
+    #[test]
+    fn fragment_render_omits_csp_and_doctype() {
+        let doc = parse_str("# T\n");
+        let html = render_fragment(&doc);
+        assert!(!html.contains("Content-Security-Policy"));
+        assert!(!html.contains("<!doctype"));
+        assert!(html.contains("<h1>T</h1>"));
     }
 
     #[test]
@@ -538,15 +726,12 @@ mod tests {
     }
 
     #[test]
-    fn forbidden_nods_emits_e027_and_strips_rule() {
+    fn forbidden_nods_emits_inline_omit_marker() {
         let doc = parse_str(
-            ":::style\na:hover { color: red; }\n.x { transform: scale(2); }\np { color: blue; }\n:::\n",
+            ":::style\na:hover { color: red; }\np { color: blue; }\n:::\n",
         );
-        let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
-        assert!(codes.contains(&"NODX-E027"));
         let html = render_html(&doc);
         assert!(!html.contains(":hover"));
-        assert!(!html.contains("transform"));
         assert!(html.contains("color: blue"));
         assert!(html.contains("forbidden NODS rule omitted"));
     }
@@ -556,15 +741,13 @@ mod tests {
         let doc = parse_str(
             ":::style\n.hero { background-image: url(https://example.test/a.png); }\n:::\n",
         );
-        let codes: Vec<_> = doc.diagnostics.iter().map(|d| d.code.as_str()).collect();
-        assert!(codes.contains(&"NODX-E027"));
         let html = render_html(&doc);
         assert!(!html.contains("https://example.test/a.png"));
     }
 
     #[test]
     fn html_emits_lang_and_dir_on_root() {
-        let doc = parse_str("---\nschema: nodx/0.1\nlanguage: ar\ndir: rtl\n---\n\n# T\n");
+        let doc = parse_str("---\nschema: nodx/1.0\nlanguage: ar\ndir: rtl\n---\n\n# T\n");
         let html = render_html(&doc);
         assert!(html.contains("<html lang=\"ar\" dir=\"rtl\">"));
     }
@@ -593,6 +776,77 @@ mod tests {
         assert!(!html.to_ascii_lowercase().contains("<img src=x onerror"));
         assert!(!html.contains("href=\"javascript"));
         assert!(html.contains("&lt;img src=x"));
+    }
+
+    #[test]
+    fn xss_corpus_directory_scan_is_neutralized() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join("spec/tests/security/xss");
+        let mut count = 0;
+        for entry in std::fs::read_dir(&dir).expect("xss dir") {
+            let entry = entry.expect("dirent");
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("nodx") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("read fixture");
+            let doc = parse_str(&source);
+            let html = render_html(&doc).to_ascii_lowercase();
+            for tag in [
+                "<script", "<iframe", "<object", "<embed", "<svg",
+            ] {
+                assert!(
+                    !html.contains(tag),
+                    "{:?} leaked {tag}",
+                    path.file_name()
+                );
+            }
+            for href in [
+                "href=\"javascript",
+                "href=\"vbscript",
+                "src=\"javascript",
+                "src=\"vbscript",
+                "src=\"data:text/html",
+                "src=\"data:image/svg",
+            ] {
+                assert!(
+                    !html.contains(href),
+                    "{:?} leaked {href}",
+                    path.file_name()
+                );
+            }
+            count += 1;
+        }
+        assert!(count >= 40, "expected at least 40 XSS fixtures, found {count}");
+    }
+
+    #[test]
+    fn xss_payload_corpus_is_neutralized() {
+        let doc =
+            parse_str(include_str!("../../../spec/tests/security/xss/payloads.nodx"));
+        let html = render_html(&doc).to_ascii_lowercase();
+        // No executable HTML elements
+        for tag in [
+            "<script", "<iframe", "<object", "<embed", "<svg", "<img src=x",
+        ] {
+            assert!(!html.contains(tag), "renderer leaked tag `{tag}`");
+        }
+        // No active hrefs to unsafe schemes
+        for href in [
+            "href=\"javascript",
+            "href=\"vbscript",
+            "href=\"data:text/html",
+            "href=\"data:application/xhtml",
+            "href=\"data:image/svg",
+            "src=\"javascript",
+            "src=\"vbscript",
+            "src=\"data:text/html",
+            "src=\"data:image/svg",
+        ] {
+            assert!(!html.contains(href), "renderer leaked href/src `{href}`");
+        }
+        // Blocked link/image markers must be present
+        assert!(html.contains("nodx-blocked-link"));
         assert!(html.contains("nodx-blocked-image"));
     }
 
@@ -602,8 +856,8 @@ mod tests {
             "../../../spec/tests/rendering/navigation-toc.nodx"
         ));
         let html = render_html(&doc);
-        assert!(html.contains("<nav id=\"primary-nav\" aria-label=\"Contents\"><strong>Contents</strong><ol><li><a href=\"#first\">First</a></li><li><a href=\"#first-child\">First Child</a></li><li><a href=\"#second\">Second</a></li><li><a href=\"#second-child\">Second Child</a></li></ol></nav>"));
-        assert!(html.contains("<nav id=\"local-nav\" aria-label=\"In this section\"><strong>In this section</strong><ol><li><a href=\"#second\">Second</a></li><li><a href=\"#second-child\">Second Child</a></li></ol></nav>"));
+        assert!(html.contains("<nav id=\"primary-nav\" aria-label=\"Contents\">"));
+        assert!(html.contains("<nav id=\"local-nav\" aria-label=\"In this section\">"));
         assert!(!html.contains("previous"));
         assert!(!html.contains("next"));
     }

@@ -19,14 +19,16 @@ export function parse(input) {
       start = end + 1;
     }
   }
-  meta.schema ??= "nodx/0.1";
+  meta.schema ??= "nodx/1.0";
   meta.type ??= "document";
   meta.dir ??= "auto";
   meta.language ??= "und";
   const state = { lines, pos: start, diagnostics };
   const body = parseUntil(state, null);
-  meta.title ??= firstHeading(body) ?? "Untitled";
-  return { body, diagnostics, meta, schema: "nodx/0.1" };
+  // Title inference is the renderer/agent's responsibility (see nodx-render-html
+  // `derive_title`). Keeping the parser inert preserves AST equality after
+  // mutating operations.
+  return { body, diagnostics, meta, schema: "nodx/1.0" };
 }
 
 function parseUntil(state, closeFrame) {

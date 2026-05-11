@@ -1,5 +1,5 @@
 ---
-schema: nodx/0.1
+schema: nodx/1.0
 type: document
 id: agent-review-demo
 title: Agent Review Workflow
@@ -7,26 +7,66 @@ language: en
 dir: ltr
 vars:
   company: Example Corp
-requires: [rich-tables]
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+    - package
+    - agent-read
 ---
+
+:::toc {#main role="primary" title="Workflow contents"}
+:::
 
 # Agent Review Workflow {#title}
 
 Issued by {{vars.company}}. Agents address stable nodes such as @[risk-table]
-instead of byte offsets.
+instead of byte offsets. The NODX 1.0 Agent SDK requires `beforeHash` on every
+mutating op and validates the document **after every operation**.
 
 ::::section {#policy}
 ## Policy Surface
 
-:::note {#guardrail type="warning" approved="true"}
+:::note {#guardrail type="warning" status="pending" fallback="children"}
 Approved content requires an explicit policy override before mutation.
 :::
 
-| Capability | Default |
-| --- | --- |
-| Remote fetch | blocked |
-| Source-range edits | blocked |
-| Validate after op | required |
+:::table {caption="Capability defaults"}
+:::row
+:::cell {header="true" scope="col"}
+Capability
+:::
+:::cell {header="true" scope="col"}
+Default
+:::
+:::
+:::row
+:::cell
+Remote fetch
+:::
+:::cell
+blocked
+:::
+:::
+:::row
+:::cell
+Source-range edits
+:::
+:::cell
+blocked unless CST profile is loaded
+:::
+:::
+:::row
+:::cell
+Validate after op
+:::
+:::cell
+required (atomic batch rollback on failure)
+:::
+:::
+:::
 
 :::table {#risk-table caption="Mutation risk table"}
 :::row
@@ -42,13 +82,32 @@ Mitigation
 Invented target ID
 :::
 :::cell
-Fail closed when the ID is missing.
+`MissingTarget` returned; batch is rolled back.
+:::
+:::
+:::row
+:::cell
+Stale beforeHash
+:::
+:::cell
+`HashMismatch` returned; document untouched.
+:::
+:::
+:::row
+:::cell
+Validation breakage after edit
+:::
+:::cell
+`ValidationFailed`; previous AST restored atomically.
 :::
 :::
 :::
 ::::
 
-:::code {lang="json"}
-{"schema":"nodx/change/0.1","op":"replace","target":"#guardrail","requiresApproval":true}
-:::
+::::section {#mutate}
+## Sample change record
 
+:::code {lang="jsonl"}
+{"schema":"nodx/change/1.0","op":"set-attribute","target":"#guardrail","beforeHash":"sha256-…","afterHash":"sha256-…","author":"agent:reviewer","time":"2026-05-10T10:00:00Z","reason":"Approve content","path":"1"}
+:::
+::::

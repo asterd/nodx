@@ -1,0 +1,12 @@
+---
+schema: nodx/1.0
+title: NCP Semantic Variant 11
+---
+
+# H11 {#h11}
+
+Body with **strong** and a [link](#h11).
+
+:::section {#s11}
+## Section 11
+:::

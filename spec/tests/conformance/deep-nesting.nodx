@@ -1,0 +1,13 @@
+::::section {#l1}
+# L1
+
+:::section {#l2}
+## L2
+
+:::note
+nested note inside section
+:::
+
+Paragraph in L2.
+:::
+::::

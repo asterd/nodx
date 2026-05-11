@@ -1,0 +1,10 @@
+---
+schema: nodx/1.0
+base:
+  a: 1
+extended:
+  <<: *base
+  b: 2
+---
+
+Body
