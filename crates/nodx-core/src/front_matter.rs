@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::Value;
 use crate::diagnostic::{Diagnostic, diag};
@@ -7,162 +7,299 @@ pub(crate) fn parse_front_matter(
     lines: &[&str],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> BTreeMap<String, Value> {
-    let mut map = BTreeMap::new();
-    let mut i = 0;
-    while i < lines.len() {
-        let line = lines[i];
-        if line.trim().is_empty() {
-            i += 1;
+    let events = yaml_events(lines, diagnostics);
+    let mut parser = EventParser {
+        events: &events,
+        pos: 0,
+    };
+    parser.parse_mapping(0, diagnostics)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum YamlEvent {
+    Mapping {
+        indent: usize,
+        line: usize,
+        key: String,
+        value: Option<String>,
+    },
+    Sequence {
+        indent: usize,
+        line: usize,
+        value: String,
+    },
+    Scalar {
+        indent: usize,
+        text: String,
+    },
+}
+
+fn yaml_events(lines: &[&str], diagnostics: &mut Vec<Diagnostic>) -> Vec<YamlEvent> {
+    let mut events = Vec::new();
+    let mut block_scalar_indent: Option<usize> = None;
+    for (idx, line) in lines.iter().enumerate() {
+        let line_no = idx + 2;
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
             continue;
         }
-        check_yaml_safety(line, i + 2, diagnostics);
-        if !line.starts_with(' ') {
-            if let Some((k, v)) = line.split_once(':') {
-                let key = k.trim().to_string();
-                if map.contains_key(&key) {
-                    diagnostics.push(diag(
-                        "NODX-E020",
-                        "fatal",
-                        "Duplicate front matter key.",
-                        i + 2,
-                        1,
-                    ));
-                }
-                let rest = v.trim();
-                if rest.is_empty() {
-                    let next = lines.get(i + 1).copied().unwrap_or("");
-                    if next.trim_start().starts_with("- ") || next.trim() == "-" {
-                        let (list, consumed) = parse_block_sequence(lines, i + 1, diagnostics);
-                        map.insert(key, Value::List(list));
-                        i = consumed;
-                        continue;
+        check_yaml_safety(line, line_no, diagnostics);
+        let indent = line.chars().take_while(|c| *c == ' ').count();
+        let trimmed = &line[indent..];
+        if let Some(block_indent) = block_scalar_indent {
+            if indent >= block_indent {
+                events.push(YamlEvent::Scalar {
+                    indent,
+                    text: line[block_indent.min(line.len())..].to_string(),
+                });
+                continue;
+            }
+            block_scalar_indent = None;
+        }
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            events.push(YamlEvent::Sequence {
+                indent,
+                line: line_no,
+                value: rest.trim().to_string(),
+            });
+        } else if trimmed == "-" {
+            events.push(YamlEvent::Sequence {
+                indent,
+                line: line_no,
+                value: String::new(),
+            });
+        } else if let Some((key, value)) = split_mapping(trimmed) {
+            let key = unquote(key.trim());
+            let value = value.trim();
+            if is_block_scalar(value) {
+                block_scalar_indent = Some(indent + 2);
+            }
+            events.push(YamlEvent::Mapping {
+                indent,
+                line: line_no,
+                key,
+                value: if value.is_empty() {
+                    None
+                } else {
+                    Some(value.to_string())
+                },
+            });
+        } else {
+            diagnostics.push(forbidden(line_no, "Forbidden YAML safe-subset construct."));
+        }
+    }
+    events
+}
+
+struct EventParser<'a> {
+    events: &'a [YamlEvent],
+    pos: usize,
+}
+
+impl EventParser<'_> {
+    fn parse_mapping(
+        &mut self,
+        indent: usize,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> BTreeMap<String, Value> {
+        let mut map = BTreeMap::new();
+        let mut seen = BTreeSet::new();
+        while let Some(YamlEvent::Mapping {
+            indent: item_indent,
+            line,
+            key,
+            value,
+        }) = self.events.get(self.pos)
+        {
+            if *item_indent < indent {
+                break;
+            }
+            if *item_indent > indent {
+                self.pos += 1;
+                continue;
+            }
+            if !seen.insert(key.clone()) {
+                diagnostics.push(forbidden(*line, "Duplicate front matter key."));
+            }
+            if key == "<<" {
+                diagnostics.push(forbidden(*line, "YAML merge keys are not supported."));
+            }
+            self.pos += 1;
+            let parsed = match value {
+                Some(raw) if is_block_scalar(raw) => self.parse_block_scalar(*item_indent),
+                Some(raw) => scalar(raw),
+                None => self.parse_nested_value(*item_indent, diagnostics),
+            };
+            map.insert(key.clone(), parsed);
+        }
+        map
+    }
+
+    fn parse_sequence(&mut self, indent: usize, diagnostics: &mut Vec<Diagnostic>) -> Vec<Value> {
+        let mut out = Vec::new();
+        while let Some(YamlEvent::Sequence {
+            indent: item_indent,
+            line,
+            value,
+        }) = self.events.get(self.pos)
+        {
+            if *item_indent != indent {
+                break;
+            }
+            self.pos += 1;
+            if value.is_empty() {
+                out.push(self.parse_nested_value(*item_indent, diagnostics));
+            } else if let Some((key, rest)) = split_mapping(value) {
+                let mut child = BTreeMap::new();
+                let key = unquote(key.trim());
+                child.insert(
+                    key,
+                    if rest.trim().is_empty() {
+                        self.parse_nested_value(*item_indent, diagnostics)
+                    } else {
+                        scalar(rest.trim())
+                    },
+                );
+                if matches!(
+                    self.events.get(self.pos),
+                    Some(YamlEvent::Mapping { indent: next, .. }) if *next > *item_indent
+                ) {
+                    let nested = self.parse_mapping(*item_indent + 2, diagnostics);
+                    for key in nested.keys() {
+                        if child.contains_key(key) {
+                            diagnostics.push(forbidden(*line, "Duplicate front matter key."));
+                        }
                     }
-                    let (child, consumed) = parse_block_mapping(lines, i + 1, diagnostics);
-                    map.insert(key, Value::Map(child));
-                    i = consumed;
-                    continue;
+                    child.extend(nested);
                 }
-                map.insert(key, scalar(rest));
+                out.push(Value::Map(child));
+            } else {
+                out.push(scalar(value));
             }
         }
-        i += 1;
+        out
     }
-    map
+
+    fn parse_nested_value(
+        &mut self,
+        parent_indent: usize,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Value {
+        let Some(next) = self.events.get(self.pos) else {
+            return Value::Map(BTreeMap::new());
+        };
+        match next {
+            YamlEvent::Sequence { indent, .. } if *indent > parent_indent => {
+                Value::List(self.parse_sequence(*indent, diagnostics))
+            }
+            YamlEvent::Mapping { indent, .. } if *indent > parent_indent => {
+                Value::Map(self.parse_mapping(*indent, diagnostics))
+            }
+            _ => Value::Map(BTreeMap::new()),
+        }
+    }
+
+    fn parse_block_scalar(&mut self, parent_indent: usize) -> Value {
+        let mut parts = Vec::new();
+        while let Some(event) = self.events.get(self.pos) {
+            match event {
+                YamlEvent::Scalar { indent, text } if *indent > parent_indent => {
+                    parts.push(text.clone());
+                }
+                YamlEvent::Mapping {
+                    indent, key, value, ..
+                } if *indent > parent_indent => {
+                    if let Some(value) = value {
+                        parts.push(format!("{key}: {value}"));
+                    } else {
+                        parts.push(format!("{key}:"));
+                    }
+                }
+                _ => break,
+            }
+            self.pos += 1;
+        }
+        Value::String(parts.join("\n"))
+    }
 }
 
 fn check_yaml_safety(line: &str, line_no: usize, diagnostics: &mut Vec<Diagnostic>) {
     let trimmed = line.trim_start();
-    if trimmed.starts_with('&')
-        || trimmed.starts_with("*")
-        || trimmed.starts_with("!!")
-        || trimmed.starts_with("---")
-        || trimmed.starts_with("<<:")
+    let unquoted = unquoted_view(trimmed);
+    if trimmed == "---"
+        || trimmed == "..."
+        || trimmed.starts_with("--- ")
+        || trimmed.starts_with("... ")
     {
-        diagnostics.push(diag(
-            "NODX-E019",
-            "fatal",
-            "Forbidden YAML safe-subset construct.",
+        diagnostics.push(forbidden(
             line_no,
-            1,
+            "Multiple YAML documents are not supported.",
         ));
     }
-    if trimmed.contains(": &")
-        || trimmed.contains(": *")
-        || trimmed.contains(": !!")
-        || trimmed.contains("<<:")
-        || trimmed.eq("...")
+    if line
+        .chars()
+        .take_while(|c| c.is_ascii_whitespace())
+        .any(|c| c == '\t')
     {
-        diagnostics.push(diag(
-            "NODX-E019",
-            "fatal",
-            "Forbidden YAML safe-subset construct.",
-            line_no,
-            1,
-        ));
+        diagnostics.push(forbidden(line_no, "Forbidden YAML indentation."));
     }
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.contains(".nan") || lower.contains(".inf") || lower.contains("infinity") {
-        diagnostics.push(diag(
-            "NODX-E019",
-            "fatal",
-            "Forbidden YAML non-finite number.",
+    if unquoted.contains('&') || unquoted.contains('*') || unquoted.contains('!') {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML safe-subset construct."));
+    }
+    if unquoted.contains("<<:") || trimmed.starts_with("? ") {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML safe-subset construct."));
+    }
+    if let Some((key, value)) = split_mapping(trimmed) {
+        let key = key.trim();
+        if key.is_empty()
+            || key.starts_with('[')
+            || key.starts_with('{')
+            || key == "?"
+            || key == "<<"
+        {
+            diagnostics.push(forbidden(line_no, "Forbidden YAML mapping key."));
+        }
+        check_scalar_safety(value.trim(), line_no, diagnostics);
+    } else if let Some(value) = trimmed.strip_prefix("- ") {
+        check_scalar_safety(value.trim(), line_no, diagnostics);
+    }
+}
+
+fn check_scalar_safety(raw: &str, line_no: usize, diagnostics: &mut Vec<Diagnostic>) {
+    if raw.is_empty() || is_quoted(raw) || is_block_scalar(raw) {
+        return;
+    }
+    let lower = raw.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        ".nan" | ".inf" | "+.inf" | "-.inf" | ".infinity" | "+.infinity" | "-.infinity"
+    ) {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML non-finite number."));
+    }
+    if lower.starts_with("0x") || lower.starts_with("+0x") || lower.starts_with("-0x") {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML numeric special."));
+    }
+    if lower.starts_with("0b") || lower.starts_with("+0b") || lower.starts_with("-0b") {
+        diagnostics.push(forbidden(line_no, "Forbidden YAML numeric special."));
+    }
+    if is_native_timestamp(raw) {
+        diagnostics.push(forbidden(
             line_no,
-            1,
+            "Native YAML timestamps are not supported.",
         ));
     }
 }
 
-fn parse_block_mapping(
-    lines: &[&str],
-    start: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> (BTreeMap<String, Value>, usize) {
-    let mut map = BTreeMap::new();
-    let mut i = start;
-    while i < lines.len() && lines[i].starts_with("  ") && !lines[i].trim_start().starts_with("- ")
-    {
-        check_yaml_safety(lines[i], i + 2, diagnostics);
-        if let Some((ck, cv)) = lines[i].trim().split_once(':') {
-            map.insert(ck.trim().to_string(), scalar(cv.trim()));
-        }
-        i += 1;
-    }
-    (map, i)
-}
-
-fn parse_block_sequence(
-    lines: &[&str],
-    start: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> (Vec<Value>, usize) {
-    let mut out = Vec::new();
-    let mut i = start;
-    while i < lines.len() {
-        let line = lines[i];
-        if !line.starts_with("  ") {
-            break;
-        }
-        let trimmed = line.trim_start();
-        if !trimmed.starts_with("- ") && trimmed != "-" {
-            break;
-        }
-        check_yaml_safety(line, i + 2, diagnostics);
-        let after = if trimmed == "-" { "" } else { &trimmed[2..] };
-        if let Some((k, v)) = after.split_once(':') {
-            let mut child = BTreeMap::new();
-            let key = k.trim().to_string();
-            let rest = v.trim();
-            if rest.is_empty() {
-                i += 1;
-                while i < lines.len() && lines[i].starts_with("    ") {
-                    check_yaml_safety(lines[i], i + 2, diagnostics);
-                    if let Some((ck, cv)) = lines[i].trim().split_once(':') {
-                        child.insert(ck.trim().to_string(), scalar(cv.trim()));
-                    }
-                    i += 1;
-                }
-                out.push(Value::Map(child));
-                continue;
-            }
-            child.insert(key, scalar(rest));
-            i += 1;
-            while i < lines.len()
-                && lines[i].starts_with("    ")
-                && !lines[i].trim_start().starts_with("- ")
-            {
-                check_yaml_safety(lines[i], i + 2, diagnostics);
-                if let Some((ck, cv)) = lines[i].trim().split_once(':') {
-                    child.insert(ck.trim().to_string(), scalar(cv.trim()));
-                }
-                i += 1;
-            }
-            out.push(Value::Map(child));
-        } else {
-            out.push(scalar(after));
-            i += 1;
+fn split_mapping(input: &str) -> Option<(&str, &str)> {
+    let mut quote = None;
+    for (idx, ch) in input.char_indices() {
+        match (quote, ch) {
+            (Some(q), c) if c == q => quote = None,
+            (None, '"' | '\'') => quote = Some(ch),
+            (None, ':') => return Some((&input[..idx], &input[idx + 1..])),
+            _ => {}
         }
     }
-    (out, i)
+    None
 }
 
 fn scalar(raw: &str) -> Value {
@@ -174,7 +311,13 @@ fn scalar(raw: &str) -> Value {
         Value::Bool(false)
     } else if raw.starts_with('[') && raw.ends_with(']') {
         let inner = &raw[1..raw.len() - 1];
-        Value::List(inner.split(',').map(|s| scalar(s.trim())).collect())
+        Value::List(
+            inner
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| scalar(s.trim()))
+                .collect(),
+        )
     } else if raw.parse::<f64>().is_ok() && raw.chars().any(|c| c.is_ascii_digit()) {
         Value::Number(raw.to_string())
     } else {
@@ -182,10 +325,49 @@ fn scalar(raw: &str) -> Value {
     }
 }
 
+fn unquoted_view(input: &str) -> String {
+    let mut out = String::new();
+    let mut quote = None;
+    for ch in input.chars() {
+        match (quote, ch) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(ch),
+            (None, c) => out.push(c),
+        }
+    }
+    out
+}
+
+fn is_quoted(raw: &str) -> bool {
+    (raw.starts_with('"') && raw.ends_with('"')) || (raw.starts_with('\'') && raw.ends_with('\''))
+}
+
+fn is_block_scalar(raw: &str) -> bool {
+    raw == "|"
+        || raw == ">"
+        || raw.starts_with("|+")
+        || raw.starts_with("|-")
+        || raw.starts_with(">+")
+        || raw.starts_with(">-")
+}
+
+fn is_native_timestamp(raw: &str) -> bool {
+    let bytes = raw.as_bytes();
+    bytes.len() >= 10
+        && bytes[0..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
+}
+
+fn forbidden(line: usize, message: &str) -> Diagnostic {
+    diag("NODX-E019", "fatal", message, line, 1)
+}
+
 pub(crate) fn unquote(raw: &str) -> String {
-    if (raw.starts_with('"') && raw.ends_with('"'))
-        || (raw.starts_with('\'') && raw.ends_with('\''))
-    {
+    if is_quoted(raw) {
         raw[1..raw.len() - 1].to_string()
     } else {
         raw.to_string()

@@ -7,7 +7,7 @@ subtitle: Wide tables, generous spacing, A3 landscape
 language: en
 dir: ltr
 authors: [NODX Working Group]
-created: 2026-05-10
+created: "2026-05-10"
 keywords: [print, landscape, dashboard, spacing, padding]
 requires: [rich-tables, style]
 ---

@@ -163,7 +163,7 @@ function parseMeta(lines, diagnostics) {
     const key = line.slice(0, idx).trim();
     const rest = line.slice(idx + 1).trim();
     if (Object.prototype.hasOwnProperty.call(meta, key)) {
-      diagnostics.push(diag("NODX-E020", "fatal", "Duplicate front matter key.", i + 2, 1));
+      diagnostics.push(diag("NODX-E019", "fatal", "Duplicate front matter key.", i + 2, 1));
     }
     if (rest) {
       meta[key] = scalar(rest);
@@ -186,8 +186,30 @@ function parseMeta(lines, diagnostics) {
 
 function checkYamlSafety(line, lineNo, diagnostics) {
   const trimmed = line.trimStart();
-  if (trimmed.startsWith("&") || trimmed.startsWith("*") || trimmed.startsWith("!!") || trimmed.startsWith("---") || trimmed.startsWith("<<:")) {
+  const unquoted = trimmed.replace(/"[^"]*"|'[^']*'/g, "");
+  if (trimmed === "---" || trimmed === "..." || trimmed.startsWith("--- ") || trimmed.startsWith("... ")) {
+    diagnostics.push(diag("NODX-E019", "fatal", "Multiple YAML documents are not supported.", lineNo, 1));
+  }
+  if (unquoted.includes("&") || unquoted.includes("*") || unquoted.includes("!") || unquoted.includes("<<:") || trimmed.startsWith("? ")) {
     diagnostics.push(diag("NODX-E019", "fatal", "Forbidden YAML safe-subset construct.", lineNo, 1));
+  }
+  const idx = trimmed.indexOf(":");
+  const value = idx >= 0 ? trimmed.slice(idx + 1).trim() : trimmed.replace(/^- /, "").trim();
+  const key = idx >= 0 ? trimmed.slice(0, idx).trim() : "";
+  if (key === "<<" || key === "?" || key.startsWith("[") || key.startsWith("{")) {
+    diagnostics.push(diag("NODX-E019", "fatal", "Forbidden YAML mapping key.", lineNo, 1));
+  }
+  if (!isQuoted(value)) {
+    const lower = value.toLowerCase();
+    if ([".nan", ".inf", "+.inf", "-.inf", ".infinity", "+.infinity", "-.infinity"].includes(lower)) {
+      diagnostics.push(diag("NODX-E019", "fatal", "Forbidden YAML non-finite number.", lineNo, 1));
+    }
+    if (/^[+-]?0[bx]/i.test(value)) {
+      diagnostics.push(diag("NODX-E019", "fatal", "Forbidden YAML numeric special.", lineNo, 1));
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+      diagnostics.push(diag("NODX-E019", "fatal", "Native YAML timestamps are not supported.", lineNo, 1));
+    }
   }
 }
 
@@ -472,8 +494,12 @@ function plain(inlines) {
 }
 
 function unquote(raw) {
-  if ((raw.startsWith("\"") && raw.endsWith("\"")) || (raw.startsWith("'") && raw.endsWith("'"))) return raw.slice(1, -1);
+  if (isQuoted(raw)) return raw.slice(1, -1);
   return raw;
+}
+
+function isQuoted(raw) {
+  return (raw.startsWith("\"") && raw.endsWith("\"")) || (raw.startsWith("'") && raw.endsWith("'"));
 }
 
 function sortValue(value) {

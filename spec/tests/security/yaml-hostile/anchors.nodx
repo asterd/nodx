@@ -1,0 +1,7 @@
+---
+schema: nodx/0.1
+base: &base unsafe
+copy: *base
+---
+
+Body

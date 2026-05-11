@@ -1,0 +1,13 @@
+[package]
+name = "nodx-package"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Safe read-only package reader for NODX"
+
+[lib]
+name = "nodx_package"
+path = "src/lib.rs"
+
+[dependencies]
+nodx-url = { path = "../nodx-url" }

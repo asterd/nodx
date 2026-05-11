@@ -11,7 +11,6 @@ mod html_baseline;
 mod inline_parser;
 mod navigation;
 mod ncp_baseline;
-mod package_baseline;
 mod style_baseline;
 mod tui;
 

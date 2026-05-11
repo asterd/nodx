@@ -21,6 +21,7 @@ Implemented today:
 - Rust reference crate: `crates/nodx-core`
 - Rust URL policy crate: `crates/nodx-url`
 - Rust validator crate: `crates/nodx-validate`
+- Rust package reader crate: `crates/nodx-package`
 - CLI facade: `crates/nodx-cli`
 - Independent JavaScript parser: `packages/nodx-js`
 - Public conformance fixtures: `spec/tests/conformance`
@@ -33,12 +34,11 @@ Rich subset, front matter, delimited blocks, headings, paragraphs, lists, pipe
 tables, literal blocks, attributes, common inline nodes, deterministic
 canonical JSON, focused semantic validation in `nodx-validate`, safe HTML
 rendering, centralized URL/resource policy, TUI rendering, semantic NCP
-projection, and a minimal stored-ZIP package reader with manifest digest
-verification.
+projection, and a safe stored-ZIP package reader with manifest digest
+verification and read-only virtual filesystem access.
 
-The workspace does not yet contain separate `nodx-package`, `nodx-style`,
-`nodx-ncp`, or `nodx-render-html` crates. Those are roadmap targets, not
-current modules.
+The workspace does not yet contain separate `nodx-style`, `nodx-ncp`, or
+`nodx-render-html` crates. Those are roadmap targets, not current modules.
 
 ## Verify
 
@@ -81,9 +81,10 @@ Build the bundled `.nodx` ZIP package example:
 rtk python3 scripts/build_package.py
 ```
 
-The package reader currently handles stored ZIP entries and manifest digest
-verification. Deflated entries, virtual filesystem work, signatures, and
-advanced package policy are deferred.
+The package reader currently handles stored ZIP entries, manifest size and
+digest verification, CRC checks, ZIP path validation, and read-only virtual
+filesystem access. Deflated entries, signatures, and advanced package policy
+are deferred.
 
 ## Media Types
 

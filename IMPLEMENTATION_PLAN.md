@@ -14,6 +14,7 @@ Current workspace:
 ```text
 crates/
   nodx-core/
+  nodx-package/
   nodx-url/
   nodx-validate/
   nodx-cli/
@@ -28,8 +29,9 @@ apps/desktop/
 Current crates and packages:
 
 - `crates/nodx-core`: Rust parser, canonical AST serializer, shared navigation
-  graph resolver, HTML renderer, TUI renderer, NCP projection, and minimal
-  package reader.
+  graph resolver, HTML renderer, TUI renderer, and NCP projection.
+- `crates/nodx-package`: safe stored-ZIP package reader, manifest verifier, and
+  read-only `PackageFs`.
 - `crates/nodx-url`: centralized URL classification, package-relative path
   normalization, `ResourcePolicy`, and shared `ResourceLimits`.
 - `crates/nodx-validate`: semantic validator, profile handling, and stable
@@ -39,9 +41,9 @@ Current crates and packages:
 - `packages/nodx-js`: independent JavaScript parser and canonical serializer
   used for conformance parity.
 
-The repository does not yet have separate `nodx-validate`, `nodx-url`,
-`nodx-package`, `nodx-style`, `nodx-ncp`, `nodx-render-html`, fuzz, security
-corpus, or golden corpus directories. Those are 1.0 roadmap work items.
+The repository does not yet have separate `nodx-style`, `nodx-ncp`,
+`nodx-render-html`, fuzz, or golden corpus directories. Those are 1.0 roadmap
+work items.
 
 ## Implemented Behavior
 
@@ -49,8 +51,8 @@ Implemented now:
 
 - UTF-8 input through Rust `parse_bytes`.
 - Text NODX and stored-ZIP Packaged NODX sniffing.
-- Front matter parser for simple mappings, nested maps, arrays, strings,
-  booleans, numbers, and null.
+- Safe front matter parser for simple mappings, nested maps, arrays, strings,
+  booleans, numbers, null, and the NODX 1.0 forbidden YAML construct set.
 - Compact headings, paragraphs, compact lists, pipe tables, delimited blocks,
   literal `code`, `pre`, `math`, and inline `style` blocks.
 - Attribute blocks with IDs, classes, and quoted named attributes.
@@ -61,8 +63,8 @@ Implemented now:
   issues.
 - Safe HTML escaping and centralized context-aware URL and asset checks.
 - Recursive NCP semantic projection with deterministic SHA-256 hashes.
-- Minimal stored-ZIP package reader with manifest digest verification for
-  generated examples.
+- Safe stored-ZIP package reader with manifest size/digest verification, CRC
+  checks, package path validation, ZIP bomb controls, and read-only virtual FS.
 
 ## Known Gaps Against 1.0
 
@@ -70,7 +72,7 @@ Not implemented yet:
 
 - Full package-level 1.0 profile declaration enforcement.
 - Separate package, style, NCP, and HTML renderer crates.
-- Deflated ZIP entries, package virtual filesystem, and advanced package policy.
+- Deflated ZIP entries and advanced package policy.
 - Full NODS allowlist parser and cascade.
 - Lossless CST, source maps, signatures, mutation SDK, and native PDF/DOCX/PPTX
   exporters.

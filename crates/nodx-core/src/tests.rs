@@ -57,6 +57,44 @@ fn front_matter_block_sequence_of_mappings() {
 }
 
 #[test]
+fn front_matter_preserves_unknown_nested_metadata() {
+    let doc = parse_str(
+        "---\nschema: nodx/0.1\nx-extra:\n  flag: true\n  values: [1, two]\n---\n\nBody\n",
+    );
+    let extra = doc.meta.get("x-extra").expect("x-extra");
+    match extra {
+        Value::Map(map) => {
+            assert!(matches!(map.get("flag"), Some(Value::Bool(true))));
+            assert!(matches!(map.get("values"), Some(Value::List(items)) if items.len() == 2));
+        }
+        other => panic!("expected map, got {other:?}"),
+    }
+}
+
+#[test]
+fn front_matter_rejects_hostile_yaml_constructs() {
+    for source in [
+        "---\nschema: nodx/0.1\nbase: &base x\n---\n",
+        "---\nschema: nodx/0.1\ncopy: *base\n---\n",
+        "---\nschema: nodx/0.1\ntagged: !!str x\n---\n",
+        "---\nschema: nodx/0.1\n<<: {title: x}\n---\n",
+        "---\nschema: nodx/0.1\nschema: nodx/0.1\n---\n",
+        "---\n[not, string]: x\n---\n",
+        "---\nvalue: .nan\n---\n",
+        "---\nvalue: 0x10\n---\n",
+        "---\ndate: 2026-05-11\n---\n",
+        "---\nschema: nodx/0.1\n...\n---\n",
+    ] {
+        let doc = parse_str(source);
+        assert!(
+            doc.diagnostics.iter().any(|d| d.code == "NODX-E019"),
+            "missing NODX-E019 for {source:?}: {:?}",
+            doc.diagnostics
+        );
+    }
+}
+
+#[test]
 fn labelled_close_produces_same_ast_as_plain() {
     let plain = parse_str(":::note\nBody.\n:::\n");
     let labelled = parse_str(":::note\nBody.\n::: note\n");
