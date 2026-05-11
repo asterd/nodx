@@ -27,6 +27,7 @@ venv/
 *.tmp
 *.html
 *.pdf
+NODX_1.0_IMPLEMENTATION_WAVE_PROMPTS.local.md
 
 # OS / editor
 .DS_Store
@@ -35,4 +36,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-
