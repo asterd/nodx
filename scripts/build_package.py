@@ -52,6 +52,27 @@ COMPONENTS_NODC = b"""{
 }
 """
 
+APPROVAL_COMPONENT = b"""---
+schema: nodx/1.0
+name: approval-card
+style: |
+  .nodx-component--approval-card {
+    border-left: 5px solid var(--nodx-color-primary);
+    background-color: #ecfdf5;
+  }
+---
+:::note {class="nodx-component nodx-component--approval-card"}
+## {{title}}
+{{children}}
+:::
+"""
+
+PACKAGE_THEME = b""".nodx-component--approval-card {
+  border-left: 5px solid var(--nodx-color-primary);
+  background-color: #ecfdf5;
+}
+"""
+
 PUBLIC_JWK = b"""{
   "kty": "EC",
   "crv": "P-256",
@@ -103,7 +124,9 @@ def collect_entries() -> list[tuple[str, bytes]]:
     return [
         ("content/document.nodx", (ROOT / "examples/extended-showcase.nodx").read_bytes()),
         ("styles/editorial.nods", EDITORIAL_NODS),
+        ("themes/package.nods", PACKAGE_THEME),
         ("components/editorial-components.nodc", COMPONENTS_NODC),
+        ("components/approval-card.nodx", APPROVAL_COMPONENT),
         ("assets/reference-pipeline.svg", (ROOT / "examples/assets/reference-pipeline.svg").read_bytes()),
         ("assets/demo-placeholder.txt", (ROOT / "examples/assets/demo-placeholder.txt").read_bytes()),
         ("keys/editor-public.jwk", PUBLIC_JWK),
@@ -125,6 +148,10 @@ def build(out_path: Path) -> None:
         "  - style",
         "optional:",
         "  - package",
+        "components:",
+        "  - path: components/approval-card.nodx",
+        "themes:",
+        "  - path: themes/package.nods",
         "entries:",
     ]
     for path, data in entries:

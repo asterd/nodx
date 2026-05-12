@@ -7,7 +7,15 @@ from .limits import DEFAULT_LIMITS
 from .navigation import resolve_navigation
 from .ncp import ncp_json
 from .nods import audit_stylesheet, sanitize_stylesheet, yaml_style_to_css
-from .package import is_packaged_nodx, open_stored_package, package_entry_text
+from .package import (
+    apply_package_extensions,
+    is_packaged_nodx,
+    open_stored_package,
+    package_component_definitions,
+    package_entry_text,
+    package_theme_stylesheets,
+    parse_packaged_document,
+)
 from .render_html import (
     THEME_NAMES,
     render_fragment,
@@ -33,6 +41,10 @@ yamlStyleToCss = yaml_style_to_css
 isPackagedNodx = is_packaged_nodx
 openStoredPackage = open_stored_package
 packageEntryText = package_entry_text
+parsePackagedDocument = parse_packaged_document
+applyPackageExtensions = apply_package_extensions
+packageComponentDefinitions = package_component_definitions
+packageThemeStylesheets = package_theme_stylesheets
 renderFragment = render_fragment
 renderHtml = render_html
 renderSemanticText = render_semantic_text
@@ -66,7 +78,15 @@ __all__ = [
     "openStoredPackage",
     "open_stored_package",
     "packageEntryText",
+    "parsePackagedDocument",
+    "applyPackageExtensions",
+    "packageComponentDefinitions",
+    "packageThemeStylesheets",
     "package_entry_text",
+    "parse_packaged_document",
+    "apply_package_extensions",
+    "package_component_definitions",
+    "package_theme_stylesheets",
     "parse",
     "parse_inlines",
     "parseInlines",

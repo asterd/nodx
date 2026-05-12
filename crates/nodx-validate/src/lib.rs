@@ -229,11 +229,13 @@ fn validate_meta(
 }
 
 fn is_valid_theme(theme: &str) -> bool {
-    matches!(theme, "none" | "plain" | "base" | "web" | "print" | "presentation")
-        || (theme.ends_with(".nodt")
-            && !theme.starts_with('/')
-            && !theme.contains("..")
-            && !theme.contains('\\'))
+    matches!(
+        theme,
+        "none" | "plain" | "base" | "web" | "print" | "presentation" | "docs"
+    ) || (theme.ends_with(".nodt")
+        && !theme.starts_with('/')
+        && !theme.contains("..")
+        && !theme.contains('\\'))
 }
 
 fn validate_required_profile(
@@ -323,15 +325,19 @@ fn validate_nodes(
         match node.node_type.as_str() {
             "heading" => validate_heading(node, &mut state.previous_heading, state.diagnostics),
             "image" => validate_image(node, state.diagnostics, limits),
-            "media" | "embed" | "include" => {
-                validate_asset_node(node, state.diagnostics, limits)
-            }
+            "media" | "embed" | "include" => validate_asset_node(node, state.diagnostics, limits),
             "table" => validate_table(node, state.diagnostics),
             "toc" => validate_toc(node, state.diagnostics),
             "style" => validate_style_block(node, state.diagnostics, limits),
             _ => {}
         }
-        collect_inline_refs(&node.inlines, &mut state.refs, vars, state.diagnostics, limits);
+        collect_inline_refs(
+            &node.inlines,
+            &mut state.refs,
+            vars,
+            state.diagnostics,
+            limits,
+        );
         validate_nodes(&node.children, components, vars, limits, state);
     }
 }
@@ -461,7 +467,12 @@ fn validate_toc(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     if let Some(mode) = node.attrs.get("mode")
         && !matches!(mode.as_str(), "auto" | "manual")
     {
-        diagnostics.push(validation_diag("NODX-E004", "error", "Invalid toc mode.", mode));
+        diagnostics.push(validation_diag(
+            "NODX-E004",
+            "error",
+            "Invalid toc mode.",
+            mode,
+        ));
     }
     if let Some(scope) = node.attrs.get("scope")
         && (!scope.starts_with('#') || scope.len() == 1)
@@ -752,9 +763,7 @@ mod tests {
 
     #[test]
     fn nods_audit_runs_in_validator() {
-        let doc = parse_str(
-            "---\nschema: nodx/1.0\n---\n:::style\na:hover { color: red; }\n:::\n",
-        );
+        let doc = parse_str("---\nschema: nodx/1.0\n---\n:::style\na:hover { color: red; }\n:::\n");
         let diagnostics = Validator::default().validate(&doc);
         assert!(diagnostics.iter().any(|d| d.code == "NODX-E027"));
     }
@@ -859,7 +868,11 @@ mod tests {
                 .unwrap_or_else(|_| panic!("missing golden for {stem}"));
             let doc = parse_str(&source);
             let diagnostics = Validator::default().validate(&doc);
-            assert_eq!(diagnostics_json(&diagnostics), expected.trim_end(), "{stem}");
+            assert_eq!(
+                diagnostics_json(&diagnostics),
+                expected.trim_end(),
+                "{stem}"
+            );
         }
     }
 }

@@ -1,20 +1,24 @@
+import { parse } from "./blockParser.mjs";
 import { resolveNavigation } from "./navigation.mjs";
 import { classifyUri, ReferenceKind } from "./url.mjs";
 import { sanitizeStylesheet, yamlStyleToCss } from "./nods.mjs";
 
-export const THEME_NAMES = ["none", "plain", "base", "web", "print", "presentation"];
+export const THEME_NAMES = ["none", "plain", "base", "web", "print", "presentation", "docs"];
 
 export function renderFragment(doc, options = {}) {
   const navigation = resolveNavigation(doc);
-  const extraStyles = (options.stylesheets ?? []).map((css) => `<style>${sanitizeStylesheet(css)}</style>`).join("");
-  return extraStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, options)).join("");
+  const stylesheets = [...(Array.isArray(doc.meta.stylesheets) ? doc.meta.stylesheets : []), ...(options.stylesheets ?? [])];
+  const extraStyles = stylesheets.map((css) => `<style>${sanitizeStylesheet(css)}</style>`).join("");
+  const componentStyles = componentDefinitions(doc).map((def) => def.style ? `<style>${sanitizeStylesheet(def.style)}</style>` : "").join("");
+  return extraStyles + componentStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, { ...options, doc })).join("");
 }
 
 export function renderHtml(doc, options = {}) {
   const title = typeof doc.meta.title === "string" ? doc.meta.title : deriveTitle(doc.body);
   const lang = typeof doc.meta.language === "string" && doc.meta.language !== "und" ? ` lang="${escapeAttr(doc.meta.language)}"` : "";
   const dir = typeof doc.meta.dir === "string" && doc.meta.dir !== "auto" ? ` dir="${escapeAttr(doc.meta.dir)}"` : "";
-  return `<!doctype html><html${lang}${dir}><meta charset="utf-8"><style>${themeStylesheet(doc.meta.theme)}</style>${title ? `<title>${escapeHtml(title)}</title>` : ""}<body>${renderFragment(doc, options)}</body></html>`;
+  const body = isDocsLayout(doc) ? renderDocsBody(doc, options) : `<body>${renderFragment(doc, options)}</body>`;
+  return `<!doctype html><html${lang}${dir}><meta charset="utf-8"><style>${themeStylesheet(doc.meta.theme)}</style>${title ? `<title>${escapeHtml(title)}</title>` : ""}${body}</html>`;
 }
 
 export function themeStylesheet(theme = "base") {
@@ -32,7 +36,40 @@ export function themeStylesheet(theme = "base") {
   if (name === "web") {
     return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}" + common;
   }
+  if (name === "docs") {
+    return tokens + docsStyles() + common;
+  }
   return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}" + common;
+}
+
+function renderDocsBody(doc, options) {
+  const navigation = resolveNavigation(doc);
+  const entries = navigation.navigations[0]?.entries ?? collectHeadingEntries(doc.body);
+  return `<body class="nodx-docs-layout"><aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries, 2)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside></body>`;
+}
+
+function docsNav(entries, maxLevel) {
+  const items = entries.filter((entry) => entry.id && entry.level <= maxLevel).map((entry) => `<li data-level="${escapeAttr(String(entry.level))}"><a href="#${escapeAttr(entry.id)}">${escapeHtml(entry.title)}</a></li>`).join("");
+  return items ? `<nav><ol>${items}</ol></nav>` : "";
+}
+
+function collectHeadingEntries(nodes, path = "", out = []) {
+  nodes.forEach((node, index) => {
+    const nextPath = childPath(path, index);
+    if (node.type === "heading") {
+      out.push({ id: node.id ?? "", level: Number(node.attrs.level ?? 1), path: nextPath, title: plainInlines(node.inlines) });
+    }
+    collectHeadingEntries(node.children ?? [], nextPath, out);
+  });
+  return out;
+}
+
+function docsTitle(doc) {
+  return typeof doc.meta.title === "string" ? doc.meta.title : deriveTitle(doc.body) ?? "Documentation";
+}
+
+function isDocsLayout(doc) {
+  return doc.meta.layout === "docs" || doc.meta.theme === "docs";
 }
 
 export function renderSemanticText(doc) {
@@ -213,6 +250,8 @@ function renderNode(node, path, navigation, options) {
       attrs: htmlAttrs(node),
     });
   }
+  const component = componentDefinitions(options.doc).find((def) => def.name === node.type && typeof def.template === "string");
+  if (component) return renderComponentTemplate(component, node, path, navigation, options);
   switch (node.type) {
     case "heading": {
       const level = clamp(Number(node.attrs.level ?? 1), 1, 6);
@@ -254,6 +293,26 @@ function renderNode(node, path, navigation, options) {
 
 function renderChildren(node, path, navigation, options) {
   return node.children.map((child, index) => renderNode(child, childPath(path, index), navigation, options)).join("");
+}
+
+function renderComponentTemplate(component, node, path, navigation, options) {
+  const rendered = renderTemplatePart(component.template, component, node, path, navigation, options);
+  const children = renderInlines(node.inlines, options) + renderChildren(node, path, navigation, options);
+  return rendered.replaceAll("<p><var>vars.children</var></p>", children).replaceAll("<var>vars.children</var>", children);
+}
+
+function renderTemplatePart(part, component, node, path, navigation, options) {
+  const parsed = parse(substituteTemplateVars(part, node, options.doc));
+  return parsed.body.map((child, index) => renderNode(child, `${path}.template.${component.name}.${index}`, navigation, options)).join("");
+}
+
+function substituteTemplateVars(source, node, doc) {
+  return source.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_match, key) => {
+    if (key === "children") return "{{children}}";
+    if (key.startsWith("attrs.")) return String(node.attrs[key.slice(6)] ?? "");
+    if (key.startsWith("vars.")) return String(doc?.meta?.vars?.[key.slice(5)] ?? "");
+    return String(node.attrs[key] ?? "");
+  });
 }
 
 function wrapChildren(tag, node, path, navigation, options) {
@@ -325,6 +384,7 @@ function renderLink(item) {
 function htmlAttrs(node) {
   let out = htmlId(node);
   if (node.classes?.length) out += ` class="${escapeAttr(node.classes.join(" "))}"`;
+  if (node.styles && Object.keys(node.styles).length) out += ` style="${escapeAttr(styleAttr(node.styles))}"`;
   if (node.attrs.lang) out += ` lang="${escapeAttr(node.attrs.lang)}"`;
   if (["ltr", "rtl", "auto"].includes(node.attrs.dir)) out += ` dir="${escapeAttr(node.attrs.dir)}"`;
   if (node.attrs.title) out += ` title="${escapeAttr(node.attrs.title)}"`;
@@ -343,6 +403,7 @@ function inlineAttrs(attrs) {
   if (!attrs) return "";
   let out = attrs.id ? ` id="${escapeAttr(attrs.id)}"` : "";
   if (attrs.classes?.length) out += ` class="${escapeAttr(attrs.classes.join(" "))}"`;
+  if (attrs.styles && Object.keys(attrs.styles).length) out += ` style="${escapeAttr(styleAttr(attrs.styles))}"`;
   if (attrs.attrs?.lang) out += ` lang="${escapeAttr(attrs.attrs.lang)}"`;
   if (["ltr", "rtl", "auto"].includes(attrs.attrs?.dir)) out += ` dir="${escapeAttr(attrs.attrs.dir)}"`;
   if (attrs.attrs?.title) out += ` title="${escapeAttr(attrs.attrs.title)}"`;
@@ -355,6 +416,14 @@ function htmlId(node) {
 
 function classAttr(node, extra) {
   return escapeAttr([...(node.classes ?? []), extra].join(" "));
+}
+
+function styleAttr(styles) {
+  return Object.entries(styles).map(([key, value]) => `${key}: ${value}`).join("; ");
+}
+
+function componentDefinitions(doc) {
+  return Array.isArray(doc?.meta?.components) ? doc.meta.components.filter((item) => item && typeof item.name === "string") : [];
 }
 
 function safeLinkUrl(raw) {
@@ -392,6 +461,10 @@ function standardTokens() {
 
 function commonStyles() {
   return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}";
+}
+
+function docsStyles() {
+  return "body.nodx-docs-layout{font:16px/1.65 var(--nodx-font-body);color:var(--nodx-color-text);margin:0;display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(180px,240px);gap:0;min-height:100vh}.nodx-docs-sidebar,.nodx-docs-outline{position:sticky;top:0;height:100vh;overflow:auto;padding:24px 18px;border-color:#e5e7eb}.nodx-docs-sidebar{border-inline-end:1px solid #e5e7eb;background:#f8fafc}.nodx-docs-outline{border-inline-start:1px solid #e5e7eb;background:#fff}.nodx-docs-main{min-width:0;max-width:860px;width:100%;padding:32px 32px 64px;margin:0 auto}.nodx-docs-brand{display:block;font-weight:700;color:var(--nodx-color-text);text-decoration:none;margin-bottom:18px}.nodx-docs-layout nav ol{list-style:none;padding:0;margin:0}.nodx-docs-layout nav li{margin:2px 0}.nodx-docs-layout nav li[data-level=\"2\"]{padding-inline-start:12px}.nodx-docs-layout nav li[data-level=\"3\"],.nodx-docs-layout nav li[data-level=\"4\"],.nodx-docs-layout nav li[data-level=\"5\"],.nodx-docs-layout nav li[data-level=\"6\"]{padding-inline-start:22px}.nodx-docs-layout nav a{display:block;color:#374151;text-decoration:none;border-radius:6px;padding:4px 6px}.nodx-docs-layout nav a:hover{background:#eef2ff;color:#111827}@media(max-width:920px){body.nodx-docs-layout{display:block}.nodx-docs-sidebar,.nodx-docs-outline{position:static;height:auto;border:0;border-bottom:1px solid #e5e7eb}.nodx-docs-outline{display:none}.nodx-docs-main{padding:24px 18px 48px}}";
 }
 
 function clamp(value, min, max) {

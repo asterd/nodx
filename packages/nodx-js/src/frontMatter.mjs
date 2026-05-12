@@ -103,8 +103,14 @@ function parseBlockMapping(lines, start, indent, diagnostics, top) {
       diagnostics.push(diag("NODX-E019", "fatal", "Duplicate front matter key.", i + 2, 1));
     }
     if (rest !== "") {
-      map[key] = scalar(rest);
-      i += 1;
+      if (isBlockScalar(rest)) {
+        const [value, consumed] = parseBlockScalar(lines, i + 1, indent);
+        map[key] = value;
+        i = consumed;
+      } else {
+        map[key] = scalar(rest);
+        i += 1;
+      }
       continue;
     }
     const next = lines[i + 1] ?? "";
@@ -152,7 +158,13 @@ function parseBlockSequence(lines, start, indent, diagnostics) {
       const child = {};
       i += 1;
       if (rest !== "") {
-        child[key] = scalar(rest);
+        if (isBlockScalar(rest)) {
+          const [value, consumed] = parseBlockScalar(lines, i, indent);
+          child[key] = value;
+          i = consumed;
+        } else {
+          child[key] = scalar(rest);
+        }
       } else {
         // Possibly nested mapping/sequence after the `- key:` line
         const peek = lines[i];
@@ -188,9 +200,15 @@ function parseBlockSequence(lines, start, indent, diagnostics) {
         checkYamlSafety(peek, i + 2, diagnostics);
         const ck = peekTrim.slice(0, k).trim();
         const cv = peekTrim.slice(k + 1).trim();
-        if (cv !== "") {
-          child[ck] = scalar(cv);
-          i += 1;
+                if (cv !== "") {
+          if (isBlockScalar(cv)) {
+            const [value, consumed] = parseBlockScalar(lines, i + 1, pi);
+            child[ck] = value;
+            i = consumed;
+          } else {
+            child[ck] = scalar(cv);
+            i += 1;
+          }
         } else {
           // nested under this field
           i += 1;
@@ -219,6 +237,30 @@ function parseBlockSequence(lines, start, indent, diagnostics) {
     }
   }
   return [out, i];
+}
+
+function isBlockScalar(raw) {
+  return raw === "|" || raw === "|-" || raw === "|+";
+}
+
+function parseBlockScalar(lines, start, parentIndent) {
+  let i = start;
+  let blockIndent = null;
+  const out = [];
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") {
+      out.push("");
+      i += 1;
+      continue;
+    }
+    const indent = lineIndent(line);
+    if (indent <= parentIndent) break;
+    if (blockIndent === null) blockIndent = indent;
+    out.push(line.slice(Math.min(blockIndent, line.length)));
+    i += 1;
+  }
+  return [out.join("\n"), i];
 }
 
 function scalar(raw) {

@@ -76,7 +76,7 @@ def validate_meta(doc, requested_profile, diagnostics):
 
 
 def is_valid_theme(theme):
-    return theme in ("none", "plain", "base", "web", "print", "presentation") or (
+    return theme in ("none", "plain", "base", "web", "print", "presentation", "docs") or (
         theme.endswith(".nodt") and not theme.startswith("/") and ".." not in theme and "\\" not in theme
     )
 

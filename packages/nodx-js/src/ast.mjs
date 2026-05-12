@@ -1,9 +1,11 @@
 export function node(type, attrs, children, inlines, text) {
-  return { attrs: attrs.attrs, children, classes: attrs.classes, id: attrs.id, inlines, text, type };
+  const out = { attrs: attrs.attrs, children, classes: attrs.classes, id: attrs.id, inlines, text, type };
+  if (Object.keys(attrs.styles ?? {}).length) out.styles = attrs.styles;
+  return out;
 }
 
 export function emptyAttrs() {
-  return { attrs: {}, classes: [], id: null };
+  return { attrs: {}, classes: [], id: null, styles: {} };
 }
 
 export function firstHeading(nodes) {

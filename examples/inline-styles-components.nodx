@@ -1,0 +1,27 @@
+---
+schema: nodx/1.0
+title: Inline Styles And Components
+theme: web
+components:
+  - name: approval-card
+    template: |
+      :::note {class="nodx-component nodx-component--approval-card" role="approval"}
+      ## {{title}}
+      {{children}}
+      :::
+    style: |
+      .nodx-component--approval-card {
+        border-left: 5px solid var(--nodx-color-primary);
+        background-color: #f0fdfa;
+      }
+---
+
+# Inline Styles And Components
+
+Normal text can carry [[small visual emphasis]]{.inline-chip color="var(--nodx-color-primary)" bg="#ccfbf1" radius="999px" pad="2px 8px" weight="700"} without leaving paragraph flow.
+
+Use the `highlight` preset for [[short callouts]]{highlight}, or keep classes outside the attribute block with [[status text]].status-pill.success.
+
+::approval-card {title="Approved by design"}
+This component is declared in front matter and keeps its children intact.
+::

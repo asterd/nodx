@@ -71,12 +71,14 @@ profiles:
 | Paragraph emphasis | `**strong**`, `*emphasis*`, `` `code` `` |
 | Variable | `{{reviewer}}` or `{{meta.title}}` |
 | Safe link with metadata | `[guide](docs/guide.nodx){title="Open guide" rel="help"}` |
+| Styled inline span | `[[status]]{.pill color="var(--nodx-color-primary)" bg="#ccfbf1" radius="999px" pad="2px 8px"}` |
 | Note/callout | `::note ... ::` |
 | Image | `::image {src="assets/photo.png" alt="Photo description"}` then `::` |
 | Table | `| A | B |` then `|---|---|` |
 | Table of contents | `::toc {title="Contents"}` then `::` |
 | Manual page break | `::pagebreak` then `::` |
 | Style block | `::style`, style rules, then `::` |
+| Documentation layout | `theme: docs` or `layout: docs` |
 
 ### Why Not Just Markdown?
 
@@ -281,8 +283,35 @@ rtk sh scripts/run_conformance.sh
   `scripts/build_package.py`.
 - `examples/layout-fonts.nodx`: visual showcase for horizontal layout, grid,
   asymmetric margins/padding, and different font-family rows.
+- `examples/inline-styles-components.nodx`: focused example for `[[...]]`
+  styled spans, safe style shorthands, class suffix sugar, and front matter
+  component templates.
+- `examples/docs-layout.nodx`: native documentation shell with left
+  navigation, central content, and a right section outline.
 
 The older focused examples remain useful as small regression fixtures.
+
+## Component And Theme Libraries
+
+Packaged NODX ZIP files can be self-contained extension bundles. Add package
+local component templates and stylesheets to `manifest.yaml`:
+
+```yaml
+components:
+  - path: components/approval-card.nodx
+themes:
+  - path: themes/docs.nods
+```
+
+Library APIs apply these extensions before rendering:
+
+- JS: `parsePackagedDocument(bytes)` or `applyPackageExtensions(doc, pkg)`
+- Python: `parse_packaged_document(bytes_)` or `apply_package_extensions(doc, pkg)`
+- Rust: `nodx_package::apply_package_extensions(&doc, &package)`
+
+Remote libraries should be fetched by the host application, checked with an
+integrity digest, opened as a package, and then passed through the same APIs.
+The parser itself does not perform network I/O.
 
 ## Security
 

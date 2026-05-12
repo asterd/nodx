@@ -1,3 +1,5 @@
+import { parse } from "./blockParser.mjs";
+
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
 export function isPackagedNodx(bytes) {
@@ -47,6 +49,69 @@ export function packageEntryText(bytes) {
   return decode(openStoredPackage(bytes).entryBytes);
 }
 
+export function parsePackagedDocument(bytes, options = {}) {
+  const pkg = openStoredPackage(bytes);
+  const doc = parse(decode(pkg.entryBytes));
+  return applyPackageExtensions(doc, pkg, options);
+}
+
+export function applyPackageExtensions(doc, pkg, options = {}) {
+  const out = {
+    ...doc,
+    meta: {
+      ...doc.meta,
+      components: [...(Array.isArray(doc.meta.components) ? doc.meta.components : [])],
+      stylesheets: [...(Array.isArray(doc.meta.stylesheets) ? doc.meta.stylesheets : [])],
+    },
+  };
+  for (const component of packageComponentDefinitions(pkg, options)) out.meta.components.push(component);
+  for (const css of packageThemeStylesheets(pkg, options)) out.meta.stylesheets.push(css);
+  if (!out.meta.components.length) delete out.meta.components;
+  if (!out.meta.stylesheets.length) delete out.meta.stylesheets;
+  return out;
+}
+
+export function packageComponentDefinitions(pkg, options = {}) {
+  const files = pkg.files;
+  const paths = manifestPaths(pkg.manifest.components);
+  if (options.autodiscoverComponents) {
+    for (const path of files.keys()) {
+      if (path.startsWith("components/") && path.endsWith(".nodx") && !paths.includes(path)) paths.push(path);
+    }
+  }
+  return paths.map((path) => parseComponentFile(decodeRequired(files, path), path));
+}
+
+export function packageThemeStylesheets(pkg, options = {}) {
+  const files = pkg.files;
+  const paths = manifestPaths(pkg.manifest.themes);
+  if (options.autodiscoverThemes) {
+    for (const path of files.keys()) {
+      if ((path.startsWith("themes/") || path.startsWith("styles/")) && path.endsWith(".nods") && !paths.includes(path)) paths.push(path);
+    }
+  }
+  return paths.map((path) => decodeRequired(files, path));
+}
+
+function parseComponentFile(text, path) {
+  const body = stripFrontMatter(text);
+  const parsed = parse(text);
+  const name = typeof parsed.meta.name === "string" ? parsed.meta.name : basename(path).replace(/\.nodx$/, "");
+  const component = { name, template: body };
+  if (typeof parsed.meta.style === "string" && parsed.meta.style.trim()) component.style = parsed.meta.style;
+  return component;
+}
+
+function stripFrontMatter(text) {
+  if (!text.startsWith("---\n")) return text;
+  const end = text.indexOf("\n---", 4);
+  if (end < 0) return text;
+  let bodyStart = end + 4;
+  if (text[bodyStart] === "\r") bodyStart += 1;
+  if (text[bodyStart] === "\n") bodyStart += 1;
+  return text.slice(bodyStart);
+}
+
 function readStoredEntry(bytes, offset, compressedSize, uncompressedSize, expectedName) {
   if (u32(bytes, offset) !== 0x04034b50) throw new Error("invalid ZIP local header");
   if (u16(bytes, offset + 8) !== 0) throw new Error("browser package reader supports stored ZIP entries only");
@@ -64,21 +129,43 @@ function readStoredEntry(bytes, offset, compressedSize, uncompressedSize, expect
 }
 
 function parseManifest(text) {
-  const manifest = { schema: "", entry: "", signature: "", entries: [] };
+  const manifest = { schema: "", entry: "", signature: "", entries: [], components: [], themes: [] };
   let inEntries = false;
+  let listField = null;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trimEnd();
     if (!line.trim() || line.trimStart().startsWith("#")) continue;
-    if (!raw.startsWith(" ") && !raw.startsWith("-")) inEntries = false;
+    if (!raw.startsWith(" ") && !raw.startsWith("-")) {
+      inEntries = false;
+      listField = null;
+    }
     if (line.startsWith("schema:")) manifest.schema = unquote(line.slice(7).trim());
     else if (line.startsWith("entry:")) manifest.entry = unquote(line.slice(6).trim());
     else if (line.startsWith("signature:")) manifest.signature = unquote(line.slice(10).trim());
     else if (line === "entries:") inEntries = true;
+    else if (line === "components:") listField = "components";
+    else if (line === "themes:") listField = "themes";
     else if (inEntries && line.trimStart().startsWith("- path:")) {
       manifest.entries.push({ path: unquote(line.trimStart().slice(7).trim()) });
+    } else if (listField && line.trimStart().startsWith("- path:")) {
+      manifest[listField].push({ path: unquote(line.trimStart().slice(7).trim()) });
     }
   }
   return manifest;
+}
+
+function manifestPaths(items) {
+  return Array.isArray(items) ? items.map((item) => typeof item === "string" ? item : item?.path).filter(Boolean) : [];
+}
+
+function decodeRequired(files, path) {
+  const bytes = files.get(path);
+  if (!bytes) throw new Error("package manifest references missing path: " + path);
+  return decode(bytes);
+}
+
+function basename(path) {
+  return path.split("/").pop() ?? path;
 }
 
 function unquote(value) {

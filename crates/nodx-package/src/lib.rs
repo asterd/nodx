@@ -5,7 +5,10 @@ mod manifest;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nodx_core::{ResourceLimits, crc32 as core_crc32, sha256_base64url as core_sha256_base64url};
+use nodx_core::{
+    Document, ResourceLimits, Value, crc32 as core_crc32, parse_str,
+    sha256_base64url as core_sha256_base64url,
+};
 use nodx_url::{ResourcePolicy, UrlError};
 
 use crate::manifest::parse_package_manifest;
@@ -22,6 +25,8 @@ pub struct Package {
     signature_path: Option<String>,
     profiles_required: Vec<String>,
     profiles_optional: Vec<String>,
+    component_paths: Vec<String>,
+    theme_paths: Vec<String>,
     fs: PackageFs,
 }
 
@@ -109,6 +114,29 @@ impl Package {
                 return Err(diag_code("NODX-E021", "Package digest mismatch."));
             }
         }
+        for path in manifest_data
+            .components
+            .iter()
+            .chain(manifest_data.themes.iter())
+        {
+            validate_package_path(path, limits)?;
+            if fs.read(path).is_none() {
+                return Err(diag_code(
+                    "NODX-E021",
+                    "Manifest lists a missing package extension.",
+                ));
+            }
+            if !manifest_data
+                .entries
+                .iter()
+                .any(|entry| entry.path == *path)
+            {
+                return Err(diag_code(
+                    "NODX-E021",
+                    "Package extension paths must also be listed in manifest entries.",
+                ));
+            }
+        }
         let entry = manifest_data
             .entry
             .clone()
@@ -132,6 +160,8 @@ impl Package {
             signature_path,
             profiles_required: manifest_data.profiles_required,
             profiles_optional: manifest_data.profiles_optional,
+            component_paths: manifest_data.components,
+            theme_paths: manifest_data.themes,
             fs,
         })
     }
@@ -158,9 +188,105 @@ impl Package {
         &self.profiles_optional
     }
 
+    pub fn component_paths(&self) -> &[String] {
+        &self.component_paths
+    }
+
+    pub fn theme_paths(&self) -> &[String] {
+        &self.theme_paths
+    }
+
     pub fn fs(&self) -> &PackageFs {
         &self.fs
     }
+}
+
+pub fn apply_package_extensions(
+    doc: &Document,
+    package: &Package,
+) -> Result<Document, PackageDiagnostic> {
+    let mut out = doc.clone();
+    let mut components = match out.meta.remove("components") {
+        Some(Value::List(items)) => items,
+        _ => Vec::new(),
+    };
+    for path in package.component_paths() {
+        components.push(Value::Map(component_definition(package, path)?));
+    }
+    if !components.is_empty() {
+        out.meta
+            .insert("components".to_string(), Value::List(components));
+    }
+
+    let mut stylesheets = match out.meta.remove("stylesheets") {
+        Some(Value::List(items)) => items,
+        _ => Vec::new(),
+    };
+    for path in package.theme_paths() {
+        let text = package_text(package, path)?;
+        stylesheets.push(Value::String(text));
+    }
+    if !stylesheets.is_empty() {
+        out.meta
+            .insert("stylesheets".to_string(), Value::List(stylesheets));
+    }
+    Ok(out)
+}
+
+fn component_definition(
+    package: &Package,
+    path: &str,
+) -> Result<BTreeMap<String, Value>, PackageDiagnostic> {
+    let text = package_text(package, path)?;
+    let parsed = parse_str(&text);
+    let mut map = BTreeMap::new();
+    let name = match parsed.meta.get("name") {
+        Some(Value::String(name)) => name.clone(),
+        _ => path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".nodx")
+            .to_string(),
+    };
+    map.insert("name".to_string(), Value::String(name));
+    map.insert(
+        "template".to_string(),
+        Value::String(strip_front_matter(&text)),
+    );
+    if let Some(Value::String(style)) = parsed.meta.get("style")
+        && !style.trim().is_empty()
+    {
+        map.insert("style".to_string(), Value::String(style.clone()));
+    }
+    Ok(map)
+}
+
+fn package_text(package: &Package, path: &str) -> Result<String, PackageDiagnostic> {
+    let bytes = package
+        .fs()
+        .read(path)
+        .ok_or_else(|| diag_code("NODX-E021", "Package extension path is missing."))?;
+    std::str::from_utf8(bytes)
+        .map(str::to_string)
+        .map_err(|_| diag_code("NODX-E002", "Package extension is not UTF-8."))
+}
+
+fn strip_front_matter(text: &str) -> String {
+    if !text.starts_with("---\n") {
+        return text.to_string();
+    }
+    let Some(end) = text[4..].find("\n---") else {
+        return text.to_string();
+    };
+    let mut body_start = 4 + end + 4;
+    if text.as_bytes().get(body_start) == Some(&b'\r') {
+        body_start += 1;
+    }
+    if text.as_bytes().get(body_start) == Some(&b'\n') {
+        body_start += 1;
+    }
+    text[body_start..].to_string()
 }
 
 impl PackageFs {
@@ -551,12 +677,7 @@ mod tests {
                 0,
             ),
             ("doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
-            (
-                "assets/nested.zip",
-                b"PK\x03\x04demo".to_vec(),
-                0o100644,
-                0,
-            ),
+            ("assets/nested.zip", b"PK\x03\x04demo".to_vec(), 0o100644, 0),
         ]);
         let err = Package::open(&bytes, ResourceLimits::default()).unwrap_err();
         assert_eq!(err.code, "NODX-E010");

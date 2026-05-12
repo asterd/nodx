@@ -124,7 +124,7 @@ function validateMeta(doc, requestedProfile, diagnostics) {
 }
 
 function isValidTheme(theme) {
-  return ["none", "plain", "base", "web", "print", "presentation"].includes(theme)
+  return ["none", "plain", "base", "web", "print", "presentation", "docs"].includes(theme)
     || (theme.endsWith(".nodt") && !theme.startsWith("/") && !theme.includes("..") && !theme.includes("\\"));
 }
 

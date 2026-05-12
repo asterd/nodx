@@ -1,9 +1,11 @@
 use std::{env, fs, path::PathBuf, process};
 
-use nodx_core::{ResourceLimits, canonical_json, is_packaged_nodx, parse_bytes_with_limits, render_tui};
+use nodx_core::{
+    ResourceLimits, canonical_json, is_packaged_nodx, parse_bytes_with_limits, render_tui,
+};
 use nodx_export::{ExportFormat, export_document, loss_report_json};
 use nodx_ncp::ncp_json;
-use nodx_package::Package;
+use nodx_package::{Package, apply_package_extensions};
 use nodx_render_html::{RenderOptions, render_html_with_options};
 use nodx_validate::{ProfileSet, Validator, diagnostics_json, exit_code_for};
 
@@ -161,7 +163,10 @@ fn load_document(bytes: &[u8]) -> Result<nodx_core::Document, i32> {
             }
         };
         match parse_bytes_with_limits(package.entry_bytes(), limits) {
-            Ok(doc) => Ok(doc),
+            Ok(doc) => apply_package_extensions(&doc, &package).map_err(|err| {
+                eprintln!("{}: {}", err.code, err.message);
+                2
+            }),
             Err(diag) => {
                 eprintln!("{}: {}", diag.code, diag.message);
                 Err(if diag.code == "NODX-E024" { 3 } else { 2 })
@@ -241,7 +246,10 @@ fn package_command(args: &[String]) -> i32 {
                     return 3;
                 }
             }
-            println!("digest: {}", nodx_core::sha256_base64url(package.entry_bytes()));
+            println!(
+                "digest: {}",
+                nodx_core::sha256_base64url(package.entry_bytes())
+            );
             println!("entries: {}", package.fs().paths().count());
             println!("valid: {}", exit_code_for(&diagnostics) == 0);
             if !diagnostics.is_empty() {

@@ -1,9 +1,9 @@
 def empty_attrs():
-    return {"attrs": {}, "classes": [], "id": None}
+    return {"attrs": {}, "classes": [], "id": None, "styles": {}}
 
 
 def node(type_, attrs, children, inlines, text):
-    return {
+    out = {
         "attrs": attrs["attrs"],
         "children": children,
         "classes": attrs["classes"],
@@ -12,6 +12,9 @@ def node(type_, attrs, children, inlines, text):
         "text": text,
         "type": type_,
     }
+    if attrs.get("styles"):
+        out["styles"] = attrs["styles"]
+    return out
 
 
 def first_heading(nodes):

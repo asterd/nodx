@@ -1,4 +1,7 @@
-from .attrs import parse_attrs
+import re
+
+from .ast import empty_attrs
+from .attrs import merge_class_suffix, parse_attrs
 
 
 def parse_inlines(input_):
@@ -65,6 +68,22 @@ def parse_inlines(input_):
             end = rest[1:].find("*") + 1
             out.append({"children": parse_inlines(rest[1:end]), "type": "em"})
             i += end + 1
+        elif rest.startswith("[[") and "]]" in rest:
+            close = rest.find("]]")
+            label = rest[2:close]
+            suffix = parse_span_suffix(rest[close + 2 :])
+            if suffix["consumed"] > 0:
+                out.append(
+                    {
+                        "attrs": suffix["attrs"],
+                        "children": parse_inlines(label),
+                        "type": "span",
+                    }
+                )
+                i += close + 2 + suffix["consumed"]
+            else:
+                push_text(out, rest[0])
+                i += 1
         elif rest.startswith("[") and "]" in rest:
             close = rest.find("]")
             label = rest[1:close]
@@ -88,15 +107,15 @@ def parse_inlines(input_):
                 out.append(link)
                 i += close + 1 + end + 1 + consumed_attrs
             elif after.startswith("{") and "}" in after:
-                end = after.find("}")
+                suffix = parse_span_suffix(after)
                 out.append(
                     {
-                        "attrs": parse_attrs(after[: end + 1]),
+                        "attrs": suffix["attrs"],
                         "children": parse_inlines(label),
                         "type": "span",
                     }
                 )
-                i += close + 1 + end + 1
+                i += close + 1 + suffix["consumed"]
             else:
                 push_text(out, rest[0])
                 i += 1
@@ -111,6 +130,36 @@ def parse_inlines(input_):
             push_text(out, rest[0])
             i += 1
     return out
+
+
+def parse_span_suffix(input_):
+    attrs = empty_attrs()
+    consumed = 0
+    saw = False
+    while consumed < len(input_):
+        rest = input_[consumed:]
+        if rest.startswith("{") and "}" in rest:
+            end = rest.find("}")
+            parsed = parse_attrs(rest[: end + 1])
+            attrs["id"] = parsed.get("id") or attrs["id"]
+            attrs["classes"].extend(parsed["classes"])
+            attrs["attrs"].update(parsed["attrs"])
+            attrs["styles"].update(parsed.get("styles", {}))
+            consumed += end + 1
+            saw = True
+        elif rest.startswith("."):
+            match = re.match(r"^(\.[A-Za-z_][A-Za-z0-9_-]*)+", rest)
+            if not match:
+                break
+            merge_class_suffix(attrs, match.group(0))
+            consumed += len(match.group(0))
+            saw = True
+        else:
+            break
+    attrs["classes"] = sorted(set(attrs["classes"]))
+    if not attrs["styles"]:
+        del attrs["styles"]
+    return {"attrs": attrs, "consumed": consumed if saw else 0}
 
 
 def push_text(out, text):

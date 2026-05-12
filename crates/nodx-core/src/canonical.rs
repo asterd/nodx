@@ -43,6 +43,10 @@ fn write_node(out: &mut String, node: &Node) {
     }
     out.push_str(",\"inlines\":");
     write_inlines(out, &node.inlines);
+    if !node.styles.is_empty() {
+        out.push_str(",\"styles\":");
+        write_str_map(out, &node.styles);
+    }
     out.push_str(",\"text\":");
     match &node.text {
         Some(text) => write_json_string(out, text),
@@ -155,6 +159,10 @@ fn write_attrs(out: &mut String, attrs: &Attrs) {
     match &attrs.id {
         Some(id) => write_json_string(out, id),
         None => out.push_str("null"),
+    }
+    if !attrs.styles.is_empty() {
+        out.push_str(",\"styles\":");
+        write_str_map(out, &attrs.styles);
     }
     out.push('}');
 }

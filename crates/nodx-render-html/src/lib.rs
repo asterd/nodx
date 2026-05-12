@@ -2,7 +2,7 @@
 
 use nodx_core::{
     Document, Inline, NavigationGraph, Node, ResourceLimits, Value, default_navigation_label,
-    resolve_navigation, sha256_bytes,
+    parse_str, plain_inlines, resolve_navigation, sha256_bytes,
 };
 use nodx_style::{sanitize_stylesheet, yaml_style_to_css};
 use nodx_url::{ReferenceKind, ResourcePolicy};
@@ -58,7 +58,18 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
     }
 
     let stylesheet = base_stylesheet(doc);
-    let style_hash = sha256_base64_for_csp(stylesheet.as_bytes());
+    let mut style_hashes = vec![sha256_base64_for_csp(stylesheet.as_bytes())];
+    for component in component_definitions(doc) {
+        if let Some(style) = component_style(component) {
+            let sanitized = sanitize_stylesheet(style, policy.limits());
+            style_hashes.push(sha256_base64_for_csp(sanitized.as_bytes()));
+        }
+    }
+    for stylesheet in document_stylesheets(doc) {
+        let sanitized = sanitize_stylesheet(stylesheet, policy.limits());
+        style_hashes.push(sha256_base64_for_csp(sanitized.as_bytes()));
+    }
+    let inline_style_hashes = inline_style_hashes(doc);
 
     let lang = match doc.meta.get("language") {
         Some(Value::String(s)) if s != "und" => s.clone(),
@@ -86,8 +97,17 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
     out.push_str("><meta charset=\"utf-8\">");
     if options.include_csp {
         out.push_str("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data:; style-src 'sha256-");
-        out.push_str(&style_hash);
-        out.push_str("'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\">");
+        out.push_str(&style_hashes.join("' 'sha256-"));
+        out.push('\'');
+        if !inline_style_hashes.is_empty() {
+            out.push_str(" 'unsafe-hashes'");
+            for hash in inline_style_hashes {
+                out.push_str(" 'sha256-");
+                out.push_str(&hash);
+                out.push('\'');
+            }
+        }
+        out.push_str("; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\">");
     }
     out.push_str("<style>");
     out.push_str(&stylesheet);
@@ -109,8 +129,28 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
 
 fn render_body(doc: &Document, navigation: &NavigationGraph, policy: ResourcePolicy) -> String {
     let mut out = String::new();
+    for stylesheet in document_stylesheets(doc) {
+        out.push_str("<style>");
+        out.push_str(&sanitize_stylesheet(stylesheet, policy.limits()));
+        out.push_str("</style>");
+    }
+    for component in component_definitions(doc) {
+        if let Some(style) = component_style(component) {
+            out.push_str("<style>");
+            out.push_str(&sanitize_stylesheet(style, policy.limits()));
+            out.push_str("</style>");
+        }
+    }
+    if is_docs_layout(doc) {
+        let mut content = String::new();
+        for (i, node) in doc.body.iter().enumerate() {
+            render_node(&mut content, node, &i.to_string(), navigation, policy, doc);
+        }
+        render_docs_body(&mut out, doc, navigation, &content);
+        return out;
+    }
     for (i, node) in doc.body.iter().enumerate() {
-        render_node(&mut out, node, &i.to_string(), navigation, policy);
+        render_node(&mut out, node, &i.to_string(), navigation, policy, doc);
     }
     out
 }
@@ -160,6 +200,12 @@ fn base_stylesheet(doc: &Document) -> String {
             css.push_str(common_styles());
             css
         }
+        "docs" => {
+            let mut css = String::from(standard_tokens());
+            css.push_str(docs_styles());
+            css.push_str(common_styles());
+            css
+        }
         _ => {
             let mut css = String::from(standard_tokens());
             css.push_str("body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}");
@@ -177,6 +223,10 @@ fn common_styles() -> &'static str {
     "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
 }
 
+fn docs_styles() -> &'static str {
+    "body.nodx-docs-layout{font:16px/1.65 var(--nodx-font-body);color:var(--nodx-color-text);margin:0;display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(180px,240px);gap:0;min-height:100vh}.nodx-docs-sidebar,.nodx-docs-outline{position:sticky;top:0;height:100vh;overflow:auto;padding:24px 18px;border-color:#e5e7eb}.nodx-docs-sidebar{border-inline-end:1px solid #e5e7eb;background:#f8fafc}.nodx-docs-outline{border-inline-start:1px solid #e5e7eb;background:#fff}.nodx-docs-main{min-width:0;max-width:860px;width:100%;padding:32px 32px 64px;margin:0 auto}.nodx-docs-brand{display:block;font-weight:700;color:var(--nodx-color-text);text-decoration:none;margin-bottom:18px}.nodx-docs-layout nav ol{list-style:none;padding:0;margin:0}.nodx-docs-layout nav li{margin:2px 0}.nodx-docs-layout nav li[data-level=\"2\"]{padding-inline-start:12px}.nodx-docs-layout nav li[data-level=\"3\"],.nodx-docs-layout nav li[data-level=\"4\"],.nodx-docs-layout nav li[data-level=\"5\"],.nodx-docs-layout nav li[data-level=\"6\"]{padding-inline-start:22px}.nodx-docs-layout nav a{display:block;color:#374151;text-decoration:none;border-radius:6px;padding:4px 6px}.nodx-docs-layout nav a:hover{background:#eef2ff;color:#111827}@media(max-width:920px){body.nodx-docs-layout{display:block}.nodx-docs-sidebar,.nodx-docs-outline{position:static;height:auto;border:0;border-bottom:1px solid #e5e7eb}.nodx-docs-outline{display:none}.nodx-docs-main{padding:24px 18px 48px}}"
+}
+
 fn sha256_base64_for_csp(input: &[u8]) -> String {
     let digest = sha256_bytes(input);
     // CSP hash uses standard base64 with padding, not base64url
@@ -184,8 +234,7 @@ fn sha256_base64_for_csp(input: &[u8]) -> String {
 }
 
 fn base64_standard(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 3 <= input.len() {
@@ -222,7 +271,12 @@ fn render_node(
     path: &str,
     navigation: &NavigationGraph,
     policy: ResourcePolicy,
+    doc: &Document,
 ) {
+    if let Some(template) = component_template(doc, &node.node_type) {
+        render_component_template(out, template, node, path, navigation, policy, doc);
+        return;
+    }
     match node.node_type.as_str() {
         "heading" => {
             let level = node
@@ -235,10 +289,10 @@ fn render_node(
             render_inlines(out, &node.inlines, policy);
             out.push_str(&format!("</h{}>", level));
         }
-        "paragraph" => wrap_inlines(out, "p", node, path, navigation, policy),
-        "section" => wrap_children(out, "section", node, path, navigation, policy),
-        "note" => wrap_children(out, "aside", node, path, navigation, policy),
-        "quote" => wrap_children(out, "blockquote", node, path, navigation, policy),
+        "paragraph" => wrap_inlines(out, "p", node, path, navigation, policy, doc),
+        "section" => wrap_children(out, "section", node, path, navigation, policy, doc),
+        "note" => wrap_children(out, "aside", node, path, navigation, policy, doc),
+        "quote" => wrap_children(out, "blockquote", node, path, navigation, policy, doc),
         "list" => {
             let tag = if node.attrs.get("kind").map(|s| s.as_str()) == Some("ordered") {
                 "ol"
@@ -247,11 +301,11 @@ fn render_node(
             };
             out.push_str(tag_open(tag, node).as_str());
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation, policy);
+                render_node(out, child, &child_path(path, i), navigation, policy, doc);
             }
             out.push_str(&format!("</{}>", tag));
         }
-        "item" => wrap_inlines(out, "li", node, path, navigation, policy),
+        "item" => wrap_inlines(out, "li", node, path, navigation, policy, doc),
         "code" | "pre" => {
             out.push_str("<pre><code");
             if let Some(lang) = node.attrs.get("lang") {
@@ -279,24 +333,21 @@ fn render_node(
                 raw_style
             };
             out.push_str("<style>");
-            out.push_str(&sanitize_stylesheet(
-                source,
-                policy.limits(),
-            ));
+            out.push_str(&sanitize_stylesheet(source, policy.limits()));
             out.push_str("</style>");
         }
-        "table" => wrap_children(out, "table", node, path, navigation, policy),
-        "row" => wrap_children(out, "tr", node, path, navigation, policy),
+        "table" => wrap_children(out, "table", node, path, navigation, policy, doc),
+        "row" => wrap_children(out, "tr", node, path, navigation, policy, doc),
         "cell" => {
             let tag = if node.attrs.get("header").map(|s| s.as_str()) == Some("true") {
                 "th"
             } else {
                 "td"
             };
-            wrap_inlines(out, tag, node, path, navigation, policy);
+            wrap_inlines(out, tag, node, path, navigation, policy, doc);
         }
-        "figure" => wrap_children(out, "figure", node, path, navigation, policy),
-        "caption" => wrap_inlines(out, "figcaption", node, path, navigation, policy),
+        "figure" => wrap_children(out, "figure", node, path, navigation, policy, doc),
+        "caption" => wrap_inlines(out, "figcaption", node, path, navigation, policy, doc),
         "image" => {
             let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
             let safe_src = node
@@ -318,7 +369,7 @@ fn render_node(
                 }
             }
         }
-        "form" => wrap_children(out, "dl", node, path, navigation, policy),
+        "form" => wrap_children(out, "dl", node, path, navigation, policy, doc),
         "field" => {
             out.push_str("<div");
             out.push_str(&html_id(node));
@@ -411,23 +462,37 @@ fn render_node(
             }
             out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation, policy);
+                render_node(out, child, &child_path(path, i), navigation, policy, doc);
             }
             out.push_str("</figure>");
         }
-        "bibliography" => wrap_children(out, "ol", node, path, navigation, policy),
-        "citation-entry" => wrap_inlines(out, "li", node, path, navigation, policy),
+        "bibliography" => wrap_children(out, "ol", node, path, navigation, policy, doc),
+        "citation-entry" => wrap_inlines(out, "li", node, path, navigation, policy, doc),
         "speaker-notes" => {
             out.push_str("<aside");
             out.push_str(&html_id(node));
             out.push_str(" class=\"speaker-notes\" aria-label=\"Speaker notes\">");
             render_inlines(out, &node.inlines, policy);
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation, policy);
+                render_node(out, child, &child_path(path, i), navigation, policy, doc);
             }
             out.push_str("</aside>");
         }
-        _ => wrap_children(out, "div", node, path, navigation, policy),
+        _ if node.node_type.contains('-') => {
+            out.push_str("<section");
+            out.push_str(&html_attrs(node));
+            out.push_str(" class=\"nodx-component nodx-component--fallback\" data-component=\"");
+            escape_attr(out, &node.node_type);
+            out.push_str("\"><p class=\"nodx-component__title\">");
+            escape_html(out, &format!("{} fallback", node.node_type));
+            out.push_str("</p>");
+            render_inlines(out, &node.inlines, policy);
+            for (i, child) in node.children.iter().enumerate() {
+                render_node(out, child, &child_path(path, i), navigation, policy, doc);
+            }
+            out.push_str("</section>");
+        }
+        _ => wrap_children(out, "div", node, path, navigation, policy, doc),
     }
 }
 
@@ -438,10 +503,11 @@ fn wrap_children(
     path: &str,
     navigation: &NavigationGraph,
     policy: ResourcePolicy,
+    doc: &Document,
 ) {
     out.push_str(tag_open(tag, node).as_str());
     for (i, child) in node.children.iter().enumerate() {
-        render_node(out, child, &child_path(path, i), navigation, policy);
+        render_node(out, child, &child_path(path, i), navigation, policy, doc);
     }
     out.push_str(&format!("</{}>", tag));
 }
@@ -453,13 +519,281 @@ fn wrap_inlines(
     path: &str,
     navigation: &NavigationGraph,
     policy: ResourcePolicy,
+    doc: &Document,
 ) {
     out.push_str(tag_open(tag, node).as_str());
     render_inlines(out, &node.inlines, policy);
     for (i, child) in node.children.iter().enumerate() {
-        render_node(out, child, &child_path(path, i), navigation, policy);
+        render_node(out, child, &child_path(path, i), navigation, policy, doc);
     }
     out.push_str(&format!("</{}>", tag));
+}
+
+fn render_component_template(
+    out: &mut String,
+    template: &str,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+    doc: &Document,
+) {
+    let source = substitute_template_vars(template, node, doc);
+    let parsed = parse_str(&source);
+    let mut rendered = String::new();
+    for (i, child) in parsed.body.iter().enumerate() {
+        render_node(
+            &mut rendered,
+            child,
+            &format!("{path}.template.{}.{}", node.node_type, i),
+            navigation,
+            policy,
+            doc,
+        );
+    }
+    let mut children = String::new();
+    render_inlines(&mut children, &node.inlines, policy);
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(
+            &mut children,
+            child,
+            &child_path(path, i),
+            navigation,
+            policy,
+            doc,
+        );
+    }
+    out.push_str(
+        &rendered
+            .replace("<p><var>vars.children</var></p>", &children)
+            .replace("<var>vars.children</var>", &children),
+    );
+}
+
+fn render_docs_body(out: &mut String, doc: &Document, navigation: &NavigationGraph, content: &str) {
+    let fallback_entries = if navigation.navigations.is_empty() {
+        collect_heading_entries(&doc.body)
+    } else {
+        Vec::new()
+    };
+    out.push_str("<body class=\"nodx-docs-layout\"><aside class=\"nodx-docs-sidebar\"><a class=\"nodx-docs-brand\" href=\"#\">");
+    escape_html(out, &docs_title(doc));
+    out.push_str("</a>");
+    render_docs_nav(out, navigation, &fallback_entries, 2, false);
+    out.push_str("</aside><main class=\"nodx-docs-main\">");
+    out.push_str(content);
+    out.push_str("</main><aside class=\"nodx-docs-outline\">");
+    render_docs_nav(out, navigation, &fallback_entries, 6, true);
+    out.push_str("</aside></body>");
+}
+
+fn render_docs_nav(
+    out: &mut String,
+    navigation: &NavigationGraph,
+    fallback_entries: &[(String, String, usize)],
+    max_level: usize,
+    skip_level_one: bool,
+) {
+    out.push_str("<nav><ol>");
+    if let Some(nav) = navigation.navigations.first() {
+        for entry in &nav.entries {
+            render_docs_nav_item(
+                out,
+                &entry.id,
+                &entry.title,
+                entry.level,
+                max_level,
+                skip_level_one,
+            );
+        }
+    } else {
+        for (id, title, level) in fallback_entries {
+            render_docs_nav_item(out, id, title, *level, max_level, skip_level_one);
+        }
+    }
+    out.push_str("</ol></nav>");
+}
+
+fn render_docs_nav_item(
+    out: &mut String,
+    id: &str,
+    title: &str,
+    level: usize,
+    max_level: usize,
+    skip_level_one: bool,
+) {
+    if level > max_level || skip_level_one && level <= 1 || !is_safe_fragment_id(id) {
+        return;
+    }
+    out.push_str("<li data-level=\"");
+    out.push_str(&level.to_string());
+    out.push_str("\"><a href=\"#");
+    escape_attr(out, id);
+    out.push_str("\">");
+    escape_html(out, title);
+    out.push_str("</a></li>");
+}
+
+fn collect_heading_entries(nodes: &[Node]) -> Vec<(String, String, usize)> {
+    let mut out = Vec::new();
+    collect_heading_entries_at(nodes, &mut out);
+    out
+}
+
+fn collect_heading_entries_at(nodes: &[Node], out: &mut Vec<(String, String, usize)>) {
+    for node in nodes {
+        if node.node_type == "heading" {
+            let id = node.id.clone().unwrap_or_default();
+            let title = plain_inlines(&node.inlines);
+            let level = node
+                .attrs
+                .get("level")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1);
+            out.push((id, title, level));
+        }
+        collect_heading_entries_at(&node.children, out);
+    }
+}
+
+fn docs_title(doc: &Document) -> String {
+    match doc.meta.get("title") {
+        Some(Value::String(title)) => title.clone(),
+        _ => derive_title(&doc.body).unwrap_or_else(|| "Documentation".to_string()),
+    }
+}
+
+fn is_docs_layout(doc: &Document) -> bool {
+    matches!(doc.meta.get("layout"), Some(Value::String(layout)) if layout == "docs")
+        || matches!(doc.meta.get("theme"), Some(Value::String(theme)) if theme == "docs")
+}
+
+fn substitute_template_vars(source: &str, node: &Node, doc: &Document) -> String {
+    let mut out = String::new();
+    let mut rest = source;
+    while let Some(start) = rest.find("{{") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        let Some(end) = after.find("}}") else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let key = after[..end].trim();
+        if key == "children" {
+            out.push_str("{{children}}");
+        } else if let Some(name) = key.strip_prefix("attrs.") {
+            out.push_str(node.attrs.get(name).map(String::as_str).unwrap_or(""));
+        } else if let Some(name) = key.strip_prefix("vars.") {
+            out.push_str(meta_string_map(doc.meta.get("vars"), name).unwrap_or(""));
+        } else {
+            out.push_str(node.attrs.get(key).map(String::as_str).unwrap_or(""));
+        }
+        rest = &after[end + 2..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn component_definitions(doc: &Document) -> Vec<&std::collections::BTreeMap<String, Value>> {
+    match doc.meta.get("components") {
+        Some(Value::List(items)) => items
+            .iter()
+            .filter_map(|item| match item {
+                Value::Map(map) if matches!(map.get("name"), Some(Value::String(_))) => Some(map),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn document_stylesheets(doc: &Document) -> Vec<&str> {
+    match doc.meta.get("stylesheets") {
+        Some(Value::List(items)) => items
+            .iter()
+            .filter_map(|item| match item {
+                Value::String(css) => Some(css.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn component_template<'a>(doc: &'a Document, name: &str) -> Option<&'a str> {
+    component_definitions(doc).into_iter().find_map(|component| {
+        if matches!(component.get("name"), Some(Value::String(component_name)) if component_name == name) {
+            match component.get("template") {
+                Some(Value::String(template)) => Some(template.as_str()),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    })
+}
+
+fn component_style(component: &std::collections::BTreeMap<String, Value>) -> Option<&str> {
+    match component.get("style") {
+        Some(Value::String(style)) => Some(style.as_str()),
+        _ => None,
+    }
+}
+
+fn inline_style_hashes(doc: &Document) -> Vec<String> {
+    let mut values = Vec::new();
+    collect_node_style_values(&doc.body, &mut values);
+    values
+        .into_iter()
+        .map(|value| sha256_base64_for_csp(value.as_bytes()))
+        .collect()
+}
+
+fn collect_node_style_values(nodes: &[Node], out: &mut Vec<String>) {
+    for node in nodes {
+        if !node.styles.is_empty() {
+            out.push(style_attr(&node.styles));
+        }
+        collect_inline_style_values(&node.inlines, out);
+        collect_node_style_values(&node.children, out);
+    }
+}
+
+fn collect_inline_style_values(inlines: &[Inline], out: &mut Vec<String>) {
+    for inline in inlines {
+        match inline {
+            Inline::Strong(children)
+            | Inline::Em(children)
+            | Inline::Mark(children)
+            | Inline::Sub(children)
+            | Inline::Sup(children) => collect_inline_style_values(children, out),
+            Inline::Link { label, .. } => collect_inline_style_values(label, out),
+            Inline::Span { children, attrs } => {
+                if !attrs.styles.is_empty() {
+                    out.push(style_attr(&attrs.styles));
+                }
+                collect_inline_style_values(children, out);
+            }
+            Inline::Text(_)
+            | Inline::Code(_)
+            | Inline::Var { .. }
+            | Inline::Ref { .. }
+            | Inline::Mention { .. }
+            | Inline::FootnoteRef { .. }
+            | Inline::CitationRef { .. }
+            | Inline::MathInline { .. } => {}
+        }
+    }
+}
+
+fn meta_string_map<'a>(value: Option<&'a Value>, key: &str) -> Option<&'a str> {
+    match value {
+        Some(Value::Map(map)) => match map.get(key) {
+            Some(Value::String(value)) => Some(value.as_str()),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn child_path(prefix: &str, index: usize) -> String {
@@ -498,6 +832,11 @@ fn html_attrs(node: &Node) -> String {
         }
         s.push('"');
     }
+    if !node.styles.is_empty() {
+        s.push_str(" style=\"");
+        escape_attr(&mut s, &style_attr(&node.styles));
+        s.push('"');
+    }
     if let Some(lang) = node.attrs.get("lang") {
         s.push_str(" lang=\"");
         escape_attr(&mut s, lang);
@@ -516,6 +855,19 @@ fn html_attrs(node: &Node) -> String {
         s.push('"');
     }
     s
+}
+
+fn style_attr(styles: &std::collections::BTreeMap<String, String>) -> String {
+    let mut out = String::new();
+    for (i, (key, value)) in styles.iter().enumerate() {
+        if i > 0 {
+            out.push_str("; ");
+        }
+        out.push_str(key);
+        out.push_str(": ");
+        out.push_str(value);
+    }
+    out
 }
 
 fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) {
@@ -590,6 +942,11 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 if let Some(id) = &attrs.id {
                     out.push_str(" id=\"");
                     escape_attr(out, id);
+                    out.push('"');
+                }
+                if !attrs.styles.is_empty() {
+                    out.push_str(" style=\"");
+                    escape_attr(out, &style_attr(&attrs.styles));
                     out.push('"');
                 }
                 if let Some(lang) = attrs.attrs.get("lang") {
@@ -794,9 +1151,7 @@ mod tests {
 
     #[test]
     fn forbidden_nods_emits_inline_omit_marker() {
-        let doc = parse_str(
-            ":::style\na:hover { color: red; }\np { color: blue; }\n:::\n",
-        );
+        let doc = parse_str(":::style\na:hover { color: red; }\np { color: blue; }\n:::\n");
         let html = render_html(&doc);
         assert!(!html.contains(":hover"));
         assert!(html.contains("color: blue"));
@@ -859,14 +1214,8 @@ mod tests {
             let source = std::fs::read_to_string(&path).expect("read fixture");
             let doc = parse_str(&source);
             let html = render_html(&doc).to_ascii_lowercase();
-            for tag in [
-                "<script", "<iframe", "<object", "<embed", "<svg",
-            ] {
-                assert!(
-                    !html.contains(tag),
-                    "{:?} leaked {tag}",
-                    path.file_name()
-                );
+            for tag in ["<script", "<iframe", "<object", "<embed", "<svg"] {
+                assert!(!html.contains(tag), "{:?} leaked {tag}", path.file_name());
             }
             for href in [
                 "href=\"javascript",
@@ -876,25 +1225,30 @@ mod tests {
                 "src=\"data:text/html",
                 "src=\"data:image/svg",
             ] {
-                assert!(
-                    !html.contains(href),
-                    "{:?} leaked {href}",
-                    path.file_name()
-                );
+                assert!(!html.contains(href), "{:?} leaked {href}", path.file_name());
             }
             count += 1;
         }
-        assert!(count >= 40, "expected at least 40 XSS fixtures, found {count}");
+        assert!(
+            count >= 40,
+            "expected at least 40 XSS fixtures, found {count}"
+        );
     }
 
     #[test]
     fn xss_payload_corpus_is_neutralized() {
-        let doc =
-            parse_str(include_str!("../../../spec/tests/security/xss/payloads.nodx"));
+        let doc = parse_str(include_str!(
+            "../../../spec/tests/security/xss/payloads.nodx"
+        ));
         let html = render_html(&doc).to_ascii_lowercase();
         // No executable HTML elements
         for tag in [
-            "<script", "<iframe", "<object", "<embed", "<svg", "<img src=x",
+            "<script",
+            "<iframe",
+            "<object",
+            "<embed",
+            "<svg",
+            "<img src=x",
         ] {
             assert!(!html.contains(tag), "renderer leaked tag `{tag}`");
         }

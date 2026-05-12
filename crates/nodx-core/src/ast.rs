@@ -16,6 +16,7 @@ pub struct Node {
     pub id: Option<String>,
     pub classes: Vec<String>,
     pub attrs: BTreeMap<String, String>,
+    pub styles: BTreeMap<String, String>,
     pub children: Vec<Node>,
     pub inlines: Vec<Inline>,
     pub text: Option<String>,
@@ -35,13 +36,30 @@ pub enum Inline {
         target: String,
         attrs: Attrs,
     },
-    Span { children: Vec<Inline>, attrs: Attrs },
-    Var { namespace: String, name: String },
-    Ref { target: String },
-    Mention { kind: String, target: String },
-    FootnoteRef { target: String },
-    CitationRef { target: String },
-    MathInline { source: String },
+    Span {
+        children: Vec<Inline>,
+        attrs: Attrs,
+    },
+    Var {
+        namespace: String,
+        name: String,
+    },
+    Ref {
+        target: String,
+    },
+    Mention {
+        kind: String,
+        target: String,
+    },
+    FootnoteRef {
+        target: String,
+    },
+    CitationRef {
+        target: String,
+    },
+    MathInline {
+        source: String,
+    },
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -49,6 +67,7 @@ pub struct Attrs {
     pub id: Option<String>,
     pub classes: Vec<String>,
     pub attrs: BTreeMap<String, String>,
+    pub styles: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,6 +105,7 @@ impl Node {
             id: attrs.id,
             classes: attrs.classes,
             attrs: attrs.attrs,
+            styles: attrs.styles,
             children,
             inlines,
             text,

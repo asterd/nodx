@@ -75,8 +75,11 @@ def parse_block_mapping(lines, start, indent, diagnostics, top):
         if key in map_:
             diagnostics.append(diag("NODX-E019", "fatal", "Duplicate front matter key.", i + 2, 1))
         if rest != "":
-            map_[key] = scalar(rest)
-            i += 1
+            if is_block_scalar(rest):
+                map_[key], i = parse_block_scalar(lines, i + 1, indent)
+            else:
+                map_[key] = scalar(rest)
+                i += 1
             continue
         next_ = lines[i + 1] if i + 1 < len(lines) else ""
         next_indent = line_indent(next_)
@@ -119,7 +122,10 @@ def parse_block_sequence(lines, start, indent, diagnostics):
             child = {}
             i += 1
             if rest != "":
-                child[key] = scalar(rest)
+                if is_block_scalar(rest):
+                    child[key], i = parse_block_scalar(lines, i, indent)
+                else:
+                    child[key] = scalar(rest)
             else:
                 i = parse_nested_field(lines, i, indent, diagnostics, child, key)
             while i < len(lines):
@@ -140,8 +146,11 @@ def parse_block_sequence(lines, start, indent, diagnostics):
                 ck = peek_trim[:k].strip()
                 cv = peek_trim[k + 1 :].strip()
                 if cv != "":
-                    child[ck] = scalar(cv)
-                    i += 1
+                    if is_block_scalar(cv):
+                        child[ck], i = parse_block_scalar(lines, i + 1, pi)
+                    else:
+                        child[ck] = scalar(cv)
+                        i += 1
                 else:
                     i += 1
                     i = parse_nested_field(lines, i, pi, diagnostics, child, ck)
@@ -150,6 +159,30 @@ def parse_block_sequence(lines, start, indent, diagnostics):
             out.append(scalar(after))
             i += 1
     return out, i
+
+
+def is_block_scalar(raw):
+    return raw in ("|", "|-", "|+")
+
+
+def parse_block_scalar(lines, start, parent_indent):
+    i = start
+    block_indent = None
+    out = []
+    while i < len(lines):
+        line = lines[i]
+        if line.strip() == "":
+            out.append("")
+            i += 1
+            continue
+        indent = line_indent(line)
+        if indent <= parent_indent:
+            break
+        if block_indent is None:
+            block_indent = indent
+        out.append(line[min(block_indent, len(line)) :])
+        i += 1
+    return "\n".join(out), i
 
 
 def parse_nested_field(lines, i, indent, diagnostics, child, key):

@@ -76,6 +76,8 @@ def navigation_entries_json(entries):
 
 def ncp_node_hash_input(item):
     out = item["type"] + "\n" + (item["id"] or "") + "\n" + canonical_stringify(item["attrs"]) + "\n"
+    if item.get("styles"):
+        out += canonical_stringify(item["styles"]) + "\n"
     out += item["text"] or ""
     out += plain_inlines(item["inlines"])
     for child in item["children"]:

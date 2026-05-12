@@ -39,9 +39,6 @@ fn yaml_events(lines: &[&str], diagnostics: &mut Vec<Diagnostic>) -> Vec<YamlEve
     let mut block_scalar_indent: Option<usize> = None;
     for (idx, line) in lines.iter().enumerate() {
         let line_no = idx + 2;
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
         let indent = line.chars().take_while(|c| *c == ' ').count();
         let trimmed = &line[indent..];
         if let Some(block_indent) = block_scalar_indent {
@@ -56,6 +53,9 @@ fn yaml_events(lines: &[&str], diagnostics: &mut Vec<Diagnostic>) -> Vec<YamlEve
                 continue;
             }
             block_scalar_indent = None;
+        }
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
         }
         check_yaml_safety(line, line_no, diagnostics);
         if let Some(rest) = trimmed.strip_prefix("- ") {
@@ -310,10 +310,7 @@ fn check_scalar_safety(raw: &str, line_no: usize, diagnostics: &mut Vec<Diagnost
     if lower.starts_with("0o") || lower.starts_with("+0o") || lower.starts_with("-0o") {
         diagnostics.push(forbidden(line_no, "Forbidden YAML numeric special."));
     }
-    if matches!(
-        lower.as_str(),
-        "yes" | "no" | "on" | "off" | "y" | "n"
-    ) {
+    if matches!(lower.as_str(), "yes" | "no" | "on" | "off" | "y" | "n") {
         diagnostics.push(forbidden(
             line_no,
             "Forbidden YAML boolean alias; use true/false.",

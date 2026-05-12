@@ -234,9 +234,11 @@ impl CstDocument {
                     let mut patches = PatchSet::new();
                     patches.extend(working.set_named_attribute(&path, "status", "approved")?);
                     if let Some(reviewer) = reviewer {
-                        patches.extend(
-                            working.set_named_attribute(&path, "reviewed-by", reviewer)?,
-                        );
+                        patches.extend(working.set_named_attribute(
+                            &path,
+                            "reviewed-by",
+                            reviewer,
+                        )?);
                     }
                     working = working.apply_patches(&patches)?;
                 }
@@ -247,9 +249,11 @@ impl CstDocument {
                     let mut patches = PatchSet::new();
                     patches.extend(working.set_named_attribute(&path, "status", "rejected")?);
                     if let Some(reviewer) = reviewer {
-                        patches.extend(
-                            working.set_named_attribute(&path, "reviewed-by", reviewer)?,
-                        );
+                        patches.extend(working.set_named_attribute(
+                            &path,
+                            "reviewed-by",
+                            reviewer,
+                        )?);
                     }
                     working = working.apply_patches(&patches)?;
                 }
@@ -1238,9 +1242,8 @@ mod tests {
 
     #[test]
     fn replace_operation_emits_minimal_paragraph() {
-        let cst = parse_str_lossless(
-            "---\nschema: nodx/1.0\n---\n\n# Title {#title}\n\nKeep this.\n",
-        );
+        let cst =
+            parse_str_lossless("---\nschema: nodx/1.0\n---\n\n# Title {#title}\n\nKeep this.\n");
         let hash = node_hash(cst.ast_node(&[0]).unwrap());
         let batch = Batch::new(vec![Operation::Replace {
             target: Target::id("title"),
@@ -1250,6 +1253,7 @@ mod tests {
                 id: None,
                 classes: Vec::new(),
                 attrs: std::collections::BTreeMap::new(),
+                styles: std::collections::BTreeMap::new(),
                 children: Vec::new(),
                 inlines: vec![nodx_core::Inline::Text("Replacement.".to_string())],
                 text: None,
@@ -1279,6 +1283,7 @@ mod tests {
                 id: None,
                 classes: Vec::new(),
                 attrs: std::collections::BTreeMap::new(),
+                styles: std::collections::BTreeMap::new(),
                 children: Vec::new(),
                 inlines: vec![nodx_core::Inline::Text("child".to_string())],
                 text: None,

@@ -1,17 +1,21 @@
 import re
 
+from .block_parser import parse
 from .navigation import resolve_navigation
 from .nods import sanitize_stylesheet, yaml_style_to_css
 from .url import ReferenceKind, classify_uri
 
-THEME_NAMES = ["none", "plain", "base", "web", "print", "presentation"]
+THEME_NAMES = ["none", "plain", "base", "web", "print", "presentation", "docs"]
 
 
 def render_fragment(doc, options=None):
     options = options or {}
     navigation = resolve_navigation(doc)
-    extra_styles = "".join("<style>" + sanitize_stylesheet(css) + "</style>" for css in options.get("stylesheets", []))
-    return extra_styles + "".join(render_node(node, str(index), navigation, options) for index, node in enumerate(doc["body"]))
+    stylesheets = list(doc.get("meta", {}).get("stylesheets") or []) + list(options.get("stylesheets", []))
+    extra_styles = "".join("<style>" + sanitize_stylesheet(css) + "</style>" for css in stylesheets)
+    component_styles = "".join("<style>" + sanitize_stylesheet(item["style"]) + "</style>" for item in component_definitions(doc) if isinstance(item.get("style"), str))
+    render_options = {**options, "doc": doc}
+    return extra_styles + component_styles + "".join(render_node(node, str(index), navigation, render_options) for index, node in enumerate(doc["body"]))
 
 
 def render_html(doc, options=None):
@@ -20,7 +24,8 @@ def render_html(doc, options=None):
     lang = ' lang="' + escape_attr(doc["meta"]["language"]) + '"' if isinstance(doc["meta"].get("language"), str) and doc["meta"].get("language") != "und" else ""
     dir_ = ' dir="' + escape_attr(doc["meta"]["dir"]) + '"' if isinstance(doc["meta"].get("dir"), str) and doc["meta"].get("dir") != "auto" else ""
     title_html = "<title>" + escape_html(title) + "</title>" if title else ""
-    return "<!doctype html><html" + lang + dir_ + '><meta charset="utf-8"><style>' + theme_stylesheet(doc["meta"].get("theme")) + "</style>" + title_html + "<body>" + render_fragment(doc, options) + "</body></html>"
+    body = render_docs_body(doc, options) if is_docs_layout(doc) else "<body>" + render_fragment(doc, options) + "</body>"
+    return "<!doctype html><html" + lang + dir_ + '><meta charset="utf-8"><style>' + theme_stylesheet(doc["meta"].get("theme")) + "</style>" + title_html + body + "</html>"
 
 
 def theme_stylesheet(theme="base"):
@@ -37,7 +42,40 @@ def theme_stylesheet(theme="base"):
         return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text)}h1{font-size:2.4em}h2{font-size:1.8em}" + common
     if name == "web":
         return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}" + common
+    if name == "docs":
+        return tokens + docs_styles() + common
     return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}" + common
+
+
+def render_docs_body(doc, options):
+    navigation = resolve_navigation(doc)
+    entries = navigation["navigations"][0]["entries"] if navigation["navigations"] else collect_heading_entries(doc["body"])
+    sidebar = docs_nav([entry for entry in entries if entry["level"] <= 2])
+    outline = docs_nav([entry for entry in entries if entry["level"] > 1])
+    return '<body class="nodx-docs-layout"><aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">' + escape_html(docs_title(doc)) + "</a>" + sidebar + '</aside><main class="nodx-docs-main">' + render_fragment(doc, options) + '</main><aside class="nodx-docs-outline">' + outline + "</aside></body>"
+
+
+def docs_nav(entries):
+    items = "".join('<li data-level="' + escape_attr(str(entry["level"])) + '"><a href="#' + escape_attr(entry["id"]) + '">' + escape_html(entry["title"]) + "</a></li>" for entry in entries if entry.get("id"))
+    return "<nav><ol>" + items + "</ol></nav>" if items else ""
+
+
+def collect_heading_entries(nodes, prefix="", out=None):
+    out = out if out is not None else []
+    for index, node in enumerate(nodes):
+        path = child_path(prefix, index)
+        if node["type"] == "heading":
+            out.append({"id": node.get("id") or "", "level": int(node["attrs"].get("level", 1)), "path": path, "title": plain_inlines(node["inlines"])})
+        collect_heading_entries(node.get("children", []), path, out)
+    return out
+
+
+def docs_title(doc):
+    return doc["meta"].get("title") if isinstance(doc["meta"].get("title"), str) else derive_title(doc["body"]) or "Documentation"
+
+
+def is_docs_layout(doc):
+    return doc["meta"].get("layout") == "docs" or doc["meta"].get("theme") == "docs"
 
 
 def render_semantic_text(doc):
@@ -149,6 +187,9 @@ def render_node(node, path, navigation, options):
     custom = component_renderers.get(node["type"])
     if custom:
         return custom({"node": node, "path": path, "renderChildren": lambda: render_children(node, path, navigation, options), "renderInlines": lambda inlines: render_inlines(inlines, options), "escapeHtml": escape_html, "attrs": html_attrs(node)})
+    component = next((item for item in component_definitions(options.get("doc")) if item.get("name") == node["type"] and isinstance(item.get("template"), str)), None)
+    if component:
+        return render_component_template(component, node, path, navigation, options)
     type_ = node["type"]
     if type_ == "heading":
         level = clamp(int(node["attrs"].get("level", 1)), 1, 6)
@@ -207,6 +248,31 @@ def render_node(node, path, navigation, options):
 
 def render_children(node, path, navigation, options):
     return "".join(render_node(child, child_path(path, index), navigation, options) for index, child in enumerate(node["children"]))
+
+
+def render_component_template(component, node, path, navigation, options):
+    rendered = render_template_part(component["template"], component, node, path, navigation, options)
+    children = render_inlines(node["inlines"], options) + render_children(node, path, navigation, options)
+    return rendered.replace("<p><var>vars.children</var></p>", children).replace("<var>vars.children</var>", children)
+
+
+def render_template_part(part, component, node, path, navigation, options):
+    parsed = parse(substitute_template_vars(part, node, options.get("doc")))
+    return "".join(render_node(child, path + ".template." + component["name"] + "." + str(index), navigation, options) for index, child in enumerate(parsed["body"]))
+
+
+def substitute_template_vars(source, node, doc):
+    def replace(match):
+        key = match.group(1)
+        if key == "children":
+            return "{{children}}"
+        if key.startswith("attrs."):
+            return str(node["attrs"].get(key[6:], ""))
+        if key.startswith("vars."):
+            return str((doc or {}).get("meta", {}).get("vars", {}).get(key[5:], ""))
+        return str(node["attrs"].get(key, ""))
+
+    return re.sub(r"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}", replace, source)
 
 
 def wrap_children(tag, node, path, navigation, options):
@@ -294,6 +360,8 @@ def html_attrs(node):
     out = html_id(node)
     if node.get("classes"):
         out += ' class="' + escape_attr(" ".join(node["classes"])) + '"'
+    if node.get("styles"):
+        out += ' style="' + escape_attr(style_attr(node["styles"])) + '"'
     if node["attrs"].get("lang"):
         out += ' lang="' + escape_attr(node["attrs"]["lang"]) + '"'
     if node["attrs"].get("dir") in ("ltr", "rtl", "auto"):
@@ -320,6 +388,8 @@ def inline_attrs(attrs):
     out = ' id="' + escape_attr(attrs["id"]) + '"' if attrs.get("id") else ""
     if attrs.get("classes"):
         out += ' class="' + escape_attr(" ".join(attrs["classes"])) + '"'
+    if attrs.get("styles"):
+        out += ' style="' + escape_attr(style_attr(attrs["styles"])) + '"'
     if attrs.get("attrs", {}).get("lang"):
         out += ' lang="' + escape_attr(attrs["attrs"]["lang"]) + '"'
     if attrs.get("attrs", {}).get("dir") in ("ltr", "rtl", "auto"):
@@ -335,6 +405,15 @@ def html_id(node):
 
 def class_attr(node, extra):
     return escape_attr(" ".join((node.get("classes") or []) + [extra]))
+
+
+def style_attr(styles):
+    return "; ".join(key + ": " + value for key, value in styles.items())
+
+
+def component_definitions(doc):
+    components = (doc or {}).get("meta", {}).get("components")
+    return [item for item in components if isinstance(item, dict) and isinstance(item.get("name"), str)] if isinstance(components, list) else []
 
 
 def safe_link_url(raw):
@@ -385,6 +464,10 @@ def standard_tokens():
 
 def common_styles():
     return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}"
+
+
+def docs_styles():
+    return 'body.nodx-docs-layout{font:16px/1.65 var(--nodx-font-body);color:var(--nodx-color-text);margin:0;display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) minmax(180px,240px);gap:0;min-height:100vh}.nodx-docs-sidebar,.nodx-docs-outline{position:sticky;top:0;height:100vh;overflow:auto;padding:24px 18px;border-color:#e5e7eb}.nodx-docs-sidebar{border-inline-end:1px solid #e5e7eb;background:#f8fafc}.nodx-docs-outline{border-inline-start:1px solid #e5e7eb;background:#fff}.nodx-docs-main{min-width:0;max-width:860px;width:100%;padding:32px 32px 64px;margin:0 auto}.nodx-docs-brand{display:block;font-weight:700;color:var(--nodx-color-text);text-decoration:none;margin-bottom:18px}.nodx-docs-layout nav ol{list-style:none;padding:0;margin:0}.nodx-docs-layout nav li{margin:2px 0}.nodx-docs-layout nav li[data-level="2"]{padding-inline-start:12px}.nodx-docs-layout nav li[data-level="3"],.nodx-docs-layout nav li[data-level="4"],.nodx-docs-layout nav li[data-level="5"],.nodx-docs-layout nav li[data-level="6"]{padding-inline-start:22px}.nodx-docs-layout nav a{display:block;color:#374151;text-decoration:none;border-radius:6px;padding:4px 6px}.nodx-docs-layout nav a:hover{background:#eef2ff;color:#111827}@media(max-width:920px){body.nodx-docs-layout{display:block}.nodx-docs-sidebar,.nodx-docs-outline{position:static;height:auto;border:0;border-bottom:1px solid #e5e7eb}.nodx-docs-outline{display:none}.nodx-docs-main{padding:24px 18px 48px}}'
 
 
 def semantic_id(node):

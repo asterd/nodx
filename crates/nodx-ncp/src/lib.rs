@@ -38,6 +38,10 @@ pub fn node_hash_input(node: &Node) -> String {
     out.push('\n');
     write_str_map(&mut out, &node.attrs);
     out.push('\n');
+    if !node.styles.is_empty() {
+        write_str_map(&mut out, &node.styles);
+        out.push('\n');
+    }
     out.push_str(node.text.as_deref().unwrap_or(""));
     out.push_str(&plain_inlines(&node.inlines));
     for child in &node.children {

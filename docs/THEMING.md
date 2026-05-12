@@ -17,6 +17,7 @@ The standard theme sources are committed as `.nods` files:
 | `web` | [`docs/themes/web.nods`](./themes/web.nods) |
 | `print` | [`docs/themes/print.nods`](./themes/print.nods) |
 | `presentation` | [`docs/themes/presentation.nods`](./themes/presentation.nods) |
+| `docs` | built into renderers as the navigable documentation layout theme |
 
 ## Design Tokens
 
@@ -73,8 +74,24 @@ Use these selectors to overload renderer CSS for each supported NODX component.
 | custom component with `-` | `section.nodx-component.nodx-component--fallback[data-component="name"]` | `.nodx-component`, `.nodx-component__title`, `[data-component="approval-card"]` |
 | blocked unsafe link | `a.nodx-blocked-link` | `.nodx-blocked-link` |
 | mention | `span.mention` | `.mention` |
-| inline span | `span` plus safe attrs/classes | `span`, `span[lang]`, `.your-class` |
+| inline span | `span` plus safe attrs/classes/styles | `span`, `span[lang]`, `.your-class` |
 | variable fallback | `var` | `var` |
+
+## Inline Span Styling
+
+Use `[[text]]` for authored inline spans. It accepts the same attribute block as
+legacy `[text]{...}`, plus class suffix sugar immediately after the span.
+
+```nodx
+[[Status]]{.pill color="var(--nodx-color-primary)" bg="#ccfbf1" radius="999px" pad="2px 8px"}
+[[Important]]{highlight}
+[[Approved]].status.success
+```
+
+Safe shorthands map into AST `styles`: `color`, `bg`, `border`, `radius`,
+`pad`/`padding`, `font`, `weight`, and the `highlight` preset. Unsafe values
+containing executable CSS constructs, `url(...)`, breakouts, or declaration
+separators are ignored rather than emitted.
 
 ## Document-Level Extension Example
 
@@ -109,6 +126,91 @@ table { width: 100%; }
 
 ## Package-Level Extension
 
-Packaged documents can include `.nods` files. The web playground applies all
-package `.nods` stylesheets after the selected theme, so they can extend or
-override the committed theme sources without changing the document text.
+Packaged documents can include `.nods` files and component templates. Declare
+self-contained extensions in `manifest.yaml`:
+
+```yaml
+components:
+  - path: components/approval-card.nodx
+themes:
+  - path: themes/docs.nods
+```
+
+Component files are `.nodx` templates. Their front matter can declare `name`
+and optional `style`; the remaining body is used as the template:
+
+```nodx
+---
+schema: nodx/1.0
+name: approval-card
+style: |
+  .nodx-component--approval-card {
+    border-left: 5px solid var(--nodx-color-primary);
+  }
+---
+:::note {class="nodx-component nodx-component--approval-card"}
+## {{title}}
+{{children}}
+:::
+```
+
+Renderers expose package extension APIs so editors, CLIs, and previews can
+open a package, apply local components/themes, and render without network
+access. Remote libraries should be resolved by the host, verified with
+integrity, and opened through the same package path.
+
+## Front Matter Components
+
+Renderers resolve local inline component templates declared in front matter.
+Unknown components still fall back to the safe component section.
+
+```nodx
+---
+schema: nodx/1.0
+components:
+  - name: approval-card
+    template: |
+      :::note {class="nodx-component nodx-component--approval-card"}
+      ## {{title}}
+      {{children}}
+      :::
+    style: |
+      .nodx-component--approval-card {
+        border-left: 5px solid var(--nodx-color-primary);
+      }
+---
+
+::approval-card {title="Approved"}
+Children are rendered at `{{children}}`.
+::
+```
+
+Template variables read component attributes by name, `attrs.name`, or
+`vars.name` from front matter. Core renderers do not fetch component `src`
+references; hosts that resolve package-local or remote components should keep
+the same fail-closed URL and integrity policy used for assets and styles.
+
+## Documentation Layout
+
+Use `theme: docs` or `layout: docs` for navigable documentation. Renderers emit
+a responsive shell with a left document navigation, central content, and a
+right section outline derived from the document navigation graph.
+
+```nodx
+---
+schema: nodx/1.0
+title: Product Docs
+theme: docs
+layout: docs
+---
+
+# Product Docs {#product-docs}
+
+## Getting Started {#getting-started}
+
+### Install {#install}
+```
+
+The layout is structural renderer output, not just a CSS override. Documents
+remain valid NODX and degrade to normal content in renderers that do not opt
+into the docs shell.

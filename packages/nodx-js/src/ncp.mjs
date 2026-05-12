@@ -50,6 +50,7 @@ function navigationEntriesJson(entries) {
 
 function ncpNodeHashInput(item) {
   let out = item.type + "\n" + (item.id ?? "") + "\n" + canonicalStringify(item.attrs) + "\n";
+  if (item.styles && Object.keys(item.styles).length) out += canonicalStringify(item.styles) + "\n";
   out += item.text ?? "";
   out += plainInlines(item.inlines);
   for (const child of item.children) out += "\n" + ncpNodeHashInput(child);

@@ -1,5 +1,6 @@
 import {
   canonicalJson,
+  applyPackageExtensions,
   isPackagedNodx,
   ncpJson,
   openStoredPackage,
@@ -134,7 +135,7 @@ function loadPackageBytes(bytes, origin, label) {
 function render() {
   const started = performance.now();
   try {
-    currentDoc = parse(src.value);
+    currentDoc = packageState.entryPath ? applyPackageExtensions(parse(src.value), packageState) : parse(src.value);
     currentPreviewDoc = applyVariables(currentDoc);
     const validation = validate(currentPreviewDoc);
     currentHeadings = collectHeadings(currentPreviewDoc.body);
@@ -744,8 +745,9 @@ function line(label, value) {
 
 function packageStylesheets() {
   const styles = [];
+  const themePaths = new Set((packageState.manifest.themes ?? []).map((item) => typeof item === "string" ? item : item.path).filter(Boolean));
   for (const [name, bytes] of packageState.files.entries()) {
-    if (name.endsWith(".nods")) styles.push(textDecoder.decode(bytes));
+    if (name.endsWith(".nods") && !themePaths.has(name)) styles.push(textDecoder.decode(bytes));
   }
   return styles;
 }

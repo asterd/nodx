@@ -11,6 +11,14 @@ export { parseInlines } from "./inlineParser.mjs";
 export { resolveNavigation } from "./navigation.mjs";
 export { DEFAULT_LIMITS } from "./limits.mjs";
 export { classifyUri, normalizePackagePath, ReferenceKind } from "./url.mjs";
-export { isPackagedNodx, openStoredPackage, packageEntryText } from "./package.mjs";
+export {
+  applyPackageExtensions,
+  isPackagedNodx,
+  openStoredPackage,
+  packageComponentDefinitions,
+  packageEntryText,
+  packageThemeStylesheets,
+  parsePackagedDocument,
+} from "./package.mjs";
 export { renderFragment, renderHtml, renderSemanticText, themeStylesheet, THEME_NAMES } from "./renderHtml.mjs";
 export { auditStylesheet, sanitizeStylesheet, yamlStyleToCss } from "./nods.mjs";

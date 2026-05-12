@@ -10,6 +10,8 @@ pub(crate) struct PackageManifest {
     pub(crate) profiles_required: Vec<String>,
     pub(crate) profiles_optional: Vec<String>,
     pub(crate) entries: Vec<PackageManifestEntry>,
+    pub(crate) components: Vec<String>,
+    pub(crate) themes: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +31,8 @@ pub(crate) fn parse_package_manifest(text: &str) -> Result<PackageManifest, Pack
     let mut current: Option<PackageManifestEntry> = None;
     let mut profile_section: Option<&'static str> = None;
     let mut profile_indent: usize = 0;
+    let mut path_list_section: Option<&'static str> = None;
+    let mut path_list_indent: usize = 0;
 
     let mut document_started = false;
     for (line_no, raw_line) in text.lines().enumerate() {
@@ -91,6 +95,27 @@ pub(crate) fn parse_package_manifest(text: &str) -> Result<PackageManifest, Pack
                 profile_section = None;
             }
         }
+        if let Some(section) = path_list_section {
+            if indent > path_list_indent {
+                let path = content
+                    .strip_prefix("- path:")
+                    .ok_or_else(|| {
+                        diag_code(
+                            "NODX-E019",
+                            &format!("Expected path list item at line {line_number}."),
+                        )
+                    })?
+                    .trim();
+                match section {
+                    "components" => manifest.components.push(unquote(path)),
+                    "themes" => manifest.themes.push(unquote(path)),
+                    _ => {}
+                }
+                continue;
+            } else {
+                path_list_section = None;
+            }
+        }
 
         if entry_section && indent > 0 {
             let item = content;
@@ -122,7 +147,9 @@ pub(crate) fn parse_package_manifest(text: &str) -> Result<PackageManifest, Pack
                 entry.size = Some(rest.trim().parse::<usize>().map_err(|_| {
                     diag_code(
                         "NODX-E019",
-                        &format!("Manifest size is not a non-negative integer at line {line_number}."),
+                        &format!(
+                            "Manifest size is not a non-negative integer at line {line_number}."
+                        ),
                     )
                 })?);
             } else if let Some(rest) = item.strip_prefix("sha256:") {
@@ -162,6 +189,26 @@ pub(crate) fn parse_package_manifest(text: &str) -> Result<PackageManifest, Pack
         } else if content.starts_with("entries:") {
             unique(&mut seen_top, "entries", line_number)?;
             entry_section = true;
+        } else if let Some(rest) = content.strip_prefix("components:") {
+            unique(&mut seen_top, "components", line_number)?;
+            if !rest.trim().is_empty() {
+                return Err(diag_code(
+                    "NODX-E019",
+                    &format!("`components:` must use block style at line {line_number}."),
+                ));
+            }
+            path_list_section = Some("components");
+            path_list_indent = indent;
+        } else if let Some(rest) = content.strip_prefix("themes:") {
+            unique(&mut seen_top, "themes", line_number)?;
+            if !rest.trim().is_empty() {
+                return Err(diag_code(
+                    "NODX-E019",
+                    &format!("`themes:` must use block style at line {line_number}."),
+                ));
+            }
+            path_list_section = Some("themes");
+            path_list_indent = indent;
         } else if let Some(rest) = content.strip_prefix("profiles:") {
             unique(&mut seen_top, "profiles", line_number)?;
             let trimmed = rest.trim();

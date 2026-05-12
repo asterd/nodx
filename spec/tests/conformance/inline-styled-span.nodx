@@ -1,0 +1,7 @@
+---
+schema: nodx/1.0
+---
+
+Styled [[keyword]]{.token color="red" bg="#ff0" radius="4px" pad="2px 6px" weight="700"} and [[highlighted]]{highlight}.
+
+Class sugar also works after the span: [[status]].primary.strong.

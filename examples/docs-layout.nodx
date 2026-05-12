@@ -1,0 +1,34 @@
+---
+schema: nodx/1.0
+title: NODX Documentation Layout
+theme: docs
+layout: docs
+---
+
+# NODX Documentation Layout {#docs-layout}
+
+This example uses the native documentation layout. The left navigation is built from top-level headings; the right outline follows section headings.
+
+## Authoring Model {#authoring-model}
+
+Documentation pages remain ordinary NODX documents. The layout is selected with `theme: docs` or `layout: docs`.
+
+### Headings Drive Navigation {#headings-drive-navigation}
+
+Stable heading IDs create reliable sidebar links and section outlines.
+
+### Responsive Structure {#responsive-structure}
+
+The renderer emits a three-column shell on desktop and collapses navigation for narrower screens.
+
+## Component Libraries {#component-libraries}
+
+Packaged documents can carry component templates and package-local `.nods` themes.
+
+### Local First {#local-first}
+
+Package extensions resolve from the ZIP contents, so previews work offline and in host tools such as editors.
+
+### Remote Resolver Contract {#remote-resolver-contract}
+
+Remote component libraries should be fetched by the host, checked with integrity, then applied through the same package extension APIs.

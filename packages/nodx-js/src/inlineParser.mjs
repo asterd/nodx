@@ -1,4 +1,5 @@
-import { parseAttrs } from "./attrs.mjs";
+import { emptyAttrs } from "./ast.mjs";
+import { mergeClassSuffix, parseAttrs } from "./attrs.mjs";
 
 export function parseInlines(input) {
   const out = [];
@@ -56,6 +57,17 @@ export function parseInlines(input) {
       const end = rest.slice(1).indexOf("*") + 1;
       out.push({ children: parseInlines(rest.slice(1, end)), type: "em" });
       i += end + 1;
+    } else if (rest.startsWith("[[") && rest.includes("]]")) {
+      const close = rest.indexOf("]]");
+      const label = rest.slice(2, close);
+      const suffix = parseSpanSuffix(rest.slice(close + 2));
+      if (suffix.consumed > 0) {
+        out.push({ attrs: suffix.attrs, children: parseInlines(label), type: "span" });
+        i += close + 2 + suffix.consumed;
+      } else {
+        pushText(out, "[");
+        i++;
+      }
     } else if (rest.startsWith("[") && rest.includes("]")) {
       const close = rest.indexOf("]");
       const label = rest.slice(1, close);
@@ -76,8 +88,9 @@ export function parseInlines(input) {
         i += close + 1 + end + 1 + consumedAttrs;
       } else if (after.startsWith("{") && after.includes("}")) {
         const end = after.indexOf("}");
-        out.push({ attrs: parseAttrs(after.slice(0, end + 1)), children: parseInlines(label), type: "span" });
-        i += close + 1 + end + 1;
+        const suffix = parseSpanSuffix(after);
+        out.push({ attrs: suffix.attrs, children: parseInlines(label), type: "span" });
+        i += close + 1 + suffix.consumed;
       } else {
         pushText(out, rest[0]);
         i++;
@@ -91,6 +104,36 @@ export function parseInlines(input) {
     }
   }
   return out;
+}
+
+function parseSpanSuffix(input) {
+  let attrs = emptyAttrs();
+  let consumed = 0;
+  let saw = false;
+  while (consumed < input.length) {
+    const rest = input.slice(consumed);
+    if (rest.startsWith("{") && rest.includes("}")) {
+      const end = rest.indexOf("}");
+      const parsed = parseAttrs(rest.slice(0, end + 1));
+      attrs.id = parsed.id ?? attrs.id;
+      attrs.classes.push(...parsed.classes);
+      Object.assign(attrs.attrs, parsed.attrs);
+      Object.assign(attrs.styles, parsed.styles);
+      consumed += end + 1;
+      saw = true;
+    } else if (rest.startsWith(".")) {
+      const classes = rest.match(/^(\.[A-Za-z_][A-Za-z0-9_-]*)+/)?.[0] ?? "";
+      if (!classes) break;
+      mergeClassSuffix(attrs, classes);
+      consumed += classes.length;
+      saw = true;
+    } else {
+      break;
+    }
+  }
+  attrs.classes = [...new Set(attrs.classes)].sort();
+  if (!Object.keys(attrs.styles).length) delete attrs.styles;
+  return { attrs, consumed: saw ? consumed : 0 };
 }
 
 function pushText(out, text) {

@@ -326,6 +326,20 @@ export const examples = [
   },
   {
     group: "Repository examples",
+    id: "repo-inline-styles-components",
+    label: "Inline styles and components",
+    kind: "file",
+    path: "../../examples/inline-styles-components.nodx",
+  },
+  {
+    group: "Repository examples",
+    id: "repo-docs-layout",
+    label: "Docs layout",
+    kind: "file",
+    path: "../../examples/docs-layout.nodx",
+  },
+  {
+    group: "Repository examples",
     id: "repo-typography",
     label: "Typography",
     kind: "file",

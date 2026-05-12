@@ -57,13 +57,98 @@ pub(crate) fn parse_attrs(raw: &str) -> Option<Attrs> {
         } else if let Some(class) = token.strip_prefix('.') {
             attrs.classes.push(class.to_string());
         } else if let Some((k, v)) = token.split_once('=') {
-            attrs.attrs.insert(k.to_string(), unquote(v));
+            apply_attr(&mut attrs, k, &unquote(v));
+        } else if token == "highlight" {
+            attrs.styles.insert(
+                "background-color".to_string(),
+                "color-mix(in srgb, var(--nodx-color-accent) 14%, transparent)".to_string(),
+            );
+            attrs
+                .styles
+                .insert("padding".to_string(), "0.05em 0.25em".to_string());
+            attrs
+                .styles
+                .insert("border-radius".to_string(), "0.2em".to_string());
         }
     }
     let mut set = BTreeSet::new();
     attrs.classes.retain(|c| set.insert(c.clone()));
     attrs.classes.sort();
     Some(attrs)
+}
+
+pub(crate) fn merge_class_suffix(attrs: &mut Attrs, suffix: &str) {
+    let mut rest = suffix;
+    while let Some(after_dot) = rest.strip_prefix('.') {
+        let len = after_dot
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+            .map(char::len_utf8)
+            .sum::<usize>();
+        if len == 0 {
+            break;
+        }
+        let class = &after_dot[..len];
+        if valid_ident(class) {
+            attrs.classes.push(class.to_string());
+        }
+        rest = &after_dot[len..];
+    }
+    let mut set = BTreeSet::new();
+    attrs.classes.retain(|c| set.insert(c.clone()));
+    attrs.classes.sort();
+}
+
+fn apply_attr(attrs: &mut Attrs, key: &str, value: &str) {
+    if key == "class" {
+        attrs
+            .classes
+            .extend(value.split_whitespace().map(ToString::to_string));
+        return;
+    }
+    if let Some(prop) = inline_style_property(key)
+        && safe_inline_style_value(value)
+    {
+        attrs.styles.insert(prop.to_string(), value.to_string());
+        return;
+    }
+    attrs.attrs.insert(key.to_string(), value.to_string());
+}
+
+fn inline_style_property(key: &str) -> Option<&'static str> {
+    match key {
+        "bg" => Some("background-color"),
+        "color" => Some("color"),
+        "border" => Some("border"),
+        "radius" => Some("border-radius"),
+        "pad" | "padding" => Some("padding"),
+        "font" => Some("font"),
+        "weight" => Some("font-weight"),
+        "background-color" => Some("background-color"),
+        "border-radius" => Some("border-radius"),
+        "font-weight" => Some("font-weight"),
+        _ => None,
+    }
+}
+
+fn safe_inline_style_value(value: &str) -> bool {
+    if value.len() > 240
+        || value
+            .chars()
+            .any(|c| matches!(c, '<' | '>' | '{' | '}' | ';'))
+    {
+        return false;
+    }
+    let lower = value.to_ascii_lowercase();
+    !["expression(", "javascript:", "vbscript:", "@import", "url("]
+        .iter()
+        .any(|needle| lower.contains(needle))
+}
+
+fn valid_ident(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 fn split_attr_tokens(input: &str) -> Vec<String> {
@@ -114,7 +199,11 @@ pub(crate) fn parse_close(line: &str, n: usize) -> Option<Option<String>> {
     None
 }
 
-pub(crate) fn parse_matching_close(line: &str, n: usize, expected_name: &str) -> Option<Option<String>> {
+pub(crate) fn parse_matching_close(
+    line: &str,
+    n: usize,
+    expected_name: &str,
+) -> Option<Option<String>> {
     if let Some(close) = parse_close(line, n) {
         return Some(close);
     }

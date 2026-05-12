@@ -1,5 +1,5 @@
-use crate::ast::{Inline, Node};
-use crate::attrs::parse_attrs;
+use crate::ast::{Attrs, Inline, Node};
+use crate::attrs::{merge_class_suffix, parse_attrs};
 
 pub fn parse_inlines(input: &str) -> Vec<Inline> {
     let mut out = Vec::new();
@@ -96,6 +96,21 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                 push_text(&mut out, "*");
                 i += 1;
             }
+        } else if rest.starts_with("[[") {
+            if let Some(close) = rest.find("]]") {
+                let label = &rest[2..close];
+                let (attrs, consumed) = parse_span_suffix(&rest[close + 2..]);
+                if consumed > 0 {
+                    out.push(Inline::Span {
+                        children: parse_inlines(label),
+                        attrs,
+                    });
+                    i += close + 2 + consumed;
+                    continue;
+                }
+            }
+            push_text(&mut out, "[");
+            i += 1;
         } else if rest.starts_with('[') {
             if let Some(close) = rest.find(']') {
                 let label = &rest[1..close];
@@ -123,15 +138,18 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
                         i += close + 1 + end + 2 + consumed_attrs;
                         continue;
                     }
-                } else if after.starts_with('{')
-                    && let Some(end) = after.find('}')
-                    && let Some(attrs) = parse_attrs(&after[..=end])
-                {
+                } else if after.starts_with('{') {
+                    let (attrs, consumed) = parse_span_suffix(after);
+                    if consumed == 0 {
+                        push_text(&mut out, "[");
+                        i += 1;
+                        continue;
+                    }
                     out.push(Inline::Span {
                         children: parse_inlines(label),
                         attrs,
                     });
-                    i += close + 1 + end + 1;
+                    i += close + 1 + consumed;
                     continue;
                 }
             }
@@ -153,6 +171,62 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
         }
     }
     out
+}
+
+fn parse_span_suffix(input: &str) -> (Attrs, usize) {
+    let mut attrs = Attrs::default();
+    let mut consumed = 0;
+    let mut saw = false;
+    while consumed < input.len() {
+        let rest = &input[consumed..];
+        if rest.starts_with('{') {
+            let Some(end) = rest.find('}') else { break };
+            if let Some(parsed) = parse_attrs(&rest[..=end]) {
+                attrs.id = parsed.id.or(attrs.id);
+                attrs.classes.extend(parsed.classes);
+                attrs.attrs.extend(parsed.attrs);
+                attrs.styles.extend(parsed.styles);
+                consumed += end + 1;
+                saw = true;
+                continue;
+            }
+        }
+        if rest.starts_with('.') {
+            let len = class_suffix_len(rest);
+            if len == 0 {
+                break;
+            }
+            merge_class_suffix(&mut attrs, &rest[..len]);
+            consumed += len;
+            saw = true;
+            continue;
+        }
+        break;
+    }
+    attrs.classes.sort();
+    attrs.classes.dedup();
+    (attrs, if saw { consumed } else { 0 })
+}
+
+fn class_suffix_len(input: &str) -> usize {
+    let mut pos = 0;
+    while input[pos..].starts_with('.') {
+        let rest = &input[pos + 1..];
+        let mut chars = rest.chars();
+        let Some(first) = chars.next() else { break };
+        if !(first.is_ascii_alphabetic() || first == '_') {
+            break;
+        }
+        pos += 1 + first.len_utf8();
+        for ch in chars {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                pos += ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+    }
+    pos
 }
 
 fn push_text(out: &mut Vec<Inline>, text: &str) {
