@@ -196,6 +196,7 @@ def main() -> int:
     mirror_static_dir(ROOT / "apps" / "web", SITE / "apps" / "web")
     mirror_static_dir(ROOT / "packages" / "nodx-js", SITE / "packages" / "nodx-js")
     mirror_static_dir(ROOT / "examples", SITE / "examples")
+    ensure_playground_redirect()
 
     print(f"\nWrote {len(ROUTES)} pages and a {len(search_index)}-entry search index.")
     print(f"Repo base for GitHub links: {repo_base}")
@@ -211,6 +212,29 @@ def mirror_static_dir(source: Path, dest: Path) -> None:
         ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "target", "node_modules"),
     )
     print(f"-> mirrored {source.relative_to(ROOT)} to {dest.relative_to(ROOT)}")
+
+
+def ensure_playground_redirect() -> None:
+    path = SITE / "playground" / "index.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0; url=../apps/web/index.html">
+<link rel="canonical" href="../apps/web/index.html">
+<title>NODX Playground</title>
+</head>
+<body>
+<p><a href="../apps/web/index.html">Open the NODX Playground</a></p>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+    print("-> playground redirect (site/playground/index.html)")
 
 
 if __name__ == "__main__":
