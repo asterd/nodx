@@ -1,8 +1,7 @@
 #![forbid(unsafe_code)]
 
 use nodx_core::{
-    Document, ResourceLimits, base64url_decode, base64url_encode, canonical_json, parse_bytes,
-    sha256_base64url,
+    Document, ResourceLimits, base64url_decode, base64url_encode, canonical_json, sha256_base64url,
 };
 use nodx_package::Package;
 use p256::ecdsa::signature::Verifier;
@@ -154,7 +153,12 @@ pub fn verify_detached_jws(
     compact_jws: &str,
     trust_policy: &dyn TrustPolicy,
 ) -> Result<VerificationResult, SignDiagnostic> {
-    verify_detached_jws_with_limits(text_nodx, compact_jws, trust_policy, ResourceLimits::default())
+    verify_detached_jws_with_limits(
+        text_nodx,
+        compact_jws,
+        trust_policy,
+        ResourceLimits::default(),
+    )
 }
 
 pub fn verify_detached_jws_with_limits(
@@ -186,15 +190,14 @@ pub fn verify_packaged_signature_with_limits(
     trust_policy: &dyn TrustPolicy,
     limits: ResourceLimits,
 ) -> Result<VerificationResult, SignDiagnostic> {
-    let package =
-        Package::open(package_bytes, limits).map_err(|err| diag_for(&err.message))?;
+    let package = Package::open(package_bytes, limits).map_err(|err| diag_for(&err.message))?;
     let digest = digest_text_nodx_with_limits(package.entry_bytes(), limits)?;
     let signature = package
         .fs()
         .read(signature_path)
         .ok_or_else(|| crypto_error("Package signature entry is missing."))?;
-    let signature_text =
-        std::str::from_utf8(signature).map_err(|_| crypto_error("Package signature is not UTF-8."))?;
+    let signature_text = std::str::from_utf8(signature)
+        .map_err(|_| crypto_error("Package signature is not UTF-8."))?;
     verify_compact_jws_for_digest(&digest, signature_text.trim(), false, trust_policy, limits)
 }
 
@@ -355,11 +358,6 @@ fn diag_for(message: &str) -> SignDiagnostic {
         severity: "error".to_string(),
         message: message.to_string(),
     }
-}
-
-#[allow(dead_code)]
-fn keep_parse_bytes_import_alive() {
-    let _ = parse_bytes;
 }
 
 #[cfg(test)]

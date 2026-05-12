@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::ResourceLimits;
 use crate::ast::{Attrs, Document, Node, Value};
-use crate::attrs::{parse_heading, parse_matching_close, parse_opener, valid_name};
+use crate::attrs::{
+    parse_heading, parse_heading_with_cap, parse_matching_close, parse_opener,
+    parse_opener_with_cap, valid_name,
+};
 use crate::diagnostic::{Diagnostic, diag};
 use crate::front_matter::parse_front_matter;
 use crate::inline_parser::parse_inlines;
@@ -33,6 +36,36 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
             1,
             1,
         ));
+    }
+    if let Some((line, _len)) = first_oversize_line(input, limits.line_length) {
+        diagnostics.push(diag(
+            "NODX-E012",
+            "fatal",
+            "Line length limit exceeded.",
+            line,
+            1,
+        ));
+    }
+    if input.starts_with("---")
+        && (input.len() == 3 || matches!(input.as_bytes().get(3), Some(b'\n' | b'\r')))
+        && let Some(bytes) = front_matter_region_bytes(input)
+        && bytes > limits.front_matter_bytes
+    {
+        diagnostics.push(diag(
+            "NODX-E012",
+            "fatal",
+            "Front matter size limit exceeded.",
+            1,
+            1,
+        ));
+    }
+    if diagnostics.iter().any(|d| d.severity == "fatal") {
+        return Document {
+            schema: "nodx/1.0".to_string(),
+            meta: default_meta(false),
+            body: Vec::new(),
+            diagnostics,
+        };
     }
 
     let normalized = input.replace("\r\n", "\n");
@@ -65,14 +98,9 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
             None => diagnostics.push(diag("NODX-E003", "fatal", "Unclosed front matter.", 1, 1)),
         }
     }
-    meta.entry("schema".to_string())
-        .or_insert(Value::String("nodx/1.0".to_string()));
-    meta.entry("type".to_string())
-        .or_insert(Value::String("document".to_string()));
-    meta.entry("dir".to_string())
-        .or_insert(Value::String("auto".to_string()));
-    meta.entry("language".to_string())
-        .or_insert(Value::String("und".to_string()));
+    for (key, value) in default_meta(had_front_matter) {
+        meta.entry(key).or_insert(value);
+    }
     if !had_front_matter {
         let mut profiles = BTreeMap::new();
         profiles.insert(
@@ -102,6 +130,63 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         body,
         diagnostics,
     }
+}
+
+fn default_meta(had_front_matter: bool) -> BTreeMap<String, Value> {
+    let mut meta = BTreeMap::from([
+        ("schema".to_string(), Value::String("nodx/1.0".to_string())),
+        ("type".to_string(), Value::String("document".to_string())),
+        ("dir".to_string(), Value::String("auto".to_string())),
+        ("language".to_string(), Value::String("und".to_string())),
+    ]);
+    if !had_front_matter {
+        let mut profiles = BTreeMap::new();
+        profiles.insert(
+            "requires".to_string(),
+            Value::List(vec![Value::String("core".to_string())]),
+        );
+        meta.insert("profiles".to_string(), Value::Map(profiles));
+    }
+    meta
+}
+
+fn first_oversize_line(input: &str, limit: usize) -> Option<(usize, usize)> {
+    let mut line = 1usize;
+    let mut len = 0usize;
+    for byte in input.bytes() {
+        match byte {
+            b'\n' => {
+                line += 1;
+                len = 0;
+            }
+            b'\r' => {}
+            _ => {
+                len += 1;
+                if len > limit {
+                    return Some((line, len));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn front_matter_region_bytes(input: &str) -> Option<usize> {
+    let normalized = input.replace("\r\n", "\n");
+    let mut bytes = 0usize;
+    for (idx, line) in normalized.split('\n').enumerate() {
+        if idx == 0 {
+            if line != "---" {
+                return None;
+            }
+            continue;
+        }
+        if line == "---" {
+            return Some(bytes);
+        }
+        bytes += line.len();
+    }
+    None
 }
 
 struct Parser<'a> {
@@ -184,7 +269,9 @@ impl Parser<'_> {
                 self.pos += 1;
                 continue;
             }
-            if let Some((colons, name, attrs)) = parse_opener(line) {
+            if let Some((colons, name, attrs)) =
+                parse_opener_with_cap(line, self.limits.attribute_value_bytes)
+            {
                 let opener_line = self.pos + 1;
                 if !self.count_node(opener_line) {
                     break;
@@ -192,7 +279,9 @@ impl Parser<'_> {
                 out.push(self.parse_delimited(colons, name, attrs));
                 continue;
             }
-            if let Some((level, content, attrs)) = parse_heading(line) {
+            if let Some((level, content, attrs)) =
+                parse_heading_with_cap(line, self.limits.attribute_value_bytes)
+            {
                 let heading_line = self.pos + 1;
                 self.pos += 1;
                 if !self.count_node(heading_line) {

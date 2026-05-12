@@ -4,6 +4,13 @@ use crate::ast::Attrs;
 use crate::front_matter::unquote;
 
 pub(crate) fn parse_opener(line: &str) -> Option<(usize, String, Attrs)> {
+    parse_opener_with_cap(line, 64 * 1024)
+}
+
+pub(crate) fn parse_opener_with_cap(
+    line: &str,
+    value_cap: usize,
+) -> Option<(usize, String, Attrs)> {
     let colons = line.chars().take_while(|c| *c == ':').count();
     if colons < 2 {
         return None;
@@ -14,11 +21,21 @@ pub(crate) fn parse_opener(line: &str) -> Option<(usize, String, Attrs)> {
     if name.is_empty() || !valid_name(name, true) {
         return None;
     }
-    let attrs = parts.next().and_then(parse_attrs).unwrap_or_default();
+    let attrs = parts
+        .next()
+        .and_then(|raw| parse_attrs_with_cap(raw, value_cap))
+        .unwrap_or_default();
     Some((colons, name.to_string(), attrs))
 }
 
 pub(crate) fn parse_heading(line: &str) -> Option<(usize, &str, Option<Attrs>)> {
+    parse_heading_with_cap(line, 64 * 1024)
+}
+
+pub(crate) fn parse_heading_with_cap(
+    line: &str,
+    value_cap: usize,
+) -> Option<(usize, &str, Option<Attrs>)> {
     let level = line.chars().take_while(|c| *c == '#').count();
     if !(1..=6).contains(&level) || !line[level..].starts_with(' ') {
         return None;
@@ -27,7 +44,11 @@ pub(crate) fn parse_heading(line: &str) -> Option<(usize, &str, Option<Attrs>)> 
     if let Some(pos) = raw.rfind(" {")
         && raw.ends_with('}')
     {
-        return Some((level, raw[..pos].trim_end(), parse_attrs(&raw[pos + 1..])));
+        return Some((
+            level,
+            raw[..pos].trim_end(),
+            parse_attrs_with_cap(&raw[pos + 1..], value_cap),
+        ));
     }
     if let Some(pos) = raw.rfind(' ') {
         let candidate = &raw[pos + 1..];

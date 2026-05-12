@@ -133,14 +133,19 @@ fn yaml_hostile_corpus_all_emit_e019() {
         );
         count += 1;
     }
-    assert!(count >= 30, "expected at least 30 hostile YAML fixtures, found {count}");
+    assert!(
+        count >= 30,
+        "expected at least 30 hostile YAML fixtures, found {count}"
+    );
 }
 
 #[test]
 fn front_matter_block_scalar_allows_literal_specials() {
     // `&`/`*`/`!` inside a literal block scalar are normal scalar bytes and must
     // not trigger NODX-E019.
-    let doc = parse_str("---\nschema: nodx/1.0\nnotice: |\n  & anchor\n  * bullet text\n  !important call-out\n---\n\n# A\n");
+    let doc = parse_str(
+        "---\nschema: nodx/1.0\nnotice: |\n  & anchor\n  * bullet text\n  !important call-out\n---\n\n# A\n",
+    );
     assert!(
         doc.diagnostics.iter().all(|d| d.code != "NODX-E019"),
         "got: {:?}",
@@ -221,8 +226,10 @@ fn sha256_matches_known_vector() {
 
 #[test]
 fn nodes_per_document_limit_emits_e012_and_stops_parsing() {
-    let mut limits = ResourceLimits::default();
-    limits.nodes_per_document = 5;
+    let limits = ResourceLimits {
+        nodes_per_document: 5,
+        ..ResourceLimits::default()
+    };
     let source = "# A\n\n# B\n\n# C\n\n# D\n\n# E\n\n# F\n\n# G\n";
     let doc = parse_str_with_limits(source, limits);
     assert!(
@@ -241,8 +248,10 @@ fn nodes_per_document_limit_emits_e012_and_stops_parsing() {
 
 #[test]
 fn block_nesting_depth_limit_emits_e012() {
-    let mut limits = ResourceLimits::default();
-    limits.block_nesting_depth = 2;
+    let limits = ResourceLimits {
+        block_nesting_depth: 2,
+        ..ResourceLimits::default()
+    };
     let source = ":::a\n:::b\n:::c\nbody\n:::\n:::\n:::\n";
     let doc = parse_str_with_limits(source, limits);
     assert!(
@@ -258,6 +267,47 @@ fn block_nesting_depth_limit_emits_e012() {
 fn limits_do_not_fire_under_default_caps_on_small_docs() {
     let doc = parse_str("# A\n\nP1\n\nP2\n");
     assert!(doc.diagnostics.iter().all(|d| d.code != "NODX-E012"));
+}
+
+#[test]
+fn string_parser_source_limit_fails_before_body_parse() {
+    let limits = ResourceLimits {
+        source_bytes: 4,
+        ..ResourceLimits::default()
+    };
+    let doc = parse_str_with_limits("# A\n\nbody\n", limits);
+    assert!(doc.body.is_empty());
+    assert!(
+        doc.diagnostics
+            .iter()
+            .any(|d| d.code == "NODX-E012" && d.severity == "fatal")
+    );
+}
+
+#[test]
+fn string_parser_line_limit_fails_before_body_parse() {
+    let limits = ResourceLimits {
+        line_length: 3,
+        ..ResourceLimits::default()
+    };
+    let doc = parse_str_with_limits("abcd\n# B\n", limits);
+    assert!(doc.body.is_empty());
+    assert!(
+        doc.diagnostics
+            .iter()
+            .any(|d| d.code == "NODX-E012" && d.message.contains("Line length"))
+    );
+}
+
+#[test]
+fn configured_attribute_value_limit_is_enforced() {
+    let limits = ResourceLimits {
+        attribute_value_bytes: 3,
+        ..ResourceLimits::default()
+    };
+    let doc = parse_str_with_limits(":::note {title=\"abcd\" label=\"ok\"}\n:::\n", limits);
+    assert_eq!(doc.body[0].attrs.get("title"), None);
+    assert_eq!(doc.body[0].attrs.get("label"), Some(&"ok".to_string()));
 }
 
 fn build_zip_with_duplicate_path() -> Vec<u8> {

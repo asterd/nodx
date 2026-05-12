@@ -3,6 +3,7 @@
   "displayName": "NODX Language Support",
   "description": "Syntax highlighting for NODX 1.0 documents.",
   "version": "0.1.0",
+  "license": "MIT",
   "publisher": "nodx",
   "engines": {
     "vscode": "^1.90.0"

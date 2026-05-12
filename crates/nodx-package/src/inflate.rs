@@ -19,7 +19,11 @@ pub fn inflate(input: &[u8], max_output: usize) -> Result<Vec<u8>, &'static str>
     }
 }
 
-fn inflate_stored(reader: &mut BitReader, out: &mut Vec<u8>, max_output: usize) -> Result<(), &'static str> {
+fn inflate_stored(
+    reader: &mut BitReader,
+    out: &mut Vec<u8>,
+    max_output: usize,
+) -> Result<(), &'static str> {
     reader.align_to_byte();
     let len = reader.read_u16_le()? as usize;
     let nlen = reader.read_u16_le()?;
@@ -35,20 +39,30 @@ fn inflate_stored(reader: &mut BitReader, out: &mut Vec<u8>, max_output: usize) 
     Ok(())
 }
 
-fn inflate_fixed(reader: &mut BitReader, out: &mut Vec<u8>, max_output: usize) -> Result<(), &'static str> {
+fn inflate_fixed(
+    reader: &mut BitReader,
+    out: &mut Vec<u8>,
+    max_output: usize,
+) -> Result<(), &'static str> {
     let lit = fixed_literal_table();
     let dist = fixed_distance_table();
     inflate_huffman_block(reader, out, max_output, &lit, &dist)
 }
 
-fn inflate_dynamic(reader: &mut BitReader, out: &mut Vec<u8>, max_output: usize) -> Result<(), &'static str> {
+fn inflate_dynamic(
+    reader: &mut BitReader,
+    out: &mut Vec<u8>,
+    max_output: usize,
+) -> Result<(), &'static str> {
     let hlit = reader.read_bits(5)? as usize + 257;
     let hdist = reader.read_bits(5)? as usize + 1;
     let hclen = reader.read_bits(4)? as usize + 4;
     if hlit > 286 || hdist > 30 || hclen > 19 {
         return Err("dynamic block header out of range");
     }
-    let order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+    let order = [
+        16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
+    ];
     let mut code_len_lens = [0u8; 19];
     for i in 0..hclen {
         code_len_lens[order[i]] = reader.read_bits(3)? as u8;
@@ -139,8 +153,8 @@ fn inflate_huffman_block(
             return Ok(());
         } else if symbol <= 285 {
             let idx = symbol as usize - 257;
-            let length = LENGTH_BASE[idx] as usize
-                + reader.read_bits(LENGTH_EXTRA[idx] as u8)? as usize;
+            let length =
+                LENGTH_BASE[idx] as usize + reader.read_bits(LENGTH_EXTRA[idx] as u8)? as usize;
             let dist_symbol = decode_symbol(reader, dist)?;
             if dist_symbol >= 30 {
                 return Err("invalid distance symbol");

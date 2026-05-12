@@ -20,7 +20,14 @@ fn build_zip(entries: Vec<(&str, Vec<u8>, u32, u16)>) -> Vec<u8> {
         out.extend_from_slice(&0u16.to_le_bytes());
         out.extend_from_slice(name.as_bytes());
         out.extend_from_slice(&data);
-        central.push((name.to_string(), data.len() as u32, crc, local_offset, mode, compression));
+        central.push((
+            name.to_string(),
+            data.len() as u32,
+            crc,
+            local_offset,
+            mode,
+            compression,
+        ));
     }
     let cd_offset = out.len() as u32;
     for (name, len, crc, local_offset, mode, compression) in &central {
@@ -67,7 +74,12 @@ fn open(zip: &[u8]) -> Result<Package, PackageDiagnostic> {
 fn corpus_rejects_absolute_path() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", minimal_manifest("/abs/doc.nodx"), 0o100644, 0),
+        (
+            "manifest.yaml",
+            minimal_manifest("/abs/doc.nodx"),
+            0o100644,
+            0,
+        ),
         ("/abs/doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     let err = open(&zip).unwrap_err();
@@ -78,7 +90,12 @@ fn corpus_rejects_absolute_path() {
 fn corpus_rejects_traversal_in_entry() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", minimal_manifest("../doc.nodx"), 0o100644, 0),
+        (
+            "manifest.yaml",
+            minimal_manifest("../doc.nodx"),
+            0o100644,
+            0,
+        ),
         ("../doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     assert!(open(&zip).is_err());
@@ -98,7 +115,12 @@ fn corpus_rejects_backslash_path() {
 fn corpus_rejects_control_char_path() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", minimal_manifest("a\x07b.nodx"), 0o100644, 0),
+        (
+            "manifest.yaml",
+            minimal_manifest("a\x07b.nodx"),
+            0o100644,
+            0,
+        ),
         ("a\x07b.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     assert!(open(&zip).is_err());
@@ -224,7 +246,12 @@ fn corpus_rejects_corrupt_eocd() {
 fn corpus_rejects_manifest_missing_entry() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", b"schema: nodx-package/1.0\n".to_vec(), 0o100644, 0),
+        (
+            "manifest.yaml",
+            b"schema: nodx-package/1.0\n".to_vec(),
+            0o100644,
+            0,
+        ),
         ("doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     assert!(open(&zip).is_err());
@@ -234,7 +261,12 @@ fn corpus_rejects_manifest_missing_entry() {
 fn corpus_rejects_manifest_entry_not_in_zip() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", minimal_manifest("missing.nodx"), 0o100644, 0),
+        (
+            "manifest.yaml",
+            minimal_manifest("missing.nodx"),
+            0o100644,
+            0,
+        ),
         ("doc.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     assert!(open(&zip).is_err());
@@ -254,7 +286,9 @@ fn corpus_rejects_digest_mismatch() {
 
 #[test]
 fn corpus_rejects_manifest_size_mismatch() {
-    let manifest = b"schema: nodx-package/1.0\nentry: doc.nodx\nentries:\n  - path: doc.nodx\n    size: 99\n".to_vec();
+    let manifest =
+        b"schema: nodx-package/1.0\nentry: doc.nodx\nentries:\n  - path: doc.nodx\n    size: 99\n"
+            .to_vec();
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
         ("manifest.yaml", manifest, 0o100644, 0),
@@ -288,7 +322,8 @@ fn corpus_rejects_manifest_merge_key() {
 
 #[test]
 fn corpus_rejects_manifest_duplicate_key() {
-    let manifest = b"schema: nodx-package/1.0\nschema: nodx-package/1.0\nentry: doc.nodx\n".to_vec();
+    let manifest =
+        b"schema: nodx-package/1.0\nschema: nodx-package/1.0\nentry: doc.nodx\n".to_vec();
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
         ("manifest.yaml", manifest, 0o100644, 0),
@@ -356,7 +391,10 @@ fn corpus_rejects_path_byte_limit() {
 
 #[test]
 fn corpus_rejects_path_segment_limit() {
-    let path = (0..10).map(|i| format!("a{i}")).collect::<Vec<_>>().join("/");
+    let path = (0..10)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join("/");
     let full = format!("{path}/doc.nodx");
     let manifest = format!("schema: nodx-package/1.0\nentry: {full}\n").into_bytes();
     let zip = build_zip(vec![
@@ -369,7 +407,8 @@ fn corpus_rejects_path_segment_limit() {
 
 #[test]
 fn corpus_rejects_signature_missing_when_declared() {
-    let manifest = b"schema: nodx-package/1.0\nentry: doc.nodx\nsignature: signatures/missing.jws\n".to_vec();
+    let manifest =
+        b"schema: nodx-package/1.0\nentry: doc.nodx\nsignature: signatures/missing.jws\n".to_vec();
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
         ("manifest.yaml", manifest, 0o100644, 0),
@@ -417,7 +456,12 @@ fn corpus_rejects_zero_size_compressed_with_uncompressed() {
 fn corpus_rejects_path_traversal_via_percent_encoding() {
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
-        ("manifest.yaml", minimal_manifest("a/%2e%2e/b.nodx"), 0o100644, 0),
+        (
+            "manifest.yaml",
+            minimal_manifest("a/%2e%2e/b.nodx"),
+            0o100644,
+            0,
+        ),
         ("a/%2e%2e/b.nodx", b"# A\n".to_vec(), 0o100644, 0),
     ]);
     assert!(open(&zip).is_err());
@@ -436,7 +480,8 @@ fn corpus_accepts_minimal_valid_package() {
 
 #[test]
 fn corpus_accepts_signature_declared_and_present() {
-    let manifest = b"schema: nodx-package/1.0\nentry: doc.nodx\nsignature: signatures/document.jws\n".to_vec();
+    let manifest =
+        b"schema: nodx-package/1.0\nentry: doc.nodx\nsignature: signatures/document.jws\n".to_vec();
     let zip = build_zip(vec![
         ("mimetype", b"application/nodx+zip".to_vec(), 0o100644, 0),
         ("manifest.yaml", manifest, 0o100644, 0),

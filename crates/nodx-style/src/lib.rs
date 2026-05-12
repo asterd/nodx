@@ -100,7 +100,10 @@ pub fn yaml_style_to_css(input: &str) -> Result<String, String> {
     #[derive(Clone)]
     enum Context {
         Selector(String),
-        Pseudo { key: String, selector: Option<String> },
+        Pseudo {
+            key: String,
+            selector: Option<String>,
+        },
     }
 
     let mut out = String::new();
@@ -280,8 +283,15 @@ fn parse_rules(input: &str) -> Vec<Rule<'_>> {
 fn audit_breakouts(input: &str, audit: &mut StyleAudit) {
     let decoded = decode_css_escapes(input).to_ascii_lowercase();
     for construct in [
-        "</style", "<script", "<svg", "<iframe", "<object", "<embed", "vbscript:",
-        "expression(", "@import",
+        "</style",
+        "<script",
+        "<svg",
+        "<iframe",
+        "<object",
+        "<embed",
+        "vbscript:",
+        "expression(",
+        "@import",
     ] {
         if decoded.contains(construct) {
             audit.violations.push(error(
@@ -941,7 +951,10 @@ mod tests {
             let style = extract_style(&source);
             let audit = audit_stylesheet(style, ResourceLimits::default());
             assert!(
-                audit.violations.iter().any(|v| v.severity == Severity::Error),
+                audit
+                    .violations
+                    .iter()
+                    .any(|v| v.severity == Severity::Error),
                 "expected at least one error severity in {name}, got {:?}",
                 audit.violations
             );

@@ -180,9 +180,7 @@ fn reject_control_or_backslash(input: &str) -> Result<(), UrlError> {
 }
 
 fn scheme_prefix(input: &str) -> Result<Option<(String, usize)>, UrlError> {
-    let boundary = input
-        .find([':', '/', '?', '#'])
-        .unwrap_or(input.len());
+    let boundary = input.find([':', '/', '?', '#']).unwrap_or(input.len());
     if input.as_bytes().get(boundary) != Some(&b':') {
         return Ok(None);
     }

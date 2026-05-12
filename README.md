@@ -78,7 +78,9 @@ NODX is the same readability with the contract Markdown never had.
   Every crate is `#![forbid(unsafe_code)]`.
 - **JavaScript and Python parsers** under [`packages/`](./packages/) —
   both produce the same canonical AST as the Rust reference and are
-  exercised by the conformance suite.
+  exercised by the conformance suite. Their package readers enforce the
+  same safe-path, manifest, digest, and stored-ZIP integrity checks used by
+  the browser-facing package surface.
 - **Conformance bundle** at
   [`spec/conformance/v1.0/`](./spec/conformance/v1.0/) — every fixture
   with its expected AST, NCP, diagnostics, and HTML outputs.
@@ -127,8 +129,11 @@ The full [docs index](./docs/README.md) lists every page.
 ## Build and verify
 
 ```sh
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --release     # all Rust crates
 node --test packages/nodx-js/test/*.mjs
+python3 -m pytest packages/nodx-py/tests -q
 sh scripts/run_conformance.sh        # Rust ↔ JavaScript parity over every fixture
 sh scripts/verify_conformance_package.sh
 ```
@@ -191,9 +196,9 @@ model.
 
 ## License
 
-Licensed under the **Apache License, Version 2.0** — see [`LICENSE`](./LICENSE)
-and [`NOTICE`](./NOTICE). You may use, modify, and redistribute the code
-under the License. Contributions are accepted under the same terms.
+Licensed under the **MIT License** — see [`LICENSE`](./LICENSE) and
+[`NOTICE`](./NOTICE). You may use, modify, and redistribute the code under
+the License. Contributions are accepted under the same terms.
 
 ## Contributing
 

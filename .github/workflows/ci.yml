@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Python test dependency
+        run: python3 -m pip install pytest
+
+      - name: Build package fixture
+        run: python3 scripts/build_package.py >/dev/null
+
+      - name: Rust format
+        run: cargo fmt --check
+
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --workspace
+
+      - name: JavaScript tests
+        run: node --test packages/nodx-js/test/*.mjs
+
+      - name: Python tests
+        run: python3 -m pytest packages/nodx-py/tests -q
+
+      - name: Conformance
+        run: sh scripts/run_conformance.sh
+
+      - name: Conformance package
+        run: sh scripts/verify_conformance_package.sh

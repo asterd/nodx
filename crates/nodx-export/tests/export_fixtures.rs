@@ -1,6 +1,6 @@
 use nodx_core::{ResourceLimits, parse_str};
 use nodx_export::{
-    ExportFormat, export_docx, export_docx_with_limits, export_document_with_limits,
+    ExportFormat, export_document_with_limits, export_docx, export_docx_with_limits,
     export_pdf_bridge, export_pptx, loss_report_json,
 };
 
