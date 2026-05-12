@@ -1,0 +1,47 @@
+---
+schema: nodx/1.0
+title: Shared styles
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+    - style
+---
+# Shared styles #shared-styles
+
+:::style {format="yaml"}
+h1:
+  color: var(--nodx-color-primary)
+  border-bottom: 2px solid var(--nodx-color-primary)
+  padding-bottom: 8px
+.metric-grid:
+  display: grid
+  grid-template-columns: repeat(3, minmax(0, 1fr))
+  gap: 12px
+.metric:
+  border: 1px solid #d1d5db
+  border-radius: 8px
+  padding: 12px
+  background: #f8fafc
+.metric strong:
+  display: block
+  color: var(--nodx-color-primary)
+:::style
+
+::section {.metric-grid}
+:::note {.metric}
+**Parser**
+Canonical AST parity.
+:::note
+
+:::note {.metric}
+**Renderer**
+Safe HTML output.
+:::note
+
+:::note {.metric}
+**Package**
+Stored ZIP assets.
+:::note
+::section

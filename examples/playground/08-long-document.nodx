@@ -1,0 +1,62 @@
+---
+schema: nodx/1.0
+title: Long document and pagination
+language: en
+theme: print
+profiles:
+  requires:
+    - core
+    - rich
+    - style
+---
+# Long document and pagination #long-document
+
+::toc {title="Document index" depth="3"}
+::toc
+
+This document exists to exercise scrolling, heading navigation, internal links, semantic text, and page estimation. It has enough content to make the Pages toggle meaningful in the playground.
+
+## Chapter 1 #chapter-1
+
+The first chapter establishes stable anchors and normal prose flow. It includes a note and a compact table.
+
+::note {type="tip"}
+Checkpoint 1: the renderer should keep the preview and inspector responsive.
+::note
+
+| Metric | Value | Notes |
+| --- | --- | --- |
+| Chapter | 1 | stable id chapter-1 |
+| Paragraphs | 3 | long document sample |
+| Page break | no | preview only |
+
+## Chapter 2 #chapter-2
+
+Longer paragraphs should remain readable before and after page simulation. This paragraph repeats normal prose structure so the host can split content without changing the AST or semantic projection.
+
+::note
+Checkpoint 2: page simulation is a host preview feature, not the canonical document model.
+::note
+
+| Metric | Value | Notes |
+| --- | --- | --- |
+| Chapter | 2 | stable id chapter-2 |
+| Paragraphs | 3 | long document sample |
+| Page break | after chapter | preview only |
+
+::pagebreak
+::pagebreak
+
+## Chapter 3 #chapter-3
+
+After an explicit page break, rendering continues with the same heading and table behavior.
+
+::note {type="tip"}
+Checkpoint 3: page breaks remain ordinary nodes in the AST.
+::note
+
+| Metric | Value | Notes |
+| --- | --- | --- |
+| Chapter | 3 | stable id chapter-3 |
+| Paragraphs | 3 | long document sample |
+| Page break | no | preview only |

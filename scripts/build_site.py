@@ -14,6 +14,8 @@ This script does three small jobs:
    - `../../crates/foo`     -> https URL pointing at the GitHub repo
 3. Generate `site/data/search-index.json`, a flat list of pages with
    plain text bodies used by the in-browser search.
+4. Mirror the static browser playground and the JavaScript package files
+   it imports, so the same GitHub Pages artifact can host live examples.
 
 The output of this script is committable. CI runs it on push to keep
 GitHub Pages up to date, but you can run it locally to preview.
@@ -191,9 +193,24 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    mirror_static_dir(ROOT / "apps" / "web", SITE / "apps" / "web")
+    mirror_static_dir(ROOT / "packages" / "nodx-js", SITE / "packages" / "nodx-js")
+    mirror_static_dir(ROOT / "examples", SITE / "examples")
+
     print(f"\nWrote {len(ROUTES)} pages and a {len(search_index)}-entry search index.")
     print(f"Repo base for GitHub links: {repo_base}")
     return 0
+
+
+def mirror_static_dir(source: Path, dest: Path) -> None:
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(
+        source,
+        dest,
+        ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "target", "node_modules"),
+    )
+    print(f"-> mirrored {source.relative_to(ROOT)} to {dest.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

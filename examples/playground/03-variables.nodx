@@ -1,0 +1,20 @@
+---
+schema: nodx/1.0
+title: Variables and metadata
+theme: web
+vars:
+  reviewer: Ada
+  status: approved
+  amount: 120K
+profiles:
+  requires:
+    - core
+---
+# Variables and metadata #variables
+
+Reviewer: {{reviewer}}.
+Status: {{status}}.
+Amount: {{amount}}.
+Title from metadata: {{meta.title}}.
+
+Open the Variables tab and edit values to re-render the preview without changing the source.

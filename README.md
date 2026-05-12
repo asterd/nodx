@@ -21,6 +21,8 @@ software that does not get to guess** what the author meant.
 > reference implementation in this repository is the conformance gauge.
 > The browsable documentation site is in [`site/`](./site/) and ships
 > via GitHub Pages — see *"Documentation"* below.
+> Try the live playground at
+> [asterd.github.io/nodx/apps/web/](https://asterd.github.io/nodx/apps/web/).
 
 ## In sixty seconds
 
@@ -91,7 +93,8 @@ NODX is the same readability with the contract Markdown never had.
   layout demo.
 - **Editor starter integrations** for VS Code, Sublime, and Notepad++
   under [`editors/`](./editors/).
-- **Apps**: a web playground in [`apps/web/`](./apps/web/) and a Python
+- **Apps**: a web playground in [`apps/web/`](./apps/web/) and on
+  [GitHub Pages](https://asterd.github.io/nodx/apps/web/), plus a Python
   desktop viewer in [`apps/desktop/`](./apps/desktop/).
 
 ## Documentation
@@ -101,7 +104,8 @@ as a navigable site under [`site/`](./site/). Read it in three ways:
 
 - **Hosted**: GitHub Pages, built and deployed by
   `.github/workflows/docs.yml` on every push. Enable Pages once (Source:
-  GitHub Actions); the workflow handles the rest.
+  GitHub Actions); the workflow handles the docs and the static
+  playground at `/apps/web/`.
 - **Locally** as a site:
 
   ```sh

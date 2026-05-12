@@ -6,6 +6,9 @@ on:
     paths:
       - "docs/**"
       - "site/**"
+      - "apps/web/**"
+      - "packages/nodx-js/**"
+      - "examples/**"
       - "scripts/build_site.py"
       - "NODX-RFC-0001.md"
       - "SECURITY.md"

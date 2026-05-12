@@ -1,0 +1,22 @@
+---
+schema: nodx/1.0
+title: Remote component policy
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+components:
+  - name: remote-card
+    source: https://cdn.example.invalid/nodx/components/remote-card.nodc
+    integrity: sha256-demo
+---
+# Remote component policy #remote-policy
+
+NODX documents can describe external component references, but the renderer does not fetch code or assets by default.
+
+::remote-card {title="Remote component"}
+Because this host has not supplied a remote component renderer, the block falls back to readable content.
+::remote-card
+
+Hosts that support remote component libraries should fetch them outside the renderer, verify integrity, and inject renderers through the same component APIs used by packages.

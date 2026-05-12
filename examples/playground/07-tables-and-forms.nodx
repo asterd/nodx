@@ -1,0 +1,32 @@
+---
+schema: nodx/1.0
+title: Rich blocks, tables and forms
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+---
+# Rich blocks, tables and forms #rich-blocks
+
+::toc {title="On this page" depth="3"}
+::toc
+
+## Release table #release-table
+
+| Area | Status | Owner |
+| --- | --- | --- |
+| Parser | aligned | core |
+| Playground | refreshed | apps/web |
+| Package reader | active | packages |
+
+## Form preview #form-preview
+
+::form {#release-form}
+:::field {name="release" label="Release" value="1.0 playground"}
+:::field
+:::field {name="profile" label="Profile" value="core+rich+style"}
+:::field
+:::field {name="approval" label="Approval" value="pending"}
+:::field
+::form

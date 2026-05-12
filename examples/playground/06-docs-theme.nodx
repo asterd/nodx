@@ -1,0 +1,29 @@
+---
+schema: nodx/1.0
+title: Docs theme
+theme: docs
+layout: docs
+profiles:
+  requires:
+    - core
+    - rich
+---
+# Docs theme #docs-theme
+
+Use `theme: docs` or `layout: docs` for a documentation shell generated from headings.
+
+## Authoring model #authoring-model
+
+The same source remains a normal NODX document. The renderer decides whether to emit a single reading column or a documentation shell.
+
+### Heading-driven navigation #heading-driven-navigation
+
+Second-level headings are primary navigation entries. Deeper headings appear in the section outline.
+
+## Renderer contract #renderer-contract
+
+The complete HTML renderer emits the structural shell. Hosts that preview fragments must either call the complete renderer or reproduce the same shell contract.
+
+### Export behavior #export-behavior
+
+Exported HTML should keep the documentation shell when `layout: docs` is present.

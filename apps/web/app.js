@@ -6,7 +6,9 @@ import {
   openStoredPackage,
   parse,
   renderFragment,
+  renderHtml,
   renderSemanticText,
+  resolveNavigation,
   themeStylesheet,
   THEME_NAMES,
   validate,
@@ -92,22 +94,15 @@ async function loadSample(id) {
   sample.value = example.id;
   clearPackageUrls();
   try {
-    if (example.kind === "inline") {
+    const response = await fetch(example.path);
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (isPackagedNodx(bytes)) loadPackageBytes(bytes, example.path, example.label);
+    else {
       packageState = emptyPackageState();
-      src.value = example.text;
-    } else if (example.kind === "package") {
-      loadPackageBytes(createStoredZip(example.files), "generated", example.label);
-    } else {
-      const response = await fetch(example.path);
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (isPackagedNodx(bytes)) loadPackageBytes(bytes, example.path, example.label);
-      else {
-        packageState = emptyPackageState();
-        src.value = textDecoder.decode(bytes);
-      }
+      src.value = textDecoder.decode(bytes);
     }
-    sampleKind.textContent = `${example.kind} example`;
+    sampleKind.textContent = `${example.group} / ${example.label}`;
     render();
   } catch (error) {
     packageState = emptyPackageState();
@@ -154,7 +149,7 @@ function render() {
     currentHeadings = [];
     out.replaceChildren();
     variablesPane.textContent = "No variables.";
-    outline.textContent = "No outline.";
+    outline.textContent = "No headings.";
     diagnostics.textContent = String(error.stack ?? error);
     ast.textContent = "";
     ncp.textContent = "";
@@ -166,12 +161,9 @@ function render() {
 function renderDocument(doc) {
   applyDocumentMetadata(doc.meta, out);
   applyTheme(doc);
-  const html = renderFragment(doc, {
-    assetResolver: resolveAsset,
-    textAssetResolver: resolveTextAsset,
-    componentRenderers: packageState.components,
-    stylesheets: packageStylesheets(),
-  });
+  const options = renderOptions();
+  const html = isDocsLayout(doc) && !isPressed(paged) ? renderDocsPreview(doc, options) : renderFragment(doc, options);
+  out.classList.toggle("nodx-docs-layout", isDocsLayout(doc) && !isPressed(paged));
   out.classList.toggle("paged", isPressed(paged));
   if (!isPressed(paged)) {
     out.innerHTML = html;
@@ -181,6 +173,41 @@ function renderDocument(doc) {
   const nodes = nodesFromHtml(html);
   out.replaceChildren(...paginate(nodes));
   wireInternalLinks(out);
+}
+
+function renderOptions() {
+  return {
+    assetResolver: resolveAsset,
+    textAssetResolver: resolveTextAsset,
+    componentRenderers: packageState.components,
+    stylesheets: packageStylesheets(),
+  };
+}
+
+function renderDocsPreview(doc, options) {
+  const navigation = resolveNavigation(doc);
+  const entries = navigation.navigations[0]?.entries ?? currentHeadings.map((heading) => ({
+    id: heading.id,
+    level: heading.level,
+    title: heading.text,
+  }));
+  return `<aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries, 2)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside>`;
+}
+
+function docsNav(entries, maxLevel) {
+  const items = entries
+    .filter((entry) => entry.id && entry.level <= maxLevel)
+    .map((entry) => `<li data-level="${escapeAttr(String(entry.level))}"><a href="#${escapeAttr(entry.id)}">${escapeHtml(entry.title)}</a></li>`)
+    .join("");
+  return items ? `<nav><ol>${items}</ol></nav>` : "";
+}
+
+function docsTitle(doc) {
+  return typeof doc.meta.title === "string" ? doc.meta.title : currentHeadings[0]?.text ?? "Documentation";
+}
+
+function isDocsLayout(doc) {
+  return doc.meta.layout === "docs" || doc.meta.theme === "docs";
 }
 
 function renderVariablesPanel(doc) {
@@ -328,7 +355,6 @@ function applyTheme(doc) {
     document.head.append(themeStyleEl);
   }
   themeStyleEl.textContent = scopeThemeCss(themeStylesheet(theme));
-  sampleKind.textContent = `theme ${theme}`;
 }
 
 function scopeThemeCss(css) {
@@ -722,12 +748,7 @@ function exportHtml() {
   if (!doc) return;
   const selected = themeView.value === "auto" ? doc.meta.theme : themeView.value;
   const theme = THEME_NAMES.includes(selected) ? selected : "base";
-  const html = `<!doctype html><meta charset="utf-8"><style>${themeStylesheet(theme)}</style>${renderFragment(doc, {
-    assetResolver: resolveAsset,
-    textAssetResolver: resolveTextAsset,
-    componentRenderers: packageState.components,
-    stylesheets: packageStylesheets(),
-  })}`;
+  const html = renderHtml({ ...doc, meta: { ...doc.meta, theme } }, renderOptions());
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
   link.download = "nodx-render.html";
@@ -759,52 +780,10 @@ function badge(text) {
   return span;
 }
 
-function createStoredZip(files) {
-  const entries = Object.entries(files).map(([name, content]) => ({
-    name,
-    data: typeof content === "string" ? textEncoder.encode(content) : new Uint8Array(content),
-  }));
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
-  for (const entry of entries) {
-    const nameBytes = textEncoder.encode(entry.name);
-    const crc = crc32(entry.data);
-    const local = concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(entry.data.length), u32(entry.data.length), u16(nameBytes.length), u16(0), nameBytes, entry.data);
-    localParts.push(local);
-    centralParts.push(concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(entry.data.length), u32(entry.data.length), u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes));
-    offset += local.length;
-  }
-  const centralOffset = offset;
-  const central = concat(...centralParts);
-  const end = concat(u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length), u32(central.length), u32(centralOffset), u16(0));
-  return concat(...localParts, central, end);
+function escapeHtml(input) {
+  return String(input ?? "").replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
 }
 
-function crc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function concat(...parts) {
-  const length = parts.reduce((total, part) => total + part.length, 0);
-  const outBytes = new Uint8Array(length);
-  let offset = 0;
-  for (const part of parts) {
-    outBytes.set(part, offset);
-    offset += part.length;
-  }
-  return outBytes;
-}
-
-function u16(value) {
-  return Uint8Array.of(value & 0xff, (value >>> 8) & 0xff);
-}
-
-function u32(value) {
-  return Uint8Array.of(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+function escapeAttr(input) {
+  return escapeHtml(input).replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 }

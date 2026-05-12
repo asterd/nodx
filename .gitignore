@@ -36,6 +36,9 @@ NODX_1.0_IMPLEMENTATION_WAVE_PROMPTS.local.md
 site/pages/
 site/data/
 site/assets/config.js
+site/apps/
+site/examples/
+site/packages/
 
 # OS / editor
 .DS_Store

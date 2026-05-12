@@ -1,0 +1,27 @@
+---
+schema: nodx/1.0
+title: Custom theme tokens
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+    - style
+---
+# Custom theme tokens #custom-theme-tokens
+
+:::style
+:root {
+  --nodx-color-primary: #7c2d12;
+  --nodx-color-accent: #1d4ed8;
+  --nodx-font-heading: Georgia, serif;
+  --nodx-page-margin: 18mm;
+}
+h1, h2 { color: var(--nodx-color-primary); }
+aside { border-inline-start-color: var(--nodx-color-accent); }
+.decision { background: #eff6ff; }
+:::style
+
+::note {.decision type="tip"}
+Theme tokens are regular CSS custom properties after sanitization. Documents can override tokens without requiring a custom renderer.
+::note

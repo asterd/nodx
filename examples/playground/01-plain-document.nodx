@@ -1,0 +1,9 @@
+Plain NODX starts as readable text.
+
+Blank lines split paragraphs. Inline code like `schema: nodx/1.0`, **strong text**, *emphasis*, ==marking==, and [safe links](https://example.com){title="Safe external link"} work without front matter.
+
+# A stable heading #stable-heading
+
+- Plain authoring
+- Deterministic AST
+- Safe HTML output

@@ -153,15 +153,14 @@ fn inflate_huffman_block(
             return Ok(());
         } else if symbol <= 285 {
             let idx = symbol as usize - 257;
-            let length =
-                LENGTH_BASE[idx] as usize + reader.read_bits(LENGTH_EXTRA[idx] as u8)? as usize;
+            let length = LENGTH_BASE[idx] as usize + reader.read_bits(LENGTH_EXTRA[idx])? as usize;
             let dist_symbol = decode_symbol(reader, dist)?;
             if dist_symbol >= 30 {
                 return Err("invalid distance symbol");
             }
             let didx = dist_symbol as usize;
             let distance = DISTANCE_BASE[didx] as usize
-                + reader.read_bits(DISTANCE_EXTRA[didx] as u8)? as usize;
+                + reader.read_bits(DISTANCE_EXTRA[didx])? as usize;
             if distance == 0 || distance > out.len() {
                 return Err("invalid back reference");
             }
