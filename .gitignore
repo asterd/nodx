@@ -27,6 +27,7 @@ venv/
 *.log
 *.tmp
 *.html
+!apps/web/*.html
 !spec/conformance/v1.0/expected/*.html
 !site/*.html
 *.pdf

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css">
+    <title>NODX Playground</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <strong>NODX Playground</strong>
+          <span id="sample-kind">Ready</span>
+        </div>
+        <div class="toolbar" aria-label="Playground controls">
+          <select id="sample" aria-label="Example"></select>
+          <button id="load" type="button">Load</button>
+          <button id="wrap" type="button" aria-pressed="true">Wrap</button>
+          <button id="paged" type="button" aria-pressed="false">Pages</button>
+          <select id="theme-view" aria-label="Theme preview"></select>
+          <button id="export-html" type="button">Export HTML</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="source-panel" aria-label="NODX source editor">
+          <div class="panelbar">
+            <strong>Source</strong>
+            <span id="source-meta"></span>
+          </div>
+          <textarea id="src" spellcheck="false" autocapitalize="off"></textarea>
+          <div class="status" id="status">Ready</div>
+        </section>
+
+        <section class="result-panel" aria-label="NODX preview and inspection">
+          <div class="tabs" role="tablist" aria-label="Views">
+            <button data-tab="render" type="button" aria-pressed="true">Render</button>
+            <button data-tab="variables" type="button" aria-pressed="false">Variables</button>
+            <button data-tab="outline" type="button" aria-pressed="false">Headings</button>
+            <button data-tab="diagnostics" type="button" aria-pressed="false">Diagnostics</button>
+            <button data-tab="ast" type="button" aria-pressed="false">AST</button>
+            <button data-tab="ncp" type="button" aria-pressed="false">NCP</button>
+            <button data-tab="semantic" type="button" aria-pressed="false">Semantic</button>
+            <button data-tab="package" type="button" aria-pressed="false">Package</button>
+          </div>
+          <div class="pane">
+            <main id="render" class="doc" tabindex="-1"></main>
+            <aside id="variables" class="inspector hidden"></aside>
+            <aside id="outline" class="inspector hidden"></aside>
+            <pre id="diagnostics" class="inspector hidden"></pre>
+            <pre id="ast" class="inspector hidden"></pre>
+            <pre id="ncp" class="inspector hidden"></pre>
+            <pre id="semantic" class="inspector hidden"></pre>
+            <aside id="package" class="inspector hidden"></aside>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
