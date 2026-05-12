@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalJson, diagnosticsJson, ncpJson, parse, validate } from "../src/index.mjs";
 
 const root = new URL("../../..", import.meta.url).pathname;
 const rust = join(root, "target/debug/nodx");
+
+if (!existsSync(rust)) {
+  execFileSync("cargo", ["build", "-q", "-p", "nodx"], { cwd: root, stdio: "inherit" });
+}
 
 for (const file of positiveFixtures()) {
   const source = readFileSync(join(root, file), "utf8");
