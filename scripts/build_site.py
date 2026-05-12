@@ -197,6 +197,7 @@ def main() -> int:
     mirror_static_dir(ROOT / "packages" / "nodx-js", SITE / "packages" / "nodx-js")
     mirror_static_dir(ROOT / "examples", SITE / "examples")
     ensure_playground_redirect()
+    verify_publishable_site()
 
     print(f"\nWrote {len(ROUTES)} pages and a {len(search_index)}-entry search index.")
     print(f"Repo base for GitHub links: {repo_base}")
@@ -235,6 +236,27 @@ def ensure_playground_redirect() -> None:
         encoding="utf-8",
     )
     print("-> playground redirect (site/playground/index.html)")
+
+
+def verify_publishable_site() -> None:
+    required = [
+        SITE / "index.html",
+        SITE / "playground" / "index.html",
+        SITE / "apps" / "web" / "index.html",
+        SITE / "apps" / "web" / "app.js",
+        SITE / "apps" / "web" / "examples.js",
+        SITE / "apps" / "web" / "styles.css",
+        SITE / "packages" / "nodx-js" / "parser.mjs",
+        SITE / "examples" / "playground" / "01-plain-document.nodx",
+        SITE / "examples" / "playground" / "assets" / "remote-surface.nods",
+    ]
+    missing = [path for path in required if not path.is_file()]
+    if missing:
+        print("!! publishable site is missing required files:", file=sys.stderr)
+        for path in missing:
+            print(f"!! - {path.relative_to(ROOT)}", file=sys.stderr)
+        raise SystemExit(1)
+    print("-> verified publishable playground files")
 
 
 if __name__ == "__main__":

@@ -40,10 +40,6 @@ jobs:
           NODX_REPO_BASE: https://github.com/asterd/nodx
         run: |
           python3 scripts/build_site.py
-          test -f site/apps/web/index.html
-          test -f site/packages/nodx-js/parser.mjs
-          test -f site/examples/playground/01-plain-document.nodx
-          test -f site/playground/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
