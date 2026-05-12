@@ -51,7 +51,7 @@
       "::: image",
       "::: caption",
       "${3:Caption}",
-      ":::caption",
+      "::: caption",
       ":: figure"
     ],
     "description": "Insert an accessible image figure"

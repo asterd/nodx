@@ -25,8 +25,9 @@ The number of colons must match between open and close. Two-colon blocks
 (the *Lite* form) cannot directly contain other two-colon blocks; nest by
 using three or more colons.
 
-A close may name the block (`::note`) to make mismatches loud. The parser
-records `NODX-E005` if the names disagree.
+A close may name the block (`:: note`, with `::note` accepted contextually by
+the reference parser) to make mismatches loud. The parser records `NODX-E005`
+if the names disagree.
 
 ## Built-in container blocks
 

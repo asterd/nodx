@@ -567,11 +567,15 @@ A close fence MAY carry a label:
 ::caption
 Pipeline diagram.
 ::
-::figure
+:: figure
 ```
 
 The close label, when present, MUST match the opening node name. Unmatched,
 mismatched, or unclosed blocks produce `NODX-E005`.
+
+For compatibility with the reference corpus, processors MAY also accept the
+compact contextual close form where the name immediately follows the colon run
+and matches the currently open block, such as `::figure`.
 
 Node names MUST begin with an ASCII letter and may contain ASCII letters,
 digits, and hyphens.
@@ -1383,8 +1387,8 @@ blank           = *WSP LF
 heading         = 1*6"#" SP inline-text [SP attrs] LF
 
 delimited       = opener LF *(block / literal-line) closer LF
-opener          = 3*":" name [SP attrs]
-closer          = same-colon-count [SP name]
+opener          = 2*":" name [SP attrs]
+closer          = same-colon-count [SP name / name]
 name            = ALPHA *(ALPHA / DIGIT / "-")
 
 list            = 1*(unordered-item / ordered-item / task-item)

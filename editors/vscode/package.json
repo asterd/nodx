@@ -5,6 +5,20 @@
   "version": "0.1.0",
   "license": "MIT",
   "publisher": "nodx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asterd/nodx.git",
+    "directory": "editors/vscode"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "language-configuration.json",
+    "package.json",
+    "snippets/**",
+    "syntaxes/**"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
