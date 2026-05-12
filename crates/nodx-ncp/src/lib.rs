@@ -47,6 +47,8 @@ pub fn node_hash_input(node: &Node) -> String {
         out.push_str(id);
     }
     out.push('\n');
+    write_str_list(&mut out, &node.classes);
+    out.push('\n');
     write_str_map(&mut out, &node.attrs);
     out.push('\n');
     if !node.styles.is_empty() {
@@ -434,6 +436,8 @@ fn write_ncp_node(out: &mut String, node: &Node, path: &str, navigation: &Naviga
     write_str_map(out, &node.attrs);
     out.push_str(",\"children\":");
     write_ncp_nodes(out, &node.children, path, navigation);
+    out.push_str(",\"classes\":");
+    write_str_list(out, &node.classes);
     out.push_str(",\"id\":");
     write_json_string(out, node.id.as_deref().unwrap_or(""));
     out.push_str(",\"path\":");
@@ -480,6 +484,17 @@ fn write_navigation_entries(out: &mut String, path: &str, navigation: &Navigatio
     out.push(']');
 }
 
+fn write_str_list(out: &mut String, items: &[String]) {
+    out.push('[');
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write_json_string(out, item);
+    }
+    out.push(']');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +514,13 @@ mod tests {
         let a = node_hash(&doc.body[0]);
         let b = node_hash(&doc.body[0]);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn node_hash_tracks_classes() {
+        let a = parse_str("---\nschema: nodx/1.0\n---\n:::note {#n .a}\nText\n:::\n");
+        let b = parse_str("---\nschema: nodx/1.0\n---\n:::note {#n .b}\nText\n:::\n");
+        assert_ne!(node_hash(&a.body[0]), node_hash(&b.body[0]));
+        assert!(ncp_json(&a).contains("\"classes\":[\"a\"]"));
     }
 }

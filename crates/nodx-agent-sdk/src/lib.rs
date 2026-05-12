@@ -680,7 +680,7 @@ mod tests {
         let note = get_node(&doc, &[1]).unwrap();
         assert_eq!(
             node_hash(note),
-            "sha256-MCssPUYzhZQUlFi1HaE-r-NCBlncksjtTtUF914xzNA"
+            "sha256-vCwu6OCBWVKExHORiFk3JHmpjxJtblp60qnyUuUjFJE"
         );
     }
 
@@ -701,7 +701,7 @@ mod tests {
                 },
                 Operation::AddComment {
                     target: Target::id("note"),
-                    before_hash: "sha256-pcaCDe--e93W_XnlB1B-tjdJKojU-qJabiGP-Ej0Gck".to_string(),
+                    before_hash: "sha256-Sx1IybGkYx_Nj6IfTKHqUqYWfmYNSoEdZTZhA-5a4d4".to_string(),
                     author: Some("agent:test".to_string()),
                     text: "Looks consistent.".to_string(),
                 },
@@ -809,12 +809,12 @@ mod tests {
             },
             Operation::RemoveAttribute {
                 target: Target::id("note"),
-                before_hash: "sha256-pcaCDe--e93W_XnlB1B-tjdJKojU-qJabiGP-Ej0Gck".to_string(),
+                before_hash: "sha256-Sx1IybGkYx_Nj6IfTKHqUqYWfmYNSoEdZTZhA-5a4d4".to_string(),
                 name: "status".to_string(),
             },
             Operation::Delete {
                 target: Target::id("note"),
-                before_hash: "sha256-MCssPUYzhZQUlFi1HaE-r-NCBlncksjtTtUF914xzNA".to_string(),
+                before_hash: "sha256-vCwu6OCBWVKExHORiFk3JHmpjxJtblp60qnyUuUjFJE".to_string(),
             },
         ]);
 

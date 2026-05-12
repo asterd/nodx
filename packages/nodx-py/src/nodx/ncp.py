@@ -41,6 +41,8 @@ def ncp_nodes_json(nodes, prefix, navigation):
             + canonical_stringify(item["attrs"])
             + ',"children":'
             + ncp_nodes_json(item["children"], path, navigation)
+            + ',"classes":'
+            + canonical_stringify(item.get("classes") or [])
             + ',"id":'
             + json.dumps(item["id"] or "", ensure_ascii=False)
             + ',"path":'
@@ -75,7 +77,7 @@ def navigation_entries_json(entries):
 
 
 def ncp_node_hash_input(item):
-    out = item["type"] + "\n" + (item["id"] or "") + "\n" + canonical_stringify(item["attrs"]) + "\n"
+    out = item["type"] + "\n" + (item["id"] or "") + "\n" + canonical_stringify(item.get("classes") or []) + "\n" + canonical_stringify(item["attrs"]) + "\n"
     if item.get("styles"):
         out += canonical_stringify(item["styles"]) + "\n"
     out += item["text"] or ""

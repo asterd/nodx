@@ -28,6 +28,7 @@ function ncpNodesJson(nodes, prefix, navigation) {
     const path = childPath(prefix, i);
     let out = "{\"attrs\":" + canonicalStringify(item.attrs) +
       ",\"children\":" + ncpNodesJson(item.children, path, navigation) +
+      ",\"classes\":" + canonicalStringify(item.classes ?? []) +
       ",\"id\":" + JSON.stringify(item.id ?? "") +
       ",\"path\":" + JSON.stringify(path) +
       ",\"sha256\":" + JSON.stringify(sha256Base64Url(ncpNodeHashInput(item))) +
@@ -49,7 +50,7 @@ function navigationEntriesJson(entries) {
 }
 
 function ncpNodeHashInput(item) {
-  let out = item.type + "\n" + (item.id ?? "") + "\n" + canonicalStringify(item.attrs) + "\n";
+  let out = item.type + "\n" + (item.id ?? "") + "\n" + canonicalStringify(item.classes ?? []) + "\n" + canonicalStringify(item.attrs) + "\n";
   if (item.styles && Object.keys(item.styles).length) out += canonicalStringify(item.styles) + "\n";
   out += item.text ?? "";
   out += plainInlines(item.inlines);

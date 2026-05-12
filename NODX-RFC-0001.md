@@ -1163,6 +1163,7 @@ NCP node fields:
 | `id` | string | Node ID or empty string. |
 | `path` | string | Dot-separated child index path. |
 | `attrs` | object | String attributes. |
+| `classes` | array | Sorted class names. |
 | `text` | string | Literal text or plain inline text. |
 | `children` | array | Child NCP nodes. |
 | `sha256` | string | Deterministic node digest. |
@@ -1176,9 +1177,9 @@ content that agents, editors, or integrations need to address across revisions.
 NCP deliberately excludes concrete syntax trivia, computed styles, renderer
 templates, host layout results, and custom component render output. It preserves
 custom component source semantics as ordinary node records: `type`, `id`,
-`path`, `attrs`, `text`, `children`, and `sha256`. Renderers or agents that do
-not understand a custom component MUST treat its children as fallback source
-content rather than expanding a renderer-specific template.
+`path`, `classes`, `attrs`, `text`, `children`, and `sha256`. Renderers or
+agents that do not understand a custom component MUST treat its children as
+fallback source content rather than expanding a renderer-specific template.
 
 ### 22.2 Semantic Text Projection
 
@@ -1210,9 +1211,10 @@ Semantic text processors MUST exclude:
    fallback children remain visible.
 
 For custom components, semantic text MUST emit a component marker containing
-the component name and semantic attributes, then recursively emit fallback
-children. If fallback children are absent, the component marker is still emitted
-so the omission is visible to consumers.
+the component name, ID, and semantic attributes, then recursively emit fallback
+children. Semantic text MUST NOT emit source classes; processors that need
+class-aware addressing or hashing MUST use NCP. If fallback children are absent,
+the component marker is still emitted so the omission is visible to consumers.
 
 ---
 

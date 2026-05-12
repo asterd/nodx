@@ -40,6 +40,7 @@ NCP 1.0 uses schema `nodx-ncp/1.0` and mode `semantic`:
     {
       "attrs": {"level": "1"},
       "children": [],
+      "classes": [],
       "id": "intro",
       "path": "0",
       "sha256": "sha256-...",
@@ -67,7 +68,8 @@ trivia, computed CSS, renderer templates, host layout results, package manifest
 metadata, and rendered custom component HTML. `loss: []` means no loss inside
 the NCP semantic contract, not that every Canonical AST field is present.
 
-Custom components remain ordinary node records. Consumers that do not
+Custom components remain ordinary node records, including source classes.
+Consumers that do not
 understand a custom component should read its children as fallback source
 content.
 
@@ -79,7 +81,7 @@ Semantic text is a compact, deterministic text projection:
 # Introduction #intro
 Paragraph text.
 
-Component approval-card [id="approval" status="pending" fallback="children"]:
+Component approval-card [id="approval" fallback="children" status="pending"]:
 Fallback content.
 ```
 
@@ -87,9 +89,10 @@ It includes readable source content: headings, paragraphs, lists, tables,
 figures, images, captions, literal code/math, quotes, notes, forms, media
 fallbacks, bibliography entries, and custom component fallback children.
 
-It excludes style nodes, component styles, `toc`, `pagebreak`, automatic page
-boundaries, renderer-generated HTML, computed CSS, package metadata, and custom
-component template output. Output always ends with one trailing newline.
+It excludes source classes, style nodes, component styles, `toc`, `pagebreak`,
+automatic page boundaries, renderer-generated HTML, computed CSS, package
+metadata, and custom component template output. Output always ends with one
+trailing newline.
 
 Use semantic text when token cost matters and the consumer does not need stable
 node hashes or patch addresses. Use NCP for agent tools that need to cite,
