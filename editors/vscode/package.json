@@ -1,7 +1,7 @@
 {
   "name": "nodx-language",
   "displayName": "NODX Language Support",
-  "description": "Syntax highlighting for NODX 1.0 documents.",
+  "description": "Editor, preview, validation, and package support for NODX 1.0 documents.",
   "version": "0.1.0",
   "license": "MIT",
   "publisher": "nodx",
@@ -12,17 +12,31 @@
   },
   "files": [
     "CHANGELOG.md",
+    "EDITOR_ARCHITECTURE.md",
     "LICENSE",
     "README.md",
+    "extension.js",
     "language-configuration.json",
     "package.json",
+    "vendor/nodx-js/src/**",
     "snippets/**",
     "syntaxes/**"
   ],
+  "main": "./extension.js",
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Programming Languages"],
+  "categories": ["Programming Languages", "Visualization", "Other"],
+  "activationEvents": [
+    "onLanguage:nodx",
+    "onCustomEditor:nodx.editor",
+    "onCommand:nodx.openEditor",
+    "onCommand:nodx.openPreviewToSide",
+    "onCommand:nodx.openSemanticPreview",
+    "onCommand:nodx.showInfo",
+    "onCommand:nodx.createPlain",
+    "onCommand:nodx.createPackage"
+  ],
   "contributes": {
     "languages": [
       {
@@ -43,6 +57,93 @@
       {
         "language": "nodx",
         "path": "./snippets/nodx.code-snippets"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "nodx.editor",
+        "displayName": "NODX Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.nodx"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "nodx.openEditor",
+        "title": "Open NODX Editor",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "nodx.openPreviewToSide",
+        "title": "Preview to Side",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "nodx.openSemanticPreview",
+        "title": "Semantic Preview",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "nodx.showInfo",
+        "title": "NODX Info",
+        "icon": "$(info)"
+      },
+      {
+        "command": "nodx.createPlain",
+        "title": "New NODX File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nodx.createPackage",
+        "title": "New NODX Package",
+        "icon": "$(package)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "nodx.openEditor",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nodx.openPreviewToSide",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nodx.showInfo",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "nodx.openEditor",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation"
+        },
+        {
+          "command": "nodx.openPreviewToSide",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "title": "NODX",
+        "properties": {
+          "nodx.preview.theme": {
+            "type": "string",
+            "default": "base",
+            "description": "Default preview theme for newly created NODX documents."
+          }
+        }
       }
     ]
   }
