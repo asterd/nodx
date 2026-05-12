@@ -19,10 +19,13 @@ software that does not get to guess** what the author meant.
 
 > The normative contract is [NODX-RFC-0001](./NODX-RFC-0001.md). The
 > reference implementation in this repository is the conformance gauge.
-> Read the hosted docs at
-> [https://asterd.github.io/nodx/](https://asterd.github.io/nodx/) and try
-> the live playground at
-> [https://asterd.github.io/nodx/playground/](https://asterd.github.io/nodx/playground/).
+
+## Try it online
+
+| Destination | Use it for | Link |
+|---|---|---|
+| Documentation | Read the guide, reference, cookbook, and internals. | [Open docs](https://asterd.github.io/nodx/) |
+| Playground | Edit real NODX examples and inspect render, diagnostics, AST, NCP, semantic text, and packages. | [Open playground](https://asterd.github.io/nodx/playground/) |
 
 ## In sixty seconds
 
@@ -93,9 +96,8 @@ NODX is the same readability with the contract Markdown never had.
   layout demo.
 - **Editor starter integrations** for VS Code, Sublime, and Notepad++
   under [`editors/`](./editors/).
-- **Apps**: a web playground in [`apps/web/`](./apps/web/) and hosted at
-  [https://asterd.github.io/nodx/playground/](https://asterd.github.io/nodx/playground/),
-  plus a Python desktop viewer in [`apps/desktop/`](./apps/desktop/).
+- **Apps**: a web playground in [`apps/web/`](./apps/web/) and a Python
+  desktop viewer in [`apps/desktop/`](./apps/desktop/).
 
 ## Documentation
 
@@ -103,9 +105,9 @@ The full documentation lives under [`docs/`](./docs/) and is published
 as a navigable site under [`site/`](./site/). Read it in three ways:
 
 - **Hosted docs**:
-  [https://asterd.github.io/nodx/](https://asterd.github.io/nodx/).
+  [Open the documentation site](https://asterd.github.io/nodx/).
 - **Hosted playground**:
-  [https://asterd.github.io/nodx/playground/](https://asterd.github.io/nodx/playground/).
+  [Open the browser playground](https://asterd.github.io/nodx/playground/).
   Both are built and deployed by `.github/workflows/docs.yml` on every
   push after GitHub Pages is enabled with Source: GitHub Actions.
 - **Locally** as a site:
