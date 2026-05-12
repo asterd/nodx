@@ -22,7 +22,7 @@ software that does not get to guess** what the author meant.
 > Read the hosted docs at
 > [https://asterd.github.io/nodx/](https://asterd.github.io/nodx/) and try
 > the live playground at
-> [https://asterd.github.io/nodx/apps/web/](https://asterd.github.io/nodx/apps/web/).
+> [https://asterd.github.io/nodx/apps/web/index.html](https://asterd.github.io/nodx/apps/web/index.html).
 
 ## In sixty seconds
 
@@ -94,7 +94,7 @@ NODX is the same readability with the contract Markdown never had.
 - **Editor starter integrations** for VS Code, Sublime, and Notepad++
   under [`editors/`](./editors/).
 - **Apps**: a web playground in [`apps/web/`](./apps/web/) and hosted at
-  [https://asterd.github.io/nodx/apps/web/](https://asterd.github.io/nodx/apps/web/),
+  [https://asterd.github.io/nodx/apps/web/index.html](https://asterd.github.io/nodx/apps/web/index.html),
   plus a Python desktop viewer in [`apps/desktop/`](./apps/desktop/).
 
 ## Documentation
@@ -105,7 +105,7 @@ as a navigable site under [`site/`](./site/). Read it in three ways:
 - **Hosted docs**:
   [https://asterd.github.io/nodx/](https://asterd.github.io/nodx/).
 - **Hosted playground**:
-  [https://asterd.github.io/nodx/apps/web/](https://asterd.github.io/nodx/apps/web/).
+  [https://asterd.github.io/nodx/apps/web/index.html](https://asterd.github.io/nodx/apps/web/index.html).
   Both are built and deployed by `.github/workflows/docs.yml` on every
   push after GitHub Pages is enabled with Source: GitHub Actions.
 - **Locally** as a site:
