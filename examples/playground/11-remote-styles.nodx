@@ -1,0 +1,40 @@
+---
+schema: nodx/1.0
+title: Remote styles
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+remoteStylesheets:
+  - href: https://raw.githubusercontent.com/asterd/nodx/main/examples/playground/assets/remote-surface.nods
+    fallback: assets/remote-surface.nods
+---
+# Remote styles #remote-styles
+
+This example declares a stylesheet URL in front matter. The playground host fetches it, falls back to the local copy when needed, sanitizes it through the renderer, and applies it as an external stylesheet.
+
+::section {.remote-hero}
+## Loaded from a host resolver #loaded-from-host-resolver
+
+The colored panel, badge, and grid below come from `remote-surface.nods`, not from an inline `::style` block.
+::section
+
+::section {.remote-grid}
+:::note {.remote-card}
+**Fetch**
+The host loads a remote stylesheet URL.
+:::note
+
+:::note {.remote-card}
+**Policy**
+The renderer sanitizes CSS before output.
+:::note
+
+:::note {.remote-card}
+**Fallback**
+Local fallback keeps demos usable offline.
+:::note
+::section
+
+Status: [[remote stylesheet active]].remote-badge.

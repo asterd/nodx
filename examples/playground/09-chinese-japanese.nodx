@@ -1,0 +1,34 @@
+---
+schema: nodx/1.0
+title: Chinese and Japanese text
+language: zh
+dir: ltr
+theme: web
+profiles:
+  requires:
+    - core
+    - rich
+---
+# 中文和日本語 #cjk
+
+NODX keeps CJK text as normal Unicode source and preserves language metadata for renderers and assistive tools.
+
+## 中文段落 #chinese-section
+
+这是一个中文段落，用来检查换行、标点、链接和内联格式。这里有 **加粗文本**、`inline code`，以及 [安全链接](https://example.com){title="示例链接"}。
+
+::note {type="tip"}
+中文内容不需要额外的标记。只有在同一文档中混合多种语言时，才需要给局部内容设置 `lang`。
+::note
+
+## 日本語の段落 #japanese-section
+
+これは日本語の段落です。見出し、本文、表、注記が同じレンダリング契約で処理されることを確認します。
+
+| 項目 | 状態 | メモ |
+| --- | --- | --- |
+| 文字 | 正常 | UTF-8 |
+| 見出し | 安定 | アンカー付き |
+| 表 | 表示 | セル幅を確認 |
+
+Mixed spans can be explicit: [日本語テキスト]{lang="ja" dir="ltr"} and [中文内容]{lang="zh" dir="ltr"}.

@@ -159,8 +159,8 @@ fn inflate_huffman_block(
                 return Err("invalid distance symbol");
             }
             let didx = dist_symbol as usize;
-            let distance = DISTANCE_BASE[didx] as usize
-                + reader.read_bits(DISTANCE_EXTRA[didx])? as usize;
+            let distance =
+                DISTANCE_BASE[didx] as usize + reader.read_bits(DISTANCE_EXTRA[didx])? as usize;
             if distance == 0 || distance > out.len() {
                 return Err("invalid back reference");
             }

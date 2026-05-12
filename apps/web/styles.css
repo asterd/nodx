@@ -169,6 +169,24 @@ textarea.no-wrap {
   padding-top: 0;
 }
 
+.doc.nodx-docs-layout nav {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.doc.nodx-docs-layout .nodx-docs-sidebar nav,
+.doc.nodx-docs-layout .nodx-docs-outline nav {
+  font-size: 13px;
+}
+
+.doc.nodx-docs-layout .nodx-docs-sidebar a,
+.doc.nodx-docs-layout .nodx-docs-outline a {
+  text-decoration: none;
+}
+
 .inspector {
   padding: 18px;
   min-height: 180px;

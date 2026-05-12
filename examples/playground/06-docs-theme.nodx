@@ -1,29 +1,118 @@
 ---
 schema: nodx/1.0
-title: Docs theme
+title: NODX Docs Handbook
 theme: docs
 layout: docs
 profiles:
   requires:
     - core
     - rich
+    - style
 ---
-# Docs theme #docs-theme
+# Overview #overview
 
-Use `theme: docs` or `layout: docs` for a documentation shell generated from headings.
+This document is intentionally shaped like a small technical manual. The left navigation is built from first-level headings and acts as macro navigation. The right navigation lists second- and third-level headings for section-level movement.
 
-## Authoring model #authoring-model
+## When to use docs layout #when-to-use-docs
 
-The same source remains a normal NODX document. The renderer decides whether to emit a single reading column or a documentation shell.
+Use the docs layout when the document is longer than a single article and readers need stable entry points. Product guides, implementation notes, SDK references, and internal runbooks are good candidates.
 
-### Heading-driven navigation #heading-driven-navigation
+### Reader expectations #reader-expectations
 
-Second-level headings are primary navigation entries. Deeper headings appear in the section outline.
+Readers expect the main content to stay focused while navigation stays visible. Headings should be short, stable, and written as destinations.
 
-## Renderer contract #renderer-contract
+### Source expectations #source-expectations
 
-The complete HTML renderer emits the structural shell. Hosts that preview fragments must either call the complete renderer or reproduce the same shell contract.
+The source remains a normal NODX document. There is no separate route file, no custom sidebar schema, and no hidden build step for navigation.
 
-### Export behavior #export-behavior
+## Navigation model #navigation-model
 
-Exported HTML should keep the documentation shell when `layout: docs` is present.
+First-level headings define the primary route map. Second- and third-level headings define local structure. Deeper headings can still render in the page, but should be used sparingly.
+
+| Level | Purpose | Example |
+| --- | --- | --- |
+| H1 | Macro navigation | Overview |
+| H2 | Section navigation | Navigation model |
+| H3 | Local detail | Reader expectations |
+
+# Authoring #authoring
+
+Docs pages should be easy to edit as text. The preview adds a shell, but the document should still make sense in a terminal, code review, or semantic projection.
+
+## Front matter #front-matter
+
+The docs shell is selected with `layout: docs` or `theme: docs`. `layout` controls structure. `theme` controls visual defaults. Using both makes the intent explicit.
+
+### Minimal setup #minimal-setup
+
+```nodx
+---
+title: My Handbook
+theme: docs
+layout: docs
+---
+```
+
+## Heading discipline #heading-discipline
+
+Prefer a small number of H1 sections. Each H1 should be a major destination. If the left navigation becomes noisy, the document probably needs fewer top-level sections.
+
+::note {type="tip"}
+Use stable heading IDs for documentation that will be linked from issues, pull requests, changelogs, or support threads.
+::note
+
+## Inline content #inline-content
+
+Inline formatting, links, variables, references, and citations work the same way inside the docs layout as they do in the web theme.
+
+# Rendering #rendering
+
+The complete HTML renderer emits the full documentation shell. Hosts that render fragments need to reproduce the same shell if they want an accurate preview.
+
+## Shell regions #shell-regions
+
+The rendered page has three regions: sidebar, main content, and local outline. The playground mirrors this structure so authors can inspect the real layout contract.
+
+### Sidebar behavior #sidebar-behavior
+
+The sidebar uses only H1 entries. Those links move between major sections.
+
+### Outline behavior #outline-behavior
+
+The right outline uses H2 and H3 entries. Those links move within and across the current document section.
+
+## Export behavior #export-behavior
+
+Exported HTML should preserve the docs shell when `layout: docs` is present. Switching the theme selector in the playground changes visual tokens, but the document metadata remains the source of truth.
+
+# Integration #integration
+
+Applications can embed the renderer directly, serve exported HTML, or use NODX as a source format in a documentation pipeline.
+
+## Playground host #playground-host
+
+The playground is a host application. It loads `.nodx` files, renders them, exposes AST/NCP/semantic inspectors, and resolves package-local assets without extracting files to disk.
+
+### Package assets #package-assets
+
+Stored ZIP packages can include styles, assets, component manifests, and the entry document. The Package tab shows what the host loaded.
+
+## Remote policy #remote-policy
+
+Remote styles or components should be fetched by the host, checked against policy, and passed to the renderer as trusted input. The renderer itself should not fetch arbitrary network resources.
+
+# Operations #operations
+
+Documentation is only useful if it can be validated and maintained over time.
+
+## Validation #validation
+
+Run validation in CI so broken anchors, unsafe URLs, invalid styles, and unsupported capabilities are caught before publication.
+
+## Review workflow #review-workflow
+
+Because the source is plain text, reviewers can discuss content changes in normal code review. The generated navigation follows the headings, so navigation changes are visible in the diff.
+
+## Publishing #publishing
+
+Static hosting is enough for this playground and for exported docs. GitHub Pages can serve the documentation site and the browser playground from the same artifact.

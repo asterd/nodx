@@ -45,7 +45,7 @@ export function themeStylesheet(theme = "base") {
 function renderDocsBody(doc, options) {
   const navigation = resolveNavigation(doc);
   const entries = navigation.navigations[0]?.entries ?? collectHeadingEntries(doc.body);
-  return `<body class="nodx-docs-layout"><aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries, 2)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside></body>`;
+  return `<body class="nodx-docs-layout"><aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries.filter((entry) => entry.level === 1), 1)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside></body>`;
 }
 
 function docsNav(entries, maxLevel) {

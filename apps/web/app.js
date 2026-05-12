@@ -41,6 +41,7 @@ let currentHeadings = [];
 let packageState = emptyPackageState();
 let themeStyleEl = null;
 let variableValues = new Map();
+let remoteStylesheets = [];
 
 populateExamples();
 populateThemes();
@@ -102,6 +103,7 @@ async function loadSample(id) {
       packageState = emptyPackageState();
       src.value = textDecoder.decode(bytes);
     }
+    remoteStylesheets = await loadRemoteStylesheets(src.value, example.path);
     sampleKind.textContent = `${example.group} / ${example.label}`;
     render();
   } catch (error) {
@@ -180,7 +182,7 @@ function renderOptions() {
     assetResolver: resolveAsset,
     textAssetResolver: resolveTextAsset,
     componentRenderers: packageState.components,
-    stylesheets: packageStylesheets(),
+    stylesheets: [...remoteStylesheets, ...packageStylesheets()],
   };
 }
 
@@ -191,7 +193,7 @@ function renderDocsPreview(doc, options) {
     level: heading.level,
     title: heading.text,
   }));
-  return `<aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries, 2)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside>`;
+  return `<aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">${escapeHtml(docsTitle(doc))}</a>${docsNav(entries.filter((entry) => entry.level === 1), 1)}</aside><main class="nodx-docs-main">${renderFragment(doc, options)}</main><aside class="nodx-docs-outline">${docsNav(entries.filter((entry) => entry.level > 1), 6)}</aside>`;
 }
 
 function docsNav(entries, maxLevel) {
@@ -515,6 +517,42 @@ function renderOutline() {
   wireInternalLinks(outline);
 }
 
+async function loadRemoteStylesheets(source, examplePath) {
+  let doc;
+  try {
+    doc = parse(source);
+  } catch {
+    return [];
+  }
+  const entries = Array.isArray(doc.meta.remoteStylesheets) ? doc.meta.remoteStylesheets : [];
+  const stylesheets = [];
+  for (const entry of entries) {
+    const loaded = await fetchRemoteStylesheet(entry, examplePath);
+    if (loaded) stylesheets.push(loaded);
+  }
+  return stylesheets;
+}
+
+async function fetchRemoteStylesheet(entry, examplePath) {
+  const href = typeof entry === "string" ? entry : entry?.href ?? entry?.url;
+  const fallback = typeof entry === "object" ? entry.fallback : "";
+  for (const candidate of [href, fallbackUrl(examplePath, fallback)].filter(Boolean)) {
+    try {
+      const response = await fetch(candidate);
+      if (response.ok) return await response.text();
+    } catch {
+      // Try the next declared source.
+    }
+  }
+  return "";
+}
+
+function fallbackUrl(examplePath, fallback) {
+  if (!fallback) return "";
+  if (/^https?:\/\//i.test(fallback)) return fallback;
+  return new URL(fallback, new URL(examplePath, window.location.href)).href;
+}
+
 function renderDiagnostics(items) {
   if (!items.length) {
     diagnostics.textContent = "No diagnostics.";
@@ -686,6 +724,7 @@ function isText(path) {
 function clearPackageUrls() {
   for (const url of packageState.urls.values()) URL.revokeObjectURL(url);
   packageState = emptyPackageState();
+  remoteStylesheets = [];
 }
 
 function emptyPackageState() {

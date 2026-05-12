@@ -1,0 +1,26 @@
+.remote-hero {
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 18px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+}
+
+.remote-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.remote-card {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.remote-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1em 0.6em;
+  font-weight: 700;
+  color: #1e3a8a;
+  background: #dbeafe;
+}

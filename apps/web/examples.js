@@ -57,24 +57,38 @@ export const examples = [
   },
   {
     group: "Document structure",
-    id: "international-text",
-    label: "International text",
+    id: "chinese-japanese",
+    label: "Chinese and Japanese",
     kind: "file",
-    path: "../../examples/playground/09-international-text.nodx",
+    path: "../../examples/playground/09-chinese-japanese.nodx",
+  },
+  {
+    group: "Document structure",
+    id: "arabic-rtl",
+    label: "Arabic RTL",
+    kind: "file",
+    path: "../../examples/playground/10-arabic-rtl.nodx",
+  },
+  {
+    group: "Integration",
+    id: "remote-styles",
+    label: "Remote styles",
+    kind: "file",
+    path: "../../examples/playground/11-remote-styles.nodx",
   },
   {
     group: "Integration",
     id: "remote-components",
     label: "Remote components",
     kind: "file",
-    path: "../../examples/playground/10-remote-components.nodx",
+    path: "../../examples/playground/12-remote-components.nodx",
   },
   {
     group: "Integration",
     id: "zip-package",
     label: "ZIP package",
     kind: "file",
-    path: "../../examples/playground/11-zip-package.nodx",
+    path: "../../examples/playground/13-zip-package.nodx",
   },
 ];
 

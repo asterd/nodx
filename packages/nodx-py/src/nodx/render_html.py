@@ -50,7 +50,7 @@ def theme_stylesheet(theme="base"):
 def render_docs_body(doc, options):
     navigation = resolve_navigation(doc)
     entries = navigation["navigations"][0]["entries"] if navigation["navigations"] else collect_heading_entries(doc["body"])
-    sidebar = docs_nav([entry for entry in entries if entry["level"] <= 2])
+    sidebar = docs_nav([entry for entry in entries if entry["level"] == 1])
     outline = docs_nav([entry for entry in entries if entry["level"] > 1])
     return '<body class="nodx-docs-layout"><aside class="nodx-docs-sidebar"><a class="nodx-docs-brand" href="#">' + escape_html(docs_title(doc)) + "</a>" + sidebar + '</aside><main class="nodx-docs-main">' + render_fragment(doc, options) + '</main><aside class="nodx-docs-outline">' + outline + "</aside></body>"
 
