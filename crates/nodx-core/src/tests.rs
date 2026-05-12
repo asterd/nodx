@@ -219,6 +219,47 @@ fn sha256_matches_known_vector() {
     );
 }
 
+#[test]
+fn nodes_per_document_limit_emits_e012_and_stops_parsing() {
+    let mut limits = ResourceLimits::default();
+    limits.nodes_per_document = 5;
+    let source = "# A\n\n# B\n\n# C\n\n# D\n\n# E\n\n# F\n\n# G\n";
+    let doc = parse_str_with_limits(source, limits);
+    assert!(
+        doc.diagnostics
+            .iter()
+            .any(|d| d.code == "NODX-E012" && d.message.contains("Node count")),
+        "missing node count diagnostic: {:?}",
+        doc.diagnostics
+    );
+    assert!(
+        doc.body.len() <= 5,
+        "parser must stop creating nodes after limit: got {}",
+        doc.body.len()
+    );
+}
+
+#[test]
+fn block_nesting_depth_limit_emits_e012() {
+    let mut limits = ResourceLimits::default();
+    limits.block_nesting_depth = 2;
+    let source = ":::a\n:::b\n:::c\nbody\n:::\n:::\n:::\n";
+    let doc = parse_str_with_limits(source, limits);
+    assert!(
+        doc.diagnostics
+            .iter()
+            .any(|d| d.code == "NODX-E012" && d.message.contains("nesting depth")),
+        "missing nesting depth diagnostic: {:?}",
+        doc.diagnostics
+    );
+}
+
+#[test]
+fn limits_do_not_fire_under_default_caps_on_small_docs() {
+    let doc = parse_str("# A\n\nP1\n\nP2\n");
+    assert!(doc.diagnostics.iter().all(|d| d.code != "NODX-E012"));
+}
+
 fn build_zip_with_duplicate_path() -> Vec<u8> {
     let mut out = Vec::new();
     let mut entries: Vec<(String, Vec<u8>, u32)> = Vec::new();

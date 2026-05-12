@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-label="NODX logo">
+  <title>NODX</title>
+  <!-- Mark: a vertical spine of three nodes connected to three text lines.
+       The nodes represent the canonical AST; the lines represent the
+       textual document. The spine is the structure that binds the two. -->
+  <g fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round">
+    <!-- spine -->
+    <line x1="14" y1="22" x2="14" y2="74"/>
+    <!-- connectors -->
+    <line x1="14" y1="24" x2="34" y2="24"/>
+    <line x1="14" y1="48" x2="34" y2="48"/>
+    <line x1="14" y1="72" x2="34" y2="72"/>
+    <!-- text lines -->
+    <line x1="38" y1="24" x2="84" y2="24"/>
+    <line x1="38" y1="48" x2="76" y2="48"/>
+    <line x1="38" y1="72" x2="84" y2="72"/>
+  </g>
+  <!-- nodes -->
+  <g fill="#0f766e">
+    <circle cx="14" cy="24" r="4"/>
+    <circle cx="14" cy="48" r="4"/>
+    <circle cx="14" cy="72" r="4"/>
+  </g>
+  <!-- wordmark -->
+  <text x="108" y="60"
+        font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        font-size="42"
+        font-weight="700"
+        letter-spacing="-1.5"
+        fill="#1a1a1c">NODX</text>
+  <text x="244" y="60"
+        font-family="ui-monospace, 'SF Mono', Menlo, monospace"
+        font-size="12"
+        fill="#5a5a63">1.0</text>
+</svg>

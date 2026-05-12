@@ -1,20 +1,30 @@
-# NODX
+<p align="left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img alt="NODX" src="docs/assets/logo.svg" width="280">
+  </picture>
+</p>
 
-NODX is a text-first document format for people, tools, and AI agents. It keeps
-the easy parts of Markdown, then adds the pieces Markdown cannot guarantee:
-semantic structure, deterministic JSON output, safe rendering, packaged local
-assets, stable navigation, and an agent-readable projection.
+**Structured documents for people, tools, and AI agents.**
 
-Use NODX when a document must be readable as plain text, rendered safely, checked
-by CI, converted to HTML/PDF-style outputs, and consumed by software without
-guessing what the author meant.
+NODX is a text-first document format. It keeps the parts of Markdown
+that make documents easy to read, and adds the parts Markdown leaves to
+convention: a canonical AST, deterministic JSON output, a fail-closed
+security model, packaged local assets, stable navigation, and an
+agent-readable projection.
 
-The normative specification is [NODX-RFC-0001](./NODX-RFC-0001.md). For a quick
-local preview, build the CLI and render one of the committed examples to HTML.
+Use it when a document has to be **readable as plain text, rendered
+safely, checked in CI, exported to HTML or PDF, and consumed by
+software that does not get to guess** what the author meant.
 
-## NODX In 5 Minutes
+> The normative contract is [NODX-RFC-0001](./NODX-RFC-0001.md). The
+> reference implementation in this repository is the conformance gauge.
+> The browsable documentation site is in [`site/`](./site/) and ships
+> via GitHub Pages — see *"Documentation"* below.
 
-Start with a document that looks almost like Markdown:
+## In sixty seconds
+
+Write a document:
 
 ```nodx
 ---
@@ -26,314 +36,173 @@ theme: web
 
 This is **structured text** with a safe [link](https://example.com).
 Reviewer: {{reviewer}}.
-```
-
-Add structure when the document needs meaning, navigation, or richer output:
-
-```nodx
-::toc {title="Contents" depth="2"}
-::
-
-# Quarterly report #q1
-
-| Metric | Value |
-|---|---:|
-| Revenue | 120K |
-| Costs | 80K |
 
 ::note {type="info"}
 Unknown renderers keep this fallback content readable.
 ::
 ```
 
-Use the full form only when you need explicit metadata:
+Render it:
 
-```nodx
----
-schema: nodx/1.0
-type: document
-title: Advanced NODX document
-profiles:
-  requires:
-    - core
-    - rich
-  optional:
-    - style
-    - agent-read
----
+```sh
+cargo build --release -p nodx
+target/release/nodx html my-doc.nodx > my-doc.html
+target/release/nodx validate my-doc.nodx --format json
+target/release/nodx ncp my-doc.nodx --mode chunks > my-doc.ndjson
 ```
 
-### Cheat Sheet
+Three commands. Three byte-stable outputs. No CDN, no network, no
+hidden state.
 
-| Need | Write |
+## Why not just Markdown?
+
+| Capability                      | Markdown | AsciiDoc | LaTeX | NODX |
+|---------------------------------|:--------:|:--------:|:-----:|:----:|
+| Readable as plain text          | yes      | yes      | partial | yes |
+| Canonical, byte-stable AST      | no       | partial  | no    | yes |
+| Safe for untrusted input        | no       | no       | no    | yes |
+| Built-in semantic navigation    | partial  | yes      | partial | yes |
+| Packaged ZIP with local assets  | no       | no       | no    | yes |
+| Agent-readable projection       | no       | no       | no    | yes |
+| Conformance profiles            | no       | partial  | no    | yes |
+| Diagnostics with stable codes   | no       | no       | no    | yes |
+
+Markdown is wonderful for prose and terrible as an interchange format.
+NODX is the same readability with the contract Markdown never had.
+
+## What you get in this repository
+
+- **Reference implementation in Rust**, 12 focused crates:
+  parser/validator/renderer/exporter, URL and style auditors, package
+  reader, NCP projector, signing, CST for editors, agent SDK, CLI.
+  Every crate is `#![forbid(unsafe_code)]`.
+- **JavaScript and Python parsers** under [`packages/`](./packages/) —
+  both produce the same canonical AST as the Rust reference and are
+  exercised by the conformance suite.
+- **Conformance bundle** at
+  [`spec/conformance/v1.0/`](./spec/conformance/v1.0/) — every fixture
+  with its expected AST, NCP, diagnostics, and HTML outputs.
+- **Hostile-input corpus** under [`spec/tests/security/`](./spec/tests/security/)
+  — YAML, NODS, URL, packaging, and XSS test cases.
+- **Showcase documents** under [`examples/`](./examples/) — minimal,
+  intermediate, advanced, packaged, i18n, print, and a documentation
+  layout demo.
+- **Editor starter integrations** for VS Code, Sublime, and Notepad++
+  under [`editors/`](./editors/).
+- **Apps**: a web playground in [`apps/web/`](./apps/web/) and a Python
+  desktop viewer in [`apps/desktop/`](./apps/desktop/).
+
+## Documentation
+
+The full documentation lives under [`docs/`](./docs/) and is published
+as a navigable site under [`site/`](./site/). Read it in three ways:
+
+- **Hosted**: GitHub Pages, built and deployed by
+  `.github/workflows/docs.yml` on every push. Enable Pages once (Source:
+  GitHub Actions); the workflow handles the rest.
+- **Locally** as a site:
+
+  ```sh
+  python3 scripts/build_site.py
+  python3 -m http.server 8765 -d site
+  open http://127.0.0.1:8765/
+  ```
+
+- **As plain Markdown** in your editor: the source files under
+  [`docs/`](./docs/) are the same files the site renders.
+
+### Where to start
+
+| You are… | Read |
 |---|---|
-| Heading with stable ID | `# Introduction #intro` |
-| Paragraph emphasis | `**strong**`, `*emphasis*`, `` `code` `` |
-| Variable | `{{reviewer}}` or `{{meta.title}}` |
-| Safe link with metadata | `[guide](docs/guide.nodx){title="Open guide" rel="help"}` |
-| Styled inline span | `[[status]]{.pill color="var(--nodx-color-primary)" bg="#ccfbf1" radius="999px" pad="2px 8px"}` |
-| Note/callout | `::note ... ::` |
-| Image | `::image {src="assets/photo.png" alt="Photo description"}` then `::` |
-| Table | `| A | B |` then `|---|---|` |
-| Table of contents | `::toc {title="Contents"}` then `::` |
-| Manual page break | `::pagebreak` then `::` |
-| Style block | `::style`, style rules, then `::` |
-| Documentation layout | `theme: docs` or `layout: docs` |
+| Brand new to NODX | [Quickstart](./docs/guide/01-quickstart.md) and the [Syntax tour](./docs/guide/02-syntax-tour.md). |
+| Writing a real document | The [Authoring guide](./docs/guide/03-authoring.md). |
+| Wiring NODX into a tool or CI | The [CLI guide](./docs/guide/05-cli.md) and the [Cookbook](./docs/cookbook/index.md). |
+| Implementing your own parser | The [conformance reference](./docs/reference/conformance.md) and the [AST reference](./docs/reference/ast.md). |
+| Auditing for security | The [security model](./docs/internals/security-model.md) and [`SECURITY.md`](./SECURITY.md). |
+| Sizing the system | The [scalability notes](./docs/internals/scalability.md). |
 
-### Why Not Just Markdown?
+The full [docs index](./docs/README.md) lists every page.
 
-| Capability | Markdown | AsciiDoc | LaTeX | NODX |
-|---|---:|---:|---:|---:|
-| Readable as text | yes | yes | partial | yes |
-| Canonical AST | no | partial | no | yes |
-| Safe for untrusted input | no | no | no | yes |
-| Built-in semantic navigation | partial | yes | partial | yes |
-| Packaged ZIP with local assets | no | no | no | yes |
-| Agent-readable projection | no | no | no | yes |
-| Conformance profiles | no | partial | no | yes |
-
-## What This Repo Contains
-
-- Rust reference implementation: parser, validator, URL policy, style safety,
-  HTML renderer, TUI renderer, package reader, NCP projection, signing,
-  editor/CST support, agent mutation SDK, and export previews.
-- Independent JavaScript parser/projection in `packages/nodx-js`.
-- Conformance, negative, rendering, security, package, export, and presentation
-  fixtures under `spec/tests`.
-- Implementer-facing conformance package under `spec/conformance/v1.0`.
-- Showcase documents under `examples`.
-- Editor starter integrations under `editors`.
-
-## Progressive Examples
-
-Minimal:
-
-```nodx
----
-title: My first document
----
-
-# Hello NODX #hello
-
-This is **structured text** with a safe [link](https://example.com).
-```
-
-Intermediate:
-
-```nodx
----
-title: Report Q1
-theme: print
----
-
-# Report Q1 #q1
-
-| Metric | Value |
-|---|---:|
-| Revenue | 120K |
-| Costs | 80K |
-```
-
-Advanced:
-
-```nodx
----
-schema: nodx/1.0
-type: document
-title: Hello NODX
-profiles:
-  requires:
-    - core
-    - rich
-  optional:
-    - style
-    - agent-read
----
-
-::toc {#contents role="primary" depth="2" title="Contents"}
-::
-
-# Hello NODX #hello
-
-This is **structured text** with a safe [link](https://example.com).
-
-| Feature | Status |
-| - | - |
-| Canonical AST | stable |
-| NCP semantic projection | stable |
-
-::note {#safe-note type="info"}
-Unknown renderers keep fallback children as ordinary document content.
-::
-```
-
-## Build And Verify
-
-Use `rtk` for repository commands:
+## Build and verify
 
 ```sh
-rtk cargo test
-rtk node --test packages/nodx-js/test/*.mjs
-rtk sh scripts/run_conformance.sh
-rtk sh scripts/verify_conformance_package.sh
-rtk git diff --check
+cargo test --workspace --release     # all Rust crates
+node --test packages/nodx-js/test/*.mjs
+sh scripts/run_conformance.sh        # Rust ↔ JavaScript parity over every fixture
+sh scripts/verify_conformance_package.sh
 ```
 
-The conformance runner compares Rust and JavaScript canonical AST, NCP, and
-diagnostics output for the committed fixture corpus and writes
-`target/conformance-report.json`.
+The conformance script writes `target/conformance-report.json` for CI
+consumption. A non-zero exit code from either script is a real failure —
+they do not tolerate divergence.
 
-## CLI
+## CLI cheat sheet
 
 ```sh
-rtk cargo build -p nodx
-target/debug/nodx ast examples/showcase-web.nodx
-target/debug/nodx validate examples/showcase-web.nodx --format json
-target/debug/nodx html examples/showcase-web.nodx > target/showcase.html
-target/debug/nodx tui examples/showcase-tui.nodx
-target/debug/nodx ncp examples/showcase-web.nodx
-target/debug/nodx package inspect examples/extended-showcase-bundled.nodx
-target/debug/nodx package verify examples/extended-showcase-bundled.nodx
+target/release/nodx ast doc.nodx
+target/release/nodx validate doc.nodx --format json
+target/release/nodx html doc.nodx > doc.html
+target/release/nodx tui doc.nodx
+target/release/nodx ncp doc.nodx --mode chunks
+target/release/nodx package inspect bundle.nodx
+target/release/nodx package verify  bundle.nodx
+target/release/nodx export pdf  doc.nodx -o doc.pdf
+target/release/nodx export docx doc.nodx -o doc.docx
+target/release/nodx export pptx slides.nodx -o slides.pptx
 ```
 
-Exit codes follow the RFC: `0` success, `1` I/O or CLI usage failure, `2`
-parse/validation/security failure, `3` unsupported required capability.
+Exit codes follow the RFC:
 
-## Run The Examples
+| Code | Meaning |
+|---|---|
+| `0` | Success. |
+| `1` | I/O or CLI usage error. |
+| `2` | Parse, validation, or security failure. |
+| `3` | The document requires a capability this build does not support (`NODX-E024`). |
 
-Build the CLI once:
+Full reference: [docs/guide/05-cli.md](./docs/guide/05-cli.md).
 
-```sh
-rtk cargo build -p nodx
-```
+## Scalability — measured
 
-Validate a single example before rendering it:
+Synthetic book benchmarks on the reference release build:
 
-```sh
-target/debug/nodx validate examples/showcase-web.nodx --format json
-```
+| Input | Source | Operation | Wall time | Peak RSS |
+|---|---:|---|---:|---:|
+| 2 000 pages | 3.8 MiB | `nodx html` | 0.16 s | 80 MiB |
+| 5 000 pages | 9.6 MiB | `nodx html` | 0.40 s | 195 MiB |
+| 10 000 pages | 19 MiB | `nodx html` | 0.79 s | 386 MiB |
 
-Generate one static HTML file when you want a browser artifact:
-
-```sh
-mkdir -p target/examples
-cp -R examples/assets target/examples/assets
-target/debug/nodx html examples/showcase-web.nodx > target/examples/showcase-web.html
-```
-
-Run the terminal showcase:
-
-```sh
-target/debug/nodx tui examples/showcase-tui.nodx
-```
-
-Run the local desktop-style viewer for a single file:
-
-```sh
-python3 apps/desktop/nodx_viewer.py examples/showcase-web.nodx
-```
-
-Generate the agent-readable NCP projection:
-
-```sh
-target/debug/nodx ncp examples/showcase-web.nodx > target/showcase-web.ncp.json
-```
-
-Inspect and verify the packaged ZIP example:
-
-```sh
-target/debug/nodx package inspect examples/extended-showcase-bundled.nodx
-target/debug/nodx package verify examples/extended-showcase-bundled.nodx
-```
-
-Render print and internationalization examples through the same HTML path:
-
-```sh
-target/debug/nodx html examples/print/print-portrait.nodx > target/examples/print-portrait.html
-target/debug/nodx html examples/print/print-landscape.nodx > target/examples/print-landscape.html
-target/debug/nodx html examples/i18n/arabic-rtl.nodx > target/examples/arabic-rtl.html
-target/debug/nodx html examples/i18n/chinese-cjk.nodx > target/examples/chinese-cjk.html
-target/debug/nodx html examples/i18n/mixed-scripts.nodx > target/examples/mixed-scripts.html
-```
-
-Run preview exports with machine-readable loss reports:
-
-```sh
-target/debug/nodx export pdf examples/showcase-web.nodx -o target/showcase.pdf
-target/debug/nodx export docx examples/showcase-web.nodx -o target/showcase.docx
-target/debug/nodx export pptx spec/tests/presentation/presentation-basic.nodx -o target/presentation.pptx
-```
-
-Run the full committed example/conformance sweep:
-
-```sh
-rtk sh scripts/run_conformance.sh
-```
-
-## Showcase
-
-- `examples/showcase-web.nodx`: primary HTML showcase for the implemented 1.0
-  web-safe surface: front matter, profiles, TOC, headings, inline syntax,
-  tables, figures/images, safe style blocks, custom components with fallback,
-  footnotes/citations, forms, and NCP-friendly IDs.
-- `examples/showcase-tui.nodx`: terminal/desktop-oriented showcase for content
-  where text, navigation, notes, code, page breaks, speaker notes, and
-  fallback rendering matter more than CSS.
-- `examples/extended-showcase-bundled.nodx`: packaged ZIP sample generated by
-  `scripts/build_package.py`.
-- `examples/layout-fonts.nodx`: visual showcase for horizontal layout, grid,
-  asymmetric margins/padding, and different font-family rows.
-- `examples/inline-styles-components.nodx`: focused example for `[[...]]`
-  styled spans, safe style shorthands, class suffix sugar, and front matter
-  component templates.
-- `examples/docs-layout.nodx`: native documentation shell with left
-  navigation, central content, and a right section outline.
-
-The older focused examples remain useful as small regression fixtures.
-
-## Component And Theme Libraries
-
-Packaged NODX ZIP files can be self-contained extension bundles. Add package
-local component templates and stylesheets to `manifest.yaml`:
-
-```yaml
-components:
-  - path: components/approval-card.nodx
-themes:
-  - path: themes/docs.nods
-```
-
-Library APIs apply these extensions before rendering:
-
-- JS: `parsePackagedDocument(bytes)` or `applyPackageExtensions(doc, pkg)`
-- Python: `parse_packaged_document(bytes_)` or `apply_package_extensions(doc, pkg)`
-- Rust: `nodx_package::apply_package_extensions(&doc, &package)`
-
-Remote libraries should be fetched by the host application, checked with an
-integrity digest, opened as a package, and then passed through the same APIs.
-The parser itself does not perform network I/O.
+Linear in input size, ~20× source-bytes RAM. Documents past 2 000 pages
+of *rich* content will graze the default `nodes_per_document` cap; raise
+it via the library API. The [scalability notes](./docs/internals/scalability.md)
+have the full picture and instructions for reproducing the numbers; the
+[streaming evolution proposal](./docs/internals/streaming-evolution.md)
+sketches what would change for documents that do not fit in memory.
 
 ## Security
 
-NODX processors are expected to fail closed for untrusted input: no script
-execution, no default network fetches, no package extraction to disk, strict
-resource limits, safe URL/path policy, and context escaping for renderers.
+NODX processors are expected to **fail closed** on untrusted input: no
+script execution, no default network fetches, no package extraction to
+disk, strict resource limits, safe URL/path policy, context-aware
+escaping. See [`SECURITY.md`](./SECURITY.md) for the policy and the
+[security model](./docs/internals/security-model.md) for the threat
+model.
 
-See [SECURITY.md](./SECURITY.md) for the security policy.
+## License
 
-## Documentation Layout
+Licensed under the **Apache License, Version 2.0** — see [`LICENSE`](./LICENSE)
+and [`NOTICE`](./NOTICE). You may use, modify, and redistribute the code
+under the License. Contributions are accepted under the same terms.
 
-Root documentation is intentionally small:
+## Contributing
 
-- [NODX-RFC-0001.md](./NODX-RFC-0001.md): final 1.0 specification.
-- [README.md](./README.md): project entry point.
-- [SECURITY.md](./SECURITY.md): security policy.
-- [docs/THEMING.md](./docs/THEMING.md): theme sources and CSS extension points.
+Before opening a PR or filing a security report, read:
 
-Historical planning, migration, conformance snapshot, threat-model, and wave
-prompt documents are archived under `docs/archive/` to keep the project root
-readable without losing context.
+- the [implementer guide](./docs/IMPLEMENTER_GUIDE.md);
+- the [conformance reference](./docs/reference/conformance.md);
+- the [security policy](./SECURITY.md).
 
-For external implementers, start with [docs/IMPLEMENTER_GUIDE.md](./docs/IMPLEMENTER_GUIDE.md)
-and [spec/conformance/v1.0](./spec/conformance/v1.0/README.md). The ecosystem
-roadmap is [docs/ECOSYSTEM_PLAN.md](./docs/ECOSYSTEM_PLAN.md).
+If you find a fixture where the Rust and JavaScript parsers produce
+different bytes for the same input, that is the bug we most want to
+hear about. Open an issue with both outputs attached.

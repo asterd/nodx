@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>NODX — Structured documents for people, tools, and agents</title>
+<meta name="description" content="NODX is a text-first document format: easy to read, deterministic, safe to render, and built for software consumption.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="layout-docs">
+<a class="skip-link" href="#content">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" href="./">
+      <svg class="brand__mark" aria-hidden="true" viewBox="0 0 64 64" width="32" height="32">
+        <rect width="64" height="64" rx="12" fill="var(--accent)"/>
+        <g fill="none" stroke="var(--bg-elev)" stroke-width="3.5" stroke-linecap="round">
+          <line x1="18" y1="18" x2="18" y2="46"/>
+          <line x1="18" y1="20" x2="32" y2="20"/>
+          <line x1="18" y1="32" x2="32" y2="32"/>
+          <line x1="18" y1="44" x2="32" y2="44"/>
+          <line x1="35" y1="20" x2="50" y2="20"/>
+          <line x1="35" y1="32" x2="46" y2="32"/>
+          <line x1="35" y1="44" x2="50" y2="44"/>
+        </g>
+        <g fill="var(--bg-elev)">
+          <circle cx="18" cy="20" r="3.5"/>
+          <circle cx="18" cy="32" r="3.5"/>
+          <circle cx="18" cy="44" r="3.5"/>
+        </g>
+      </svg>
+      <span class="brand__name">NODX</span>
+      <span class="brand__tag">1.0 reference</span>
+    </a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="#/guide/01-quickstart">Guide</a>
+      <a href="#/reference/blocks">Reference</a>
+      <a href="#/cookbook/index">Cookbook</a>
+      <a href="#/internals/architecture">Internals</a>
+      <a href="https://github.com" class="topnav__github" data-github>GitHub</a>
+    </nav>
+    <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle>
+      <span aria-hidden="true">◐</span>
+    </button>
+    <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false" data-nav-toggle>
+      <span aria-hidden="true">≡</span>
+    </button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar" aria-label="Documentation navigation">
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs" autocomplete="off" aria-label="Search docs">
+      <ol class="search__results" id="search-results" role="listbox" hidden></ol>
+    </div>
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <main class="content" id="content" tabindex="-1">
+    <article id="article" class="prose">
+      <!-- rendered markdown lands here -->
+    </article>
+
+    <nav class="pager" aria-label="Document pager">
+      <a class="pager__prev" id="pager-prev" rel="prev" hidden>← <span></span></a>
+      <a class="pager__next" id="pager-next" rel="next" hidden><span></span> →</a>
+    </nav>
+
+    <footer class="content__footer">
+      <p>
+        NODX is offline-first and fail-closed by design. The reference
+        implementation lives in this repository and ships under the
+        same license.
+      </p>
+      <p class="content__meta">
+        <span>Built from <code id="footer-source">docs/</code>.</span>
+        <span><a href="https://github.com" data-github>Edit this page</a></span>
+      </p>
+    </footer>
+  </main>
+
+  <aside class="outline" aria-label="On this page">
+    <h2 class="outline__title">On this page</h2>
+    <ol id="outline"></ol>
+  </aside>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/markdown.js"></script>
+<script src="assets/router.js"></script>
+</body>
+</html>

@@ -1,84 +1,55 @@
-# NODX 1.0 Implementer Guide
+# Implementer guide
 
-This guide is non-normative. The normative contract is `NODX-RFC-0001.md`.
+> This page used to be the single landing point for implementers. The
+> material has moved into dedicated reference pages so each topic can
+> grow without becoming a wall of text. The pointers below are the new
+> canonical locations.
 
-## Implementation Order
+## Where things live now
 
-1. Detect representation by bytes:
-   - `PK\x03\x04` means packaged NODX.
-   - Otherwise parse as UTF-8 text NODX.
-2. Enforce resource limits before expensive work.
-3. Validate UTF-8, BOM policy, and U+0000.
-4. Parse front matter using the NODX YAML safe subset. If it is absent, apply
-   the 1.0 defaults (`schema`, `type`, `language`, `dir`, and implicit `core`).
-5. Parse blocks, headings, lists, tables, attributes, and inline syntax.
-   Implement both full and Lite authoring forms:
-   - `::note ... ::` as well as `:::note ... :::`;
-   - heading IDs written as `# Title #intro`;
-   - variables written as `{{name}}`, canonicalized to `{{vars.name}}`;
-   - links written as `[label](target){attrs}`;
-   - table separators written as `| - |` or `|---|`.
-6. Produce canonical Semantic AST JSON with sorted object keys.
-7. Run semantic validation and emit diagnostics.
-8. Implement URL/path policy.
-9. Implement NCP semantic projection.
-10. Implement renderer output with context escaping.
+| If you want to… | Read |
+|---|---|
+| Understand the wire contract | [NODX-RFC-0001](../NODX-RFC-0001.md) |
+| See the AST shape every implementation must produce | [reference/ast.md](./reference/ast.md) |
+| Look up a diagnostic code | [reference/diagnostics.md](./reference/diagnostics.md) |
+| Check which profiles exist | [reference/profiles.md](./reference/profiles.md) |
+| Run the cross-implementation tests | [reference/conformance.md](./reference/conformance.md) |
+| Inspect resource limits | [reference/limits.md](./reference/limits.md) |
+| Walk the reference crate graph | [internals/architecture.md](./internals/architecture.md) |
+| Understand the security boundary | [internals/security-model.md](./internals/security-model.md) |
 
-## Minimal Reader
+## Minimal reader checklist
 
-A minimal useful reader should support:
+A reader is *useful* when it implements:
 
 - paragraphs and headings;
-- front matter `schema: nodx/1.0`;
-- delimited blocks with fallback children, including the two-colon Lite form;
-- safe inline text/code/link parsing;
-- `{{name}}` variables as aliases for `{{vars.name}}`;
-- link attributes on `[label](target){attrs}`;
+- front matter under `schema: nodx/1.0`;
+- delimited blocks with fallback children, in both the two-colon Lite
+  form and the three-colon full form;
+- safe inline parsing: text, code, link with `{attrs}`, `{{name}}` and
+  `{{namespace.name}}` variables;
+- pipe tables and lists, including task lists;
 - diagnostics JSON;
-- unsupported required profiles as `NODX-E024` and exit code `3`.
+- `NODX-E024` for unsupported required profiles, with exit code `3`.
 
-## Canonical Output
+A reader is *conformant* when it produces byte-identical canonical AST,
+NCP, and diagnostics output against the conformance package.
 
-Canonical AST and NCP must be byte-stable. Use:
+## Media types
 
-```sh
-rtk sh scripts/verify_conformance_package.sh
-```
+| Format | Media type | Alias |
+|---|---|---|
+| Text NODX | `text/nodx; charset=utf-8` | `text/x-nodx` |
+| Packaged NODX | `application/nodx+zip` | `application/x-nodx+zip` |
 
-Compare your implementation against `spec/conformance/v1.0/expected`.
+The aliases are tolerated until media-type registration is complete.
 
-## Diagnostics
+## Editor integrations
 
-Diagnostic JSON fields are fixed:
+For editor extensions, do not implement a partial validator. Shell out
+to `nodx validate --format json` for diagnostics, `nodx html` for
+preview, and `nodx ncp` for outline. Partial validators silently drift
+from the spec and are the largest single source of conformance reports.
 
-```json
-{"code":"NODX-E024","severity":"error","message":"Required profile `x` is unsupported.","line":null,"column":null,"target":"profile:x"}
-```
-
-Warnings and info diagnostics must not cause non-zero exit codes. Fatal and
-error diagnostics use exit code `2`, except unsupported required capabilities,
-which use exit code `3`.
-
-## Media Types
-
-Use these names in integrations:
-
-- Text NODX: `text/nodx; charset=utf-8`
-- Packaged NODX: `application/nodx+zip`
-
-Until registration is complete, tools may also accept `text/x-nodx` and
-`application/x-nodx+zip` as aliases.
-
-## Editor Integration Contract
-
-An editor integration does not need to implement the full parser. A marketable
-extension should provide:
-
-- syntax highlighting for `.nodx`;
-- snippets for front matter, `toc`, `section`, `note`, `figure`, and `table`;
-- validation by invoking `nodx diagnostics --format json`;
-- preview by invoking `nodx html`;
-- optional outline from `nodx ncp`.
-
-Do not implement a partial validator in the editor unless it is tested against
-the conformance package.
+If you do want to vendor a parser, vendor `packages/nodx-js` directly
+and run the conformance suite against it on every release.

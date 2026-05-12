@@ -88,6 +88,10 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         pos: start,
         diagnostics,
         limits,
+        node_count: 0,
+        depth: 0,
+        nodes_limit_hit: false,
+        depth_limit_hit: false,
     };
     let body = parser.parse_until(None);
     let diagnostics = parser.diagnostics;
@@ -105,9 +109,31 @@ struct Parser<'a> {
     pos: usize,
     diagnostics: Vec<Diagnostic>,
     limits: ResourceLimits,
+    node_count: usize,
+    depth: usize,
+    nodes_limit_hit: bool,
+    depth_limit_hit: bool,
 }
 
 impl Parser<'_> {
+    fn count_node(&mut self, line: usize) -> bool {
+        self.node_count += 1;
+        if self.node_count > self.limits.nodes_per_document {
+            if !self.nodes_limit_hit {
+                self.diagnostics.push(diag(
+                    "NODX-E012",
+                    "fatal",
+                    "Node count limit exceeded.",
+                    line,
+                    1,
+                ));
+                self.nodes_limit_hit = true;
+            }
+            return false;
+        }
+        true
+    }
+
     fn parse_until(&mut self, close_frame: Option<(usize, &str)>) -> Vec<Node> {
         let mut out = Vec::new();
         let mut closed = close_frame.is_none();
@@ -159,11 +185,19 @@ impl Parser<'_> {
                 continue;
             }
             if let Some((colons, name, attrs)) = parse_opener(line) {
+                let opener_line = self.pos + 1;
+                if !self.count_node(opener_line) {
+                    break;
+                }
                 out.push(self.parse_delimited(colons, name, attrs));
                 continue;
             }
             if let Some((level, content, attrs)) = parse_heading(line) {
+                let heading_line = self.pos + 1;
                 self.pos += 1;
+                if !self.count_node(heading_line) {
+                    break;
+                }
                 let mut attr_map = attrs.unwrap_or_default();
                 attr_map
                     .attrs
@@ -172,14 +206,26 @@ impl Parser<'_> {
                 continue;
             }
             if is_list_start(line) {
+                let list_line = self.pos + 1;
+                if !self.count_node(list_line) {
+                    break;
+                }
                 out.push(self.parse_list());
                 continue;
             }
             if self.pos + 1 < self.lines.len()
                 && is_pipe_table_header(line, self.lines[self.pos + 1])
             {
+                let table_line = self.pos + 1;
+                if !self.count_node(table_line) {
+                    break;
+                }
                 out.push(self.parse_pipe_table());
                 continue;
+            }
+            let para_line = self.pos + 1;
+            if !self.count_node(para_line) {
+                break;
             }
             out.push(self.parse_paragraph());
         }
@@ -196,7 +242,19 @@ impl Parser<'_> {
     }
 
     fn parse_delimited(&mut self, colons: usize, name: String, attrs: Attrs) -> Node {
+        let opener_line = self.pos + 1;
         self.pos += 1;
+        self.depth += 1;
+        if self.depth > self.limits.block_nesting_depth && !self.depth_limit_hit {
+            self.diagnostics.push(diag(
+                "NODX-E012",
+                "fatal",
+                "Block nesting depth limit exceeded.",
+                opener_line,
+                1,
+            ));
+            self.depth_limit_hit = true;
+        }
         if matches!(name.as_str(), "code" | "pre" | "math" | "style") {
             let start = self.pos;
             while self.pos < self.lines.len()
@@ -230,10 +288,12 @@ impl Parser<'_> {
                     1,
                 ));
             }
+            self.depth -= 1;
             return Node::literal(&name, attrs, text);
         }
 
         let children = self.parse_until(Some((colons, name.as_str())));
+        self.depth -= 1;
         Node::container(&name, attrs, children)
     }
 
@@ -242,6 +302,7 @@ impl Parser<'_> {
         let kind = list_kind(first);
         let mut items = Vec::new();
         while self.pos < self.lines.len() && list_kind(self.lines[self.pos]) == kind {
+            let item_line = self.pos + 1;
             let raw = self.lines[self.pos];
             let (content, checked) = strip_list_marker(raw);
             self.pos += 1;
@@ -249,6 +310,9 @@ impl Parser<'_> {
             while self.pos < self.lines.len() && self.lines[self.pos].starts_with("  ") {
                 parts.push(self.lines[self.pos].trim_start().to_string());
                 self.pos += 1;
+            }
+            if !self.count_node(item_line) {
+                break;
             }
             let mut attrs = Attrs::default();
             if let Some(done) = checked {
@@ -268,13 +332,21 @@ impl Parser<'_> {
     }
 
     fn parse_pipe_table(&mut self) -> Node {
+        let header_line = self.pos + 1;
         let header = split_pipe_row(self.lines[self.pos]);
         self.pos += 2;
-        let mut rows = vec![table_row(header, true)];
+        let mut rows = Vec::new();
+        if self.count_node(header_line) {
+            rows.push(table_row(header, true));
+        }
         while self.pos < self.lines.len()
             && self.lines[self.pos].contains('|')
             && !self.lines[self.pos].trim().is_empty()
         {
+            let row_line = self.pos + 1;
+            if !self.count_node(row_line) {
+                break;
+            }
             rows.push(table_row(split_pipe_row(self.lines[self.pos]), false));
             self.pos += 1;
         }

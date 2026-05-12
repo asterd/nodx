@@ -46,6 +46,10 @@ pub(crate) fn parse_heading(line: &str) -> Option<(usize, &str, Option<Attrs>)> 
 }
 
 pub(crate) fn parse_attrs(raw: &str) -> Option<Attrs> {
+    parse_attrs_with_cap(raw, 64 * 1024)
+}
+
+pub(crate) fn parse_attrs_with_cap(raw: &str, value_cap: usize) -> Option<Attrs> {
     let s = raw.trim();
     if !s.starts_with('{') || !s.ends_with('}') {
         return None;
@@ -57,7 +61,11 @@ pub(crate) fn parse_attrs(raw: &str) -> Option<Attrs> {
         } else if let Some(class) = token.strip_prefix('.') {
             attrs.classes.push(class.to_string());
         } else if let Some((k, v)) = token.split_once('=') {
-            apply_attr(&mut attrs, k, &unquote(v));
+            let value = unquote(v);
+            if value.len() > value_cap {
+                continue;
+            }
+            apply_attr(&mut attrs, k, &value);
         } else if token == "highlight" {
             attrs.styles.insert(
                 "background-color".to_string(),

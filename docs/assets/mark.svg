@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="NODX">
+  <title>NODX</title>
+  <g fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round">
+    <line x1="22" y1="22" x2="22" y2="74"/>
+    <line x1="22" y1="26" x2="40" y2="26"/>
+    <line x1="22" y1="48" x2="40" y2="48"/>
+    <line x1="22" y1="70" x2="40" y2="70"/>
+    <line x1="44" y1="26" x2="78" y2="26"/>
+    <line x1="44" y1="48" x2="70" y2="48"/>
+    <line x1="44" y1="70" x2="78" y2="70"/>
+  </g>
+  <g fill="#0f766e">
+    <circle cx="22" cy="26" r="5"/>
+    <circle cx="22" cy="48" r="5"/>
+    <circle cx="22" cy="70" r="5"/>
+  </g>
+</svg>
