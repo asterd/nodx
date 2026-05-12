@@ -445,16 +445,23 @@ def derive_title(nodes):
 def plain_inlines(inlines):
     out = ""
     for item in inlines:
-        if "text" in item:
+        type_ = item["type"]
+        if type_ in ("text", "code"):
             out += item["text"]
-        elif "source" in item:
+        elif type_ == "math-inline":
             out += item["source"]
-        elif "children" in item:
+        elif type_ in ("strong", "em", "mark", "sub", "sup"):
             out += plain_inlines(item["children"])
-        elif "label" in item:
+        elif type_ == "link":
             out += plain_inlines(item["label"])
-        elif "target" in item:
+        elif type_ == "span":
+            out += plain_inlines(item["children"])
+        elif type_ == "var":
+            out += "{{" + item["namespace"] + "." + item["name"] + "}}"
+        elif type_ in ("ref", "footnote-ref", "citation-ref"):
             out += item["target"]
+        elif type_ == "mention":
+            out += "@" + item["kind"] + ":" + item["target"]
     return out
 
 
@@ -475,7 +482,7 @@ def semantic_id(node):
 
 
 def semantic_attrs(node):
-    attrs = [f'{key}="{value}"' for key, value in node.get("attrs", {}).items() if value not in ("", None) and key not in ("level", "header", "scope")]
+    attrs = [f'{key}="{value}"' for key, value in sorted(node.get("attrs", {}).items()) if value not in ("", None) and key not in ("level", "header", "scope")]
     id_ = [f'id="{node["id"]}"'] if node.get("id") else []
     all_attrs = id_ + attrs
     return " [" + " ".join(all_attrs) + "]" if all_attrs else ""

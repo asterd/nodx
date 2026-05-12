@@ -53,8 +53,8 @@ ok examples/agent-workflow.nodx
 ```
 
 The script runs both the Rust and JavaScript reference parsers on every
-fixture, plus every committed example, and diffs each `ast`, `ncp`, and
-`diagnostics` output against the expected bytes. A non-zero exit code
+fixture, plus every committed example, and diffs each `ast`, `ncp`,
+`semantic`, and `diagnostics` output against the expected bytes. A non-zero exit code
 means a divergence; the offending file is named in the error.
 
 It writes a structured report to `target/conformance-report.json` for CI

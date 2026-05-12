@@ -4,7 +4,7 @@ use nodx_core::{
     ResourceLimits, canonical_json, is_packaged_nodx, parse_bytes_with_limits, render_tui,
 };
 use nodx_export::{ExportFormat, export_document, loss_report_json};
-use nodx_ncp::ncp_json;
+use nodx_ncp::{ncp_json, semantic_text};
 use nodx_package::{Package, apply_package_extensions};
 use nodx_render_html::{RenderOptions, render_html_with_options};
 use nodx_validate::{ProfileSet, Validator, diagnostics_json, exit_code_for};
@@ -20,6 +20,7 @@ const USAGE: &str = concat!(
     "  nodx html <file> [--standalone|--fragment] [--csp|--no-csp]\n",
     "  nodx tui <file>\n",
     "  nodx ncp <file> [--mode semantic]\n",
+    "  nodx semantic <file>\n",
     "  nodx package inspect <file>\n",
     "  nodx package verify <file>\n",
     "  nodx export pdf|docx|pptx <file> -o <out>   (unstable preview)\n",
@@ -122,6 +123,15 @@ fn document_command(command: &str, rest: &[String]) -> i32 {
                     return 1;
                 }
             }
+            diagnostic_exit_code(&doc)
+        }
+        "semantic" => {
+            reject_irrelevant(&options, &[]);
+            let doc = match load_document(&bytes) {
+                Ok(doc) => doc,
+                Err(code) => return code,
+            };
+            print!("{}", semantic_text(&doc));
             diagnostic_exit_code(&doc)
         }
         "diagnostics" => {

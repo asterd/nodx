@@ -1,126 +1,96 @@
-# NCP — NODX Content Projection
+# NCP And Semantic Text
 
-NCP is the agent-readable view of a NODX document. It is a JSON projection
-of the canonical AST, designed for retrieval pipelines, embeddings, and
-batch agent workflows that need a stable, semantic-aware chunking.
+NODX exposes two standard agent-readable projections:
 
-## Generating NCP
+- **NCP**: deterministic JSON for tools that need node addresses, hashes,
+  attributes, children, and resolved navigation.
+- **Semantic text**: compact UTF-8 text for LLM context, search snippets, and
+  quick human review.
+
+Use the Canonical AST when you need full fidelity. Use rendered HTML when you
+need presentation.
+
+## Generating Projections
 
 ```sh
-nodx ncp doc.nodx              # summary mode (default)
-nodx ncp doc.nodx --mode chunks
-nodx ncp doc.nodx --mode full
+nodx ncp doc.nodx
+nodx ncp doc.nodx --mode semantic
+nodx semantic doc.nodx
 ```
 
-The output is JSON, byte-stable across runs for the same input.
+`nodx ncp` emits `application/nodx-ncp+json`. `nodx semantic` emits
+`text/nodx-semantic; charset=utf-8`.
 
-## The three modes
+## NCP Shape
 
-| Mode | Adds | Best for |
-|---|---|---|
-| `summary` | Per-node id, kind, path, hash, headings, first ~120 chars of text. | Index population, search hit highlighting. |
-| `chunks` | Same as `summary` plus the full plain text body of each node. | Embeddings, retrieval-augmented generation. |
-| `full` | Same as `chunks` plus inline annotations (references, citations, mentions) and resolved cross-links. | Agent reasoning over the structured document. |
-
-A consumer that needs the smallest stable view should always use `summary`.
-Adding modes is monotonic — `chunks` is a superset of `summary`,
-`full` is a superset of `chunks`.
-
-## Top-level shape
+NCP 1.0 uses schema `nodx-ncp/1.0` and mode `semantic`:
 
 ```json
 {
-  "schema": "ncp/1.0",
-  "document": {
-    "id": "doc-hash",
-    "title": "…",
-    "language": "en",
-    "profile": ["core", "rich"],
-    "hash": "sha256-…"
-  },
-  "nodes": [ /* one entry per AST node */ ],
-  "links": [ /* resolved internal references */ ]
+  "chunks": [
+    {
+      "id": "chunk-1",
+      "nodes": ["intro", "path:1"],
+      "sha256": "sha256-..."
+    }
+  ],
+  "loss": [],
+  "mode": "semantic",
+  "nodes": [
+    {
+      "attrs": {"level": "1"},
+      "children": [],
+      "id": "intro",
+      "path": "0",
+      "sha256": "sha256-...",
+      "text": "Introduction",
+      "type": "heading"
+    }
+  ],
+  "schema": "nodx-ncp/1.0",
+  "sourceHash": "sha256-..."
 }
 ```
 
-## Per-node shape
+`nodes` is a tree projection: the top-level array mirrors `body[]`, and every
+record carries recursive `children`. `path` is a dot-separated structural path
+from `body[]`. `id` is the source ID or an empty string. Chunk node references
+use source IDs when present and `path:<path>` otherwise.
 
-```json
-{
-  "id": "intro",
-  "path": [0],
-  "kind": "section",
-  "level": 1,
-  "headings": ["Introduction"],
-  "text": "First sentence of the section…",
-  "hash": "sha256-…",
-  "attrs": {"type": "info"}
-}
+For `toc` nodes, NCP adds `navigationEntries` with resolved `id`, `level`,
+`path`, and `title` fields.
+
+## NCP Exclusions
+
+NCP is not a Canonical AST clone. It deliberately excludes concrete syntax
+trivia, computed CSS, renderer templates, host layout results, package manifest
+metadata, and rendered custom component HTML. `loss: []` means no loss inside
+the NCP semantic contract, not that every Canonical AST field is present.
+
+Custom components remain ordinary node records. Consumers that do not
+understand a custom component should read its children as fallback source
+content.
+
+## Semantic Text
+
+Semantic text is a compact, deterministic text projection:
+
+```text
+# Introduction #intro
+Paragraph text.
+
+Component approval-card [id="approval" status="pending" fallback="children"]:
+Fallback content.
 ```
 
-| Field | Meaning |
-|---|---|
-| `id` | The document-stable id if the node has one; otherwise the auto-derived `path`-id. |
-| `path` | The index path from `body[]` to the node. Same as the validator's source location. |
-| `kind` | `heading`, `paragraph`, `note`, `section`, …. |
-| `level` | Heading depth, or `null` for non-heading nodes. |
-| `headings` | The chain of ancestor headings leading to this node. Useful for displaying retrieval context. |
-| `text` | Plain text of the node (and, in `chunks`/`full` modes, of its descendants). |
-| `hash` | SHA-256 of the canonical AST subtree, base64url-encoded. Used for change tracking. |
-| `attrs` | Block attributes that survived validation. |
+It includes readable source content: headings, paragraphs, lists, tables,
+figures, images, captions, literal code/math, quotes, notes, forms, media
+fallbacks, bibliography entries, and custom component fallback children.
 
-## Why hashes
+It excludes style nodes, component styles, `toc`, `pagebreak`, automatic page
+boundaries, renderer-generated HTML, computed CSS, package metadata, and custom
+component template output. Output always ends with one trailing newline.
 
-Every node in the AST has a stable content hash. NCP exposes them at the
-top level so an agent can:
-
-- Detect that "the same section, but rephrased" produced a different hash
-  and re-embed only that node.
-- Skip nodes whose hash matches a cached embedding.
-- Verify that a write back from an agent (`agent-sdk` `Operation`)
-  applies cleanly: the operation carries the *expected* hash, and is
-  rejected if the live document has drifted.
-
-The hash function is documented in
-[`crates/nodx-core/src/hashing.rs`](../../crates/nodx-core/src/hashing.rs);
-the agent write API is in
-[`crates/nodx-agent-sdk`](../../crates/nodx-agent-sdk).
-
-## Why path
-
-NCP encodes structure in two ways: hierarchical (`headings[]`) and
-positional (`path[]`). A retrieval system can pick whichever is more
-useful for its UI. Stable ids exist for the case where neither will do.
-
-## Inline projection (full mode only)
-
-```json
-{
-  "kind": "paragraph",
-  "text": "See @[intro] and footnote [^fn-1].",
-  "annotations": [
-    {"kind": "ref", "target": "intro", "start": 4, "end": 11},
-    {"kind": "footnote-ref", "target": "fn-1", "start": 27, "end": 34}
-  ]
-}
-```
-
-Annotations carry character offsets into the plain text body. They are
-the right primitive to build "hover to preview the referenced section"
-UIs and to walk a citation graph across documents.
-
-## When *not* to use NCP
-
-NCP is not a rendering format. It does not preserve styling, theme
-attributes, or fallback content for unknown components. Use the canonical
-AST (`nodx ast`) when you need full fidelity, the HTML output (`nodx
-html`) when you need presentation.
-
-Use NCP when:
-
-- You are building an index over many documents.
-- You are feeding documents to an LLM that benefits from semantic chunks.
-- You are diffing a document at the *semantic* layer (across rewordings).
-
-Don't reach for it when "the document, exactly as it is" is what you
-actually need.
+Use semantic text when token cost matters and the consumer does not need stable
+node hashes or patch addresses. Use NCP for agent tools that need to cite,
+cache, diff, or update specific nodes.

@@ -53,10 +53,11 @@ Render it:
 cargo build --release -p nodx
 target/release/nodx html my-doc.nodx > my-doc.html
 target/release/nodx validate my-doc.nodx --format json
-target/release/nodx ncp my-doc.nodx --mode chunks > my-doc.ndjson
+target/release/nodx ncp my-doc.nodx > my-doc.ncp.json
+target/release/nodx semantic my-doc.nodx > my-doc.semantic.txt
 ```
 
-Three commands. Three byte-stable outputs. No CDN, no network, no
+Four commands. Four byte-stable outputs. No CDN, no network, no
 hidden state.
 
 ## Why not just Markdown?
@@ -157,7 +158,8 @@ target/release/nodx ast doc.nodx
 target/release/nodx validate doc.nodx --format json
 target/release/nodx html doc.nodx > doc.html
 target/release/nodx tui doc.nodx
-target/release/nodx ncp doc.nodx --mode chunks
+target/release/nodx ncp doc.nodx
+target/release/nodx semantic doc.nodx
 target/release/nodx package inspect bundle.nodx
 target/release/nodx package verify  bundle.nodx
 target/release/nodx export pdf  doc.nodx -o doc.pdf

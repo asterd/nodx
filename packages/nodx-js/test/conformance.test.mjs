@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalJson, diagnosticsJson, ncpJson, parse, validate } from "../src/index.mjs";
+import { canonicalJson, diagnosticsJson, ncpJson, parse, renderSemanticText, validate } from "../src/index.mjs";
 
 const root = new URL("../../..", import.meta.url).pathname;
 const rust = join(root, "target/debug/nodx");
@@ -18,6 +18,8 @@ for (const file of positiveFixtures()) {
   assert.equal(canonicalJson(doc) + "\n", rustAst, file + " AST");
   const rustNcp = execFileSync(rust, ["ncp", file], { cwd: root, encoding: "utf8" });
   assert.equal(ncpJson(doc) + "\n", rustNcp, file + " NCP");
+  const rustSemantic = execFileSync(rust, ["semantic", file], { cwd: root, encoding: "utf8" });
+  assert.equal(renderSemanticText(doc), rustSemantic, file + " semantic text");
 }
 
 for (const name of readdirSync(join(root, "spec/tests/golden")).filter((item) => item.endsWith(".diagnostics.json"))) {

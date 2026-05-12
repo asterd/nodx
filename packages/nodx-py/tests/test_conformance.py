@@ -68,6 +68,8 @@ def test_python_matches_rust_ast_and_ncp_when_built():
         assert canonical_json(doc) + "\n" == rust_ast
         rust_ncp = subprocess.check_output([rust, "ncp", rel], cwd=ROOT, text=True)
         assert ncp_json(doc) + "\n" == rust_ncp
+        rust_semantic = subprocess.check_output([rust, "semantic", rel], cwd=ROOT, text=True)
+        assert render_semantic_text(doc) == rust_semantic
 
 
 def test_negative_diagnostics_golden_subset():

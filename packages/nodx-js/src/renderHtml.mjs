@@ -215,6 +215,7 @@ function semanticId(node) {
 function semanticAttrs(node) {
   const attrs = Object.entries(node.attrs ?? {})
     .filter(([key, value]) => value !== "" && value !== null && value !== undefined && !["level", "header", "scope"].includes(key))
+    .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}="${String(value)}"`);
   const id = node.id ? [`id="${node.id}"`] : [];
   const all = [...id, ...attrs];
@@ -452,7 +453,43 @@ function deriveTitle(nodes) {
 }
 
 function plainInlines(inlines) {
-  return inlines.map((item) => item.text ?? item.source ?? (item.children ? plainInlines(item.children) : item.label ? plainInlines(item.label) : item.target ?? "")).join("");
+  let out = "";
+  for (const item of inlines) {
+    switch (item.type) {
+      case "text":
+      case "code":
+        out += item.text;
+        break;
+      case "math-inline":
+        out += item.source;
+        break;
+      case "strong":
+      case "em":
+      case "mark":
+      case "sub":
+      case "sup":
+        out += plainInlines(item.children);
+        break;
+      case "link":
+        out += plainInlines(item.label);
+        break;
+      case "span":
+        out += plainInlines(item.children);
+        break;
+      case "var":
+        out += "{{" + item.namespace + "." + item.name + "}}";
+        break;
+      case "ref":
+      case "footnote-ref":
+      case "citation-ref":
+        out += item.target;
+        break;
+      case "mention":
+        out += "@" + item.kind + ":" + item.target;
+        break;
+    }
+  }
+  return out;
 }
 
 function standardTokens() {

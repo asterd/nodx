@@ -21,6 +21,7 @@ Markdown-compatible table separators.
 rtk sh scripts/verify_conformance_package.sh
 ```
 
-An implementation should match `*.ast.json`, `*.ncp.json`, and diagnostic JSON
-byte-for-byte. HTML is included as reference output for the bundled renderer;
-other renderers may differ visually, but must preserve safety and semantics.
+An implementation should match `*.ast.json`, `*.ncp.json`, semantic text, and
+diagnostic JSON byte-for-byte. HTML is included as reference output for the
+bundled renderer; other renderers may differ visually, but must preserve safety
+and semantics.

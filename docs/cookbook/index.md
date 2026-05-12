@@ -88,13 +88,13 @@ nodx ast doc.nodx | sha256sum
 
 The hash is stable across runs of the same binary version, so it is a
 fine cache key. For change tracking at sub-document granularity, walk the
-NCP and key off each node's `hash` field.
+NCP tree and key off each node's `sha256` field.
 
 ## Generate a search index
 
 ```sh
-nodx ncp doc.nodx --mode chunks \
-  | jq -c '.nodes[] | {id, kind, headings, text}' \
+nodx ncp doc.nodx \
+  | jq -c '.. | objects | select(has("type") and has("path")) | {id, path, type, text, sha256}' \
   >> search-index.ndjson
 ```
 
@@ -163,12 +163,17 @@ renderer needs and is safe to ship across systems.
 ```python
 import json, subprocess
 
-ncp = json.loads(subprocess.check_output(["nodx", "ncp", "doc.nodx", "--mode", "full"]))
+ncp = json.loads(subprocess.check_output(["nodx", "ncp", "doc.nodx"]))
 
-for node in ncp["nodes"]:
-    if node["kind"] == "heading":
+def walk(nodes):
+    for node in nodes:
+        yield node
+        yield from walk(node["children"])
+
+for node in walk(ncp["nodes"]):
+    if node["type"] == "heading":
         continue
-    embed(node["id"], node["text"], hash_=node["hash"])
+    embed(node["id"] or node["path"], node["text"], hash_=node["sha256"])
 ```
 
 Re-running the script after the document changes will produce new hashes

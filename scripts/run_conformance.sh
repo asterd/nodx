@@ -16,7 +16,7 @@ record() {
     printf ',' >> "$report"
   fi
   first=0
-  printf '{"file":"%s","ast":"%s","ncp":"%s","diagnostics":"%s"}' "$1" "$2" "$3" "$4" >> "$report"
+  printf '{"file":"%s","ast":"%s","ncp":"%s","semantic":"%s","diagnostics":"%s"}' "$1" "$2" "$3" "$4" "$5" >> "$report"
 }
 
 run_capture() {
@@ -36,6 +36,8 @@ compare_fixture() {
   js_ast="$tmp_dir/$safe_name.js.ast.json"
   rust_ncp="$tmp_dir/$safe_name.rust.ncp.json"
   js_ncp="$tmp_dir/$safe_name.js.ncp.json"
+  rust_semantic="$tmp_dir/$safe_name.rust.semantic.txt"
+  js_semantic="$tmp_dir/$safe_name.js.semantic.txt"
   rust_diag="$tmp_dir/$safe_name.rust.diag.json"
   js_diag="$tmp_dir/$safe_name.js.diag.json"
 
@@ -69,6 +71,21 @@ compare_fixture() {
     printf ']}\n' >> "$report"
     exit 1
   fi
+  run_capture "$rust_semantic" target/debug/nodx semantic "$file"
+  rust_status=$RUN_STATUS
+  run_capture "$js_semantic" node packages/nodx-js/bin/nodx-js.mjs semantic "$file"
+  js_status=$RUN_STATUS
+  if [ "$rust_status" -ne 0 ] || [ "$js_status" -ne 0 ]; then
+    echo "Semantic command failed unexpectedly: $file rust=$rust_status js=$js_status" >&2
+    printf ']}\n' >> "$report"
+    exit 1
+  fi
+  if ! cmp -s "$rust_semantic" "$js_semantic"; then
+    echo "Semantic mismatch: $file" >&2
+    diff "$rust_semantic" "$js_semantic" >&2 || true
+    printf ']}\n' >> "$report"
+    exit 1
+  fi
   run_capture "$rust_diag" target/debug/nodx diagnostics "$file" --format json
   rust_status=$RUN_STATUS
   run_capture "$js_diag" node packages/nodx-js/bin/nodx-js.mjs diagnostics "$file"
@@ -84,7 +101,7 @@ compare_fixture() {
     printf ']}\n' >> "$report"
     exit 1
   fi
-  record "$file" "ok" "ok" "ok"
+  record "$file" "ok" "ok" "ok" "ok"
   target/debug/nodx html "$file" >/dev/null || true
   target/debug/nodx tui "$file" >/dev/null || true
   echo "ok $file"
@@ -116,13 +133,13 @@ compare_negative_fixture() {
     printf ']}\n' >> "$report"
     exit 1
   fi
-  record "$file" "skipped-negative" "skipped-negative" "ok"
+  record "$file" "skipped-negative" "skipped-negative" "skipped-negative" "ok"
   echo "ok $file"
 }
 
 for file in spec/tests/conformance/*.nodx spec/tests/ncp/*.nodx spec/tests/navigation/*.nodx spec/tests/rendering/*.nodx spec/conformance/v1.0/fixtures/minimal.nodx spec/conformance/v1.0/fixtures/rich-web.nodx spec/conformance/v1.0/fixtures/lite-syntax.nodx examples/*.nodx examples/i18n/*.nodx examples/print/*.nodx; do
   if [ "$(target/debug/nodx inspect "$file" | sed -n '1p')" = "format: packaged-nodx" ]; then
-    record "$file" "skipped-packaged" "skipped-packaged" "skipped-packaged"
+    record "$file" "skipped-packaged" "skipped-packaged" "skipped-packaged" "skipped-packaged"
     continue
   fi
   compare_fixture "$file"

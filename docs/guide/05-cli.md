@@ -30,6 +30,7 @@ to stderr. Exit codes are predictable:
 | `html` | Render to a complete, self-contained HTML document. |
 | `tui` | Render to a terminal-friendly representation. |
 | `ncp` | Emit the agent-readable NCP projection. |
+| `semantic` | Emit compact semantic text for LLM context and search. |
 | `package inspect` | Show manifest, entries, and check declared sizes/digests. |
 | `package verify` | Recompute every entry's SHA-256 and compare to the manifest. |
 | `export pdf` | Render a paged HTML pipeline preview suitable for headless print. |
@@ -78,17 +79,22 @@ diff -u a.ast.json b.ast.json
 ### Extract structured outline for agents
 
 ```sh
-nodx ncp doc.nodx --mode summary | jq .
+nodx ncp doc.nodx | jq .
 ```
 
 The NCP projection is a node-level extraction designed for retrieval and
-batch agent workflows. Three modes:
+batch agent workflows. It preserves node paths, IDs, hashes, attributes,
+children, and resolved navigation entries.
 
-| Mode | Content |
-|---|---|
-| `summary` | One entry per block with hash, id, kind, and headings. |
-| `chunks` | Same as `summary` plus the plain text body. |
-| `full` | Same as `chunks` plus inline annotations and references. |
+### Extract compact LLM context
+
+```sh
+nodx semantic doc.nodx
+```
+
+Semantic text keeps readable source content and fallback children while
+excluding styles, table-of-contents nodes, page breaks, computed layout, and
+custom component template output.
 
 ### Run the full conformance sweep
 
@@ -109,16 +115,14 @@ intentionally opinionated about safety.
 
 ## Output stability
 
-`nodx ast`, `nodx ncp`, and `nodx html` are designed to be byte-stable
+`nodx ast`, `nodx ncp`, `nodx semantic`, and `nodx html` are designed to be byte-stable
 across runs of the same binary on the same input. That means:
 
 - `nodx html` output makes a good CI artifact you can diff.
 - Cache invalidation can hash the canonical AST instead of the source.
 - Two parallel runs produce identical bytes; you can dedupe outputs by hash.
 
-The only place where deliberate non-determinism enters is the `--mode full`
-NCP projection, which may include timestamps if the document has them in
-the front matter. Everything else is reproducible by design.
+NODX 1.0 projections do not add timestamps, random IDs, or host layout state.
 
 ## Exit code cheat sheet
 

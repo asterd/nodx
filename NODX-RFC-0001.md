@@ -41,7 +41,7 @@ The format is stable at the following surfaces:
 3. NODX front matter safe subset.
 4. Block, inline, attribute, table, literal, and custom component syntax.
 5. Canonical Semantic AST JSON shape and serialization order.
-6. NCP semantic projection schema `nodx-ncp/1.0`.
+6. NCP semantic projection schema `nodx-ncp/1.0` and semantic text projection rules.
 7. Safe URL, asset, style, include, and package path policy.
 8. NODX package manifest schema `nodx-package/1.0`.
 9. Resource limit names and default ceilings.
@@ -123,7 +123,7 @@ use the full profile identifier.
 | `rich` | `NODX-Rich-1.0` | stable | Tables, figures, images, math text, footnotes, citations, forms, TOC, media fallbacks. |
 | `style` | `NODX-Style-1.0` | safe subset | Inline `style` blocks and safe NODS audit/sanitization. |
 | `package` | `NODX-Package-1.0` | stable reader | ZIP package opening, manifest validation, assets, digest checks. |
-| `agent-read` | `NODX-Agent-Read-1.0` | stable | NCP semantic projection and stable node hashes. |
+| `agent-read` | `NODX-Agent-Read-1.0` | stable | NCP semantic projection, semantic text projection, and stable node hashes. |
 | `agent-mutate` | `NODX-Agent-Mutate-1.1` | reserved | Validated mutation records and patch application. |
 | `signature` | `NODX-Signature-1.1` | reserved | JWS signatures, manifest signing, trust hooks. |
 | `editor` | `NODX-Editor-1.2` | reserved | Lossless CST, source maps, local rewrites. |
@@ -181,6 +181,7 @@ Until formal registration is complete, implementations SHOULD use:
 | Text NODX | `text/nodx; charset=utf-8` |
 | Packaged NODX | `application/nodx+zip` |
 | NCP semantic projection | `application/nodx-ncp+json` |
+| Semantic text projection | `text/nodx-semantic; charset=utf-8` |
 | NODS style sheet | `text/nodx-style` |
 
 Formal media-type registration is out of scope for this RFC, but future
@@ -1122,11 +1123,20 @@ Processors that do not implement include expansion MUST still validate the
 
 ---
 
-## 22. NCP Semantic Projection
+## 22. Agent-Readable Projections
 
-NCP is a read-only semantic projection for agents, indexing, search, review, and
-compact context generation. NCP is not the authoritative source when original
-NODX source is available.
+NODX 1.0 defines two standard read-only projections for agents, indexing,
+search, review, and context generation:
+
+1. NCP, a deterministic JSON tree projection for tools that need addresses,
+   hashes, attributes, navigation entries, and stable node identity.
+2. Semantic text, a compact plain-text projection for LLM prompt context and
+   human review where token cost matters more than machine-addressable fields.
+
+Neither projection is the authoritative source when original NODX source or the
+Canonical AST is available.
+
+### 22.1 NCP Semantic Projection
 
 The NCP 1.0 schema is:
 
@@ -1141,9 +1151,9 @@ NCP output fields:
 | `schema` | string | `nodx-ncp/1.0`. |
 | `mode` | string | `semantic`. |
 | `sourceHash` | string | SHA-256 base64url digest of Canonical AST JSON. |
-| `nodes` | array | Flattened semantic node records preserving tree children. |
-| `chunks` | array | Deterministic chunk metadata. |
-| `loss` | array | Omitted information; empty for baseline semantic output. |
+| `nodes` | array | Top-level semantic node records; each node preserves child records recursively. |
+| `chunks` | array | Deterministic chunk metadata over node IDs or path-derived IDs. |
+| `loss` | array | Projection loss records. Empty means no loss inside the NCP semantic contract, not that the projection is a Canonical AST clone. |
 
 NCP node fields:
 
@@ -1162,6 +1172,47 @@ Hashes use `sha256-` plus unpadded base64url digest bytes.
 
 NCP paths are structural addresses. Authors SHOULD provide stable node IDs for
 content that agents, editors, or integrations need to address across revisions.
+
+NCP deliberately excludes concrete syntax trivia, computed styles, renderer
+templates, host layout results, and custom component render output. It preserves
+custom component source semantics as ordinary node records: `type`, `id`,
+`path`, `attrs`, `text`, `children`, and `sha256`. Renderers or agents that do
+not understand a custom component MUST treat its children as fallback source
+content rather than expanding a renderer-specific template.
+
+### 22.2 Semantic Text Projection
+
+Semantic text is a deterministic UTF-8 text projection with media type
+`text/nodx-semantic; charset=utf-8`. It is optimized for compact LLM context,
+plain-text search, and quick human inspection. It is not suitable for signing,
+patch addressing, or lossless interchange.
+
+Semantic text processors MUST:
+
+1. preserve document order for included nodes;
+2. emit headings as Markdown-style `#` lines with stable IDs when present;
+3. emit paragraphs, lists, tables, figures, images, captions, code, math,
+   quotes, notes, forms, fields, media/embed/include fallback text,
+   bibliography entries, and custom component fallback children;
+4. terminate output with exactly one trailing newline;
+5. never execute or expand renderer templates, component renderers, scripts,
+   remote resources, or host layout output.
+
+Semantic text processors MUST exclude:
+
+1. `style` nodes and component style blocks;
+2. `toc` nodes, because resolved navigation is represented by headings or NCP
+   `navigationEntries`;
+3. `pagebreak` nodes and automatic page boundaries;
+4. computed CSS, theme output, HTML attributes created by renderers, and
+   package manifest metadata;
+5. custom component template output. The source custom component marker and its
+   fallback children remain visible.
+
+For custom components, semantic text MUST emit a component marker containing
+the component name and semantic attributes, then recursively emit fallback
+children. If fallback children are absent, the component marker is still emitted
+so the omission is visible to consumers.
 
 ---
 
@@ -1226,6 +1277,7 @@ nodx diagnostics <file> [--format text|json]
 nodx html <file> [--standalone|--fragment] [--csp|--no-csp]
 nodx tui <file>
 nodx ncp <file> [--mode semantic]
+nodx semantic <file>
 nodx package inspect <file>
 nodx package verify <file>
 ```
