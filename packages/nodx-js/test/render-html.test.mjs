@@ -56,6 +56,28 @@ Page body.
   assert.match(html, /background-image:url\(&#x27;assets\/page.png&#x27;\)/);
 });
 
+test("renders styled remote media with native video fallback only", () => {
+  const doc = parse(`---
+schema: nodx/1.0
+features:
+  remote-assets: true
+---
+
+:::image {src="https://example.com/image.png" alt="Remote image" width="320px" border="1px solid #cbd5e1"}
+:::
+
+:::media {src="https://example.com/video.mp4" alt="Remote video" width="480px" margin="1rem 0"}
+:::media-fallback
+Fallback text.
+:::
+:::
+`);
+  const html = renderFragment(doc);
+  assert.match(html, /<img style="width: 320px; border: 1px solid #cbd5e1" src="https:\/\/example.com\/image.png" alt="Remote image">/);
+  assert.match(html, /<figure style="width: 480px; margin: 1rem 0"><video controls src="https:\/\/example.com\/video.mp4"><p>Fallback text\.<\/p><\/video><\/figure>/);
+  assert.doesNotMatch(html, /<div class="media-fallback">/);
+});
+
 test("renders docs layout as a two-navigation document shell", () => {
   const doc = parse(`---
 schema: nodx/1.0

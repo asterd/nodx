@@ -111,6 +111,11 @@ page:
 `page.background` maps to a package-local background image. The image path uses
 the normal asset URL policy.
 
+If a document omits `page.bg` or `page.color`, an interactive viewer may keep
+that part of the page host-adaptive. The playground uses this rule for its
+light/dark switch: explicit page colors are respected, while omitted page
+colors inherit the viewer surface and text colors. Inline node styles still win.
+
 For one page-like region rather than the whole document:
 
 ```nodx

@@ -34,6 +34,7 @@ const sourceMeta = document.getElementById("source-meta");
 const paged = document.getElementById("paged");
 const wrap = document.getElementById("wrap");
 const themeView = document.getElementById("theme-view");
+const uiMode = document.getElementById("ui-mode");
 
 let currentDoc = null;
 let currentPreviewDoc = null;
@@ -52,6 +53,7 @@ sample.addEventListener("change", () => loadSample(sample.value));
 themeView.addEventListener("change", render);
 paged.addEventListener("click", () => toggleButton(paged, render));
 wrap.addEventListener("click", () => toggleButton(wrap, updateWrap));
+uiMode.addEventListener("click", toggleUiMode);
 src.addEventListener("input", render);
 
 document.querySelectorAll("button[data-tab]").forEach((button) => {
@@ -59,6 +61,7 @@ document.querySelectorAll("button[data-tab]").forEach((button) => {
 });
 
 updateWrap();
+applyUiMode(localStorage.getItem("nodx-ui-mode") === "dark" ? "dark" : "light");
 await loadSample(examples[0].id);
 
 function populateExamples() {
@@ -163,6 +166,7 @@ function render() {
 function renderDocument(doc) {
   applyDocumentMetadata(doc.meta, out);
   applyTheme(doc);
+  applyPageStyle(doc, out);
   const options = renderOptions();
   const html = isDocsLayout(doc) && !isPressed(paged) ? renderDocsPreview(doc, options) : renderFragment(doc, options);
   out.classList.toggle("nodx-docs-layout", isDocsLayout(doc) && !isPressed(paged));
@@ -175,6 +179,18 @@ function renderDocument(doc) {
   const nodes = nodesFromHtml(html);
   out.replaceChildren(...paginate(nodes));
   wireInternalLinks(out);
+}
+
+function toggleUiMode() {
+  const next = document.documentElement.dataset.uiMode === "dark" ? "light" : "dark";
+  applyUiMode(next);
+  localStorage.setItem("nodx-ui-mode", next);
+}
+
+function applyUiMode(mode) {
+  document.documentElement.dataset.uiMode = mode;
+  uiMode.setAttribute("aria-pressed", String(mode === "dark"));
+  uiMode.textContent = mode === "dark" ? "Light" : "Dark";
 }
 
 function renderOptions() {
@@ -359,6 +375,25 @@ function applyTheme(doc) {
   themeStyleEl.textContent = scopeThemeCss(themeStylesheet(theme));
 }
 
+function applyPageStyle(doc, element) {
+  const page = doc.meta?.page;
+  const bg = page && typeof page === "object" ? page.bg ?? page["background-color"] : undefined;
+  const color = page && typeof page === "object" ? page.color : undefined;
+  const hasBg = typeof bg === "string" && safeQuickStyleValue(bg);
+  const hasColor = typeof color === "string" && safeQuickStyleValue(color);
+  element.classList.toggle("page-bg-styled", hasBg);
+  element.classList.toggle("page-bg-adaptive", !hasBg);
+  element.classList.toggle("page-color-styled", hasColor);
+  element.classList.toggle("page-color-adaptive", !hasColor);
+  element.style.backgroundColor = hasBg ? bg : "transparent";
+  element.style.color = hasColor ? color : "var(--ink)";
+  element.style.setProperty("--nodx-playground-page-color", hasColor ? color : "inherit");
+}
+
+function safeQuickStyleValue(value) {
+  return value.length <= 240 && !/[<>{};]/.test(value) && !/expression\(|javascript:|vbscript:|@import|url\(/i.test(value);
+}
+
 function scopeThemeCss(css) {
   const rules = [];
   for (const chunk of css.split("}")) {
@@ -381,6 +416,12 @@ function scopeThemeCss(css) {
     rules.push(`${scoped}{${body}}`);
   }
   rules.push(".doc.paged{max-width:none;background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}");
+  rules.push(".doc.page-bg-adaptive{background:transparent}");
+  rules.push(".doc.page-color-adaptive{color:var(--ink);--nodx-color-text:var(--ink);--nodx-color-muted:var(--muted);--nodx-color-rule:var(--line);--nodx-color-bg:transparent;--nodx-color-surface:color-mix(in srgb,var(--panel) 72%,transparent)}");
+  rules.push(".doc.page-color-adaptive h1,.doc.page-color-adaptive h2,.doc.page-color-adaptive h3,.doc.page-color-adaptive h4,.doc.page-color-adaptive h5,.doc.page-color-adaptive h6{color:var(--ink)}");
+  rules.push(".doc.page-bg-adaptive figure,.doc.page-bg-adaptive nav,.doc.page-bg-adaptive .nodx-frame{background:color-mix(in srgb,var(--panel) 78%,transparent);border-color:var(--line)}");
+  rules.push(".doc.page-bg-adaptive aside{background:color-mix(in srgb,var(--warn) 12%,transparent)}");
+  rules.push(".doc.page-color-styled h1,.doc.page-color-styled h2,.doc.page-color-styled h3,.doc.page-color-styled h4,.doc.page-color-styled h5,.doc.page-color-styled h6{color:var(--nodx-playground-page-color)}");
   return rules.join("\n");
 }
 

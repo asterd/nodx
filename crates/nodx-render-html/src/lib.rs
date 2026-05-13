@@ -394,7 +394,9 @@ fn render_node(
                 .and_then(|s| safe_image_url_with_policy(policy, s));
             match safe_src {
                 Some(src) => {
-                    out.push_str("<img src=\"");
+                    out.push_str("<img");
+                    out.push_str(&html_attrs(node));
+                    out.push_str(" src=\"");
                     escape_attr(out, &src);
                     out.push_str("\" alt=\"");
                     escape_attr(out, alt);
@@ -478,7 +480,7 @@ fn render_node(
         }
         "media" | "embed" => {
             out.push_str("<figure");
-            out.push_str(&html_id(node));
+            out.push_str(&html_attrs(node));
             out.push('>');
             let safe_src = node
                 .attrs
@@ -490,23 +492,18 @@ fn render_node(
             {
                 out.push_str("<video controls src=\"");
                 escape_attr(out, src);
-                out.push_str("\"></video>");
+                out.push_str("\">");
+                render_media_fallback_content(out, node, path, navigation, policy, doc, Some(src));
+                out.push_str("</video>");
+            } else {
+                out.push_str("<div class=\"media-fallback\">");
+                render_media_fallback_content(out, node, path, navigation, policy, doc, safe_src.as_ref());
+                out.push_str("</div>");
             }
-            out.push_str("<div class=\"media-fallback\">");
-            escape_html(
-                out,
-                node.attrs
-                    .get("alt")
-                    .map(String::as_str)
-                    .unwrap_or(&node.node_type),
-            );
-            if let Some(src) = safe_src {
-                out.push_str(" - ");
-                escape_html(out, &src);
-            }
-            out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
-                render_node(out, child, &child_path(path, i), navigation, policy, doc);
+                if child.node_type != "media-fallback" {
+                    render_node(out, child, &child_path(path, i), navigation, policy, doc);
+                }
             }
             out.push_str("</figure>");
         }
@@ -903,6 +900,51 @@ fn child_path(prefix: &str, index: usize) -> String {
 
 fn tag_open(tag: &str, node: &Node) -> String {
     format!("<{}{}>", tag, html_attrs(node))
+}
+
+fn render_media_fallback_content(
+    out: &mut String,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+    doc: &Document,
+    safe_src: Option<&String>,
+) {
+    if let Some((i, fallback)) = node
+        .children
+        .iter()
+        .enumerate()
+        .find(|(_, child)| child.node_type == "media-fallback")
+    {
+        render_inlines(out, &fallback.inlines, policy);
+        for (child_index, child) in fallback.children.iter().enumerate() {
+            let fallback_path = child_path(path, i);
+            render_node(
+                out,
+                child,
+                &child_path(&fallback_path, child_index),
+                navigation,
+                policy,
+                doc,
+            );
+        }
+        return;
+    }
+    escape_html(
+        out,
+        node.attrs
+            .get("alt")
+            .map(String::as_str)
+            .unwrap_or(&node.node_type),
+    );
+    if safe_src.is_none()
+        && let Some(raw) = node.attrs.get("src")
+        && !raw.is_empty()
+    {
+        out.push_str(" - ");
+        escape_html(out, raw);
+    }
 }
 
 fn html_id(node: &Node) -> String {

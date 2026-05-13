@@ -1007,6 +1007,11 @@ page:
 text color. `page.background` or `page.background-image` maps to a package-local
 background image after the normal asset URL policy. These fields are authoring
 shortcuts; processors that do not render style MAY preserve them as metadata.
+When page colors are omitted, interactive hosts MAY treat the document surface
+and foreground as host-adaptive rather than author-fixed. In that mode, light
+or dark host chrome can supply the effective background and text colors while
+explicit page fields and node-level style attributes continue to take
+precedence.
 
 ### 18.5 Standard Design Tokens
 

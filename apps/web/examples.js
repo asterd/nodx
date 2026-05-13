@@ -85,6 +85,13 @@ export const examples = [
   },
   {
     group: "Integration",
+    id: "light-integrity",
+    label: "Light integrity header",
+    kind: "file",
+    path: "../../examples/playground/16-light-integrity.nodx",
+  },
+  {
+    group: "Integration",
     id: "remote-styles",
     label: "Remote styles",
     kind: "file",

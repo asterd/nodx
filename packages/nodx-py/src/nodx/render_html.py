@@ -317,7 +317,7 @@ def render_image(node, options):
     src = resolver(raw, node) if resolver else safe_image_url(raw, options.get("remoteAssets") is True)
     if not src:
         return '<span class="nodx-blocked-image">' + escape_html(alt or "blocked image") + "</span>"
-    return '<img src="' + escape_attr(src) + '" alt="' + escape_attr(alt) + '">'
+    return "<img" + html_attrs(node) + ' src="' + escape_attr(src) + '" alt="' + escape_attr(alt) + '">'
 
 
 def render_toc(node, path, navigation):
@@ -334,9 +334,26 @@ def render_media_fallback(node, path, navigation, options):
     raw = node["attrs"].get("src", "")
     text_resolver = options.get("textAssetResolver") or options.get("text_asset_resolver")
     src = safe_media_url(raw, options.get("remoteAssets") is True)
-    video = '<video controls src="' + escape_attr(src) + '"></video>' if node["type"] == "media" and src else ""
-    text = text_resolver(raw) if node["type"] == "include" and text_resolver else (node["attrs"].get("alt") or node["type"]) + (" - " + src if src else "")
-    return "<figure" + html_attrs(node) + ">" + video + '<div class="media-fallback">' + escape_html(text) + "</div>" + render_children(node, path, navigation, options) + "</figure>"
+    fallback = media_fallback_html(node, path, navigation, options, text_resolver, src)
+    children = render_children_without_media_fallback(node, path, navigation, options)
+    if node["type"] == "media" and src:
+        return "<figure" + html_attrs(node) + '><video controls src="' + escape_attr(src) + '">' + fallback + "</video>" + children + "</figure>"
+    return "<figure" + html_attrs(node) + '><div class="media-fallback">' + fallback + "</div>" + children + "</figure>"
+
+
+def media_fallback_html(node, path, navigation, options, text_resolver, src):
+    raw = node["attrs"].get("src", "")
+    if node["type"] == "include" and text_resolver:
+        return escape_html(text_resolver(raw))
+    for index, child in enumerate(node.get("children") or []):
+        if child["type"] == "media-fallback":
+            return render_inlines(child.get("inlines") or [], options) + render_children(child, path + "." + str(index), navigation, options)
+    text = node["attrs"].get("alt") or node["type"]
+    return escape_html(text if src else text + (" - " + raw if raw else ""))
+
+
+def render_children_without_media_fallback(node, path, navigation, options):
+    return "".join("" if child["type"] == "media-fallback" else render_node(child, path + "." + str(i), navigation, options) for i, child in enumerate(node.get("children") or []))
 
 
 def render_inlines(inlines, options=None):

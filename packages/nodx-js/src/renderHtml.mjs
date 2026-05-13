@@ -353,7 +353,7 @@ function renderImage(node, options) {
   const raw = node.attrs.src ?? "";
   const src = options.assetResolver?.(raw, node) ?? safeImageUrl(raw, options.remoteAssets);
   if (!src) return `<span class="nodx-blocked-image">${escapeHtml(alt || "blocked image")}</span>`;
-  return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
+  return `<img${htmlAttrs(node)} src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
 }
 
 function renderToc(node, path, navigation) {
@@ -369,9 +369,30 @@ function renderToc(node, path, navigation) {
 function renderMediaFallback(node, path, navigation, options) {
   const raw = node.attrs.src ?? "";
   const src = safeMediaUrl(raw, options.remoteAssets);
-  const video = node.type === "media" && src ? `<video controls src="${escapeAttr(src)}"></video>` : "";
-  const text = node.type === "include" && options.textAssetResolver?.(raw) ? options.textAssetResolver(raw) : `${node.attrs.alt ?? node.type}${src ? " - " + src : ""}`;
-  return `<figure${htmlAttrs(node)}>${video}<div class="media-fallback">${escapeHtml(text)}</div>${renderChildren(node, path, navigation, options)}</figure>`;
+  const fallback = mediaFallbackHtml(node, path, navigation, options, src);
+  const children = renderChildrenWithoutMediaFallback(node, path, navigation, options);
+  if (node.type === "media" && src) {
+    return `<figure${htmlAttrs(node)}><video controls src="${escapeAttr(src)}">${fallback}</video>${children}</figure>`;
+  }
+  return `<figure${htmlAttrs(node)}><div class="media-fallback">${fallback}</div>${children}</figure>`;
+}
+
+function mediaFallbackHtml(node, path, navigation, options, src) {
+  if (node.type === "include" && options.textAssetResolver?.(node.attrs.src ?? "")) {
+    return escapeHtml(options.textAssetResolver(node.attrs.src ?? ""));
+  }
+  const fallbackNode = node.children.find((child) => child.type === "media-fallback");
+  if (fallbackNode) {
+    return renderInlines(fallbackNode.inlines ?? [], options) + renderChildren(fallbackNode, `${path}.${node.children.indexOf(fallbackNode)}`, navigation, options);
+  }
+  const text = node.attrs.alt ?? node.type;
+  return escapeHtml(src ? text : `${text}${node.attrs.src ? " - " + node.attrs.src : ""}`);
+}
+
+function renderChildrenWithoutMediaFallback(node, path, navigation, options) {
+  return (node.children ?? [])
+    .map((child, i) => child.type === "media-fallback" ? "" : renderNode(child, `${path}.${i}`, navigation, options))
+    .join("");
 }
 
 function renderInlines(inlines, options) {

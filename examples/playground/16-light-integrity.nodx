@@ -1,0 +1,31 @@
+---
+schema: nodx/1.0
+title: Light integrity header
+theme: web
+integrity:
+  alg: sha256
+  scope: canonical-ast
+  value: sha256-GkKIvwYf4eF1WYMy3Asg8-PrfvFyTKEp7RL1kaIzOA8
+---
+
+# Light integrity header #light-integrity
+
+This document carries a lightweight integrity digest directly in front matter.
+It is not a legal or identity signature, but it lets validators detect content
+changes against the canonical AST.
+
+Run the CLI after editing:
+
+```sh
+nodx integrity examples/playground/16-light-integrity.nodx
+```
+
+Then replace `integrity.value` with the printed `sha256-...` value. The
+validator recomputes the digest with the `integrity` field excluded, so any
+later content change invalidates the header value until the document is
+re-signed.
+
+:::note
+Use the future package Signature profile for authorship, keys, trust policy,
+and signed assets. This front matter field is intentionally light.
+:::

@@ -10,10 +10,10 @@ features:
 
 This document opts into host-gated remote image and media rendering.
 
-:::image {src="https://raw.githubusercontent.com/asterd/nodx/main/examples/assets/pipeline.svg" alt="Remote pipeline diagram"}
+:::image {src="https://raw.githubusercontent.com/asterd/nodx/main/examples/assets/pipeline.svg" alt="Remote pipeline diagram" width="720px" margin="1rem 0" border="1px solid #cbd5e1" radius="10px" padding="0.75rem" bg="#f8fafc"}
 :::
 
-:::media {src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" alt="Remote sample video"}
+:::media {src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" alt="Remote sample video" width="720px" margin="1.5rem 0" border="1px solid #cbd5e1" radius="10px" padding="0.75rem" bg="#f8fafc"}
 :::media-fallback
 Remote video fallback text.
 :::
