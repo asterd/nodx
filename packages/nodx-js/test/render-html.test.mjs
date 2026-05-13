@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parse, renderFragment, renderHtml } from "../parser.mjs";
+import { parse, renderFragment, renderHtml, renderSemanticText } from "../parser.mjs";
 
 test("renders class suffix on styled spans", () => {
   const doc = parse("Text [[status text]].status-pill.success.");
@@ -76,6 +76,32 @@ Fallback text.
   assert.match(html, /<img style="width: 320px; border: 1px solid #cbd5e1" src="https:\/\/example.com\/image.png" alt="Remote image">/);
   assert.match(html, /<figure style="width: 480px; margin: 1rem 0"><video controls src="https:\/\/example.com\/video.mp4"><p>Fallback text\.<\/p><\/video><\/figure>/);
   assert.doesNotMatch(html, /<div class="media-fallback">/);
+});
+
+test("renders semantic callout blocks and typed note compatibility", () => {
+  const doc = parse(`:::warning {title="Risk"}
+Check the migration plan.
+:::
+
+:::example
+::code {lang="sh"}
+nodx html doc.nodx
+::
+:::
+
+:::note {type="tip" aria-label="Legacy custom"}
+Legacy typed note.
+:::
+`);
+  const html = renderFragment(doc);
+  assert.match(html, /class="nodx-callout nodx-callout--warning"/);
+  assert.match(html, /aria-label="Risk"/);
+  assert.match(html, /<p class="nodx-callout__label">Risk<\/p>/);
+  assert.match(html, /class="nodx-callout nodx-callout--example"/);
+  assert.match(html, /class="nodx-callout nodx-callout--tip"/);
+  assert.match(html, /aria-label="Legacy custom"/);
+  assert.doesNotMatch(html, /aria-label="Tip"/);
+  assert.match(renderSemanticText(doc), /Warning \[title="Risk"\]: Check the migration plan\./);
 });
 
 test("renders docs layout as a two-navigation document shell", () => {

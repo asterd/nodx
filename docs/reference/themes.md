@@ -1,7 +1,7 @@
 # Themes and styling
 
 NODX renders to plain, semantic HTML and lets a stylesheet decide what
-"plain" looks like. There are six built-in themes you can pick from front
+"plain" looks like. There are seven built-in themes you can pick from front
 matter, and a small surface of design tokens that survive every theme
 switch.
 
@@ -31,6 +31,23 @@ A document without `theme:` gets `base`. A document that uses
 `theme:` is declared — `layout:` controls structural rendering, `theme:`
 controls visual rendering. The two compose.
 
+`docs` is also a standard theme in the reference renderers. It is slightly
+special because it implies the same documentation shell as `layout: docs`;
+authors who want the shell with another visual language can use
+`layout: docs` plus `theme: web`, `theme: print`, or another theme.
+
+The standard themes are intentionally distinct:
+
+- `plain` keeps only readable body text and no component styling.
+- `base` is neutral and conservative for everyday documents.
+- `web` uses a lighter browser surface and stronger link/accent colors.
+- `print` switches to print-oriented serif typography and page constraints.
+- `presentation` increases scale and uses a projector-friendly surface.
+- `docs` adds the navigable documentation shell.
+
+All styled themes include the standard callout blocks: `note`, `info`, `tip`,
+`important`, `caution`, `warning`, `danger`, `example`, and `summary`.
+
 ## Design tokens
 
 Override these CSS custom properties first; they are how every built-in
@@ -39,6 +56,7 @@ theme is built, and they are stable across releases.
 ```css
 :root {
   --nodx-color-text:   #1f2937;   /* body text */
+  --nodx-color-heading:#111827;   /* headings */
   --nodx-color-muted:  #4b5563;   /* secondary text */
   --nodx-color-bg:     #ffffff;   /* page background */
   --nodx-color-primary: #0f766e;  /* links, accents */

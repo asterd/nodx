@@ -421,6 +421,7 @@ function scopeThemeCss(css) {
   rules.push(".doc.page-color-adaptive h1,.doc.page-color-adaptive h2,.doc.page-color-adaptive h3,.doc.page-color-adaptive h4,.doc.page-color-adaptive h5,.doc.page-color-adaptive h6{color:var(--ink)}");
   rules.push(".doc.page-bg-adaptive figure,.doc.page-bg-adaptive nav,.doc.page-bg-adaptive .nodx-frame{background:color-mix(in srgb,var(--panel) 78%,transparent);border-color:var(--line)}");
   rules.push(".doc.page-bg-adaptive aside{background:color-mix(in srgb,var(--warn) 12%,transparent)}");
+  rules.push(".doc.page-bg-adaptive .nodx-callout{background:var(--nodx-callout-bg);border-color:var(--nodx-callout-border)}");
   rules.push(".doc.page-color-styled h1,.doc.page-color-styled h2,.doc.page-color-styled h3,.doc.page-color-styled h4,.doc.page-color-styled h5,.doc.page-color-styled h6{color:var(--nodx-playground-page-color)}");
   return rules.join("\n");
 }

@@ -1,0 +1,59 @@
+---
+schema: nodx/1.0
+title: Semantic callouts
+theme: web
+profiles:
+  requires:
+    - core
+---
+
+# Semantic callouts #semantic-callouts
+
+NODX 1.0 includes a small set of semantic callout blocks. They are document
+structures first; themes decide their final visual treatment.
+
+:::summary {title="Available callouts"}
+Use these blocks when the content has meaning beyond decoration: context,
+advice, required information, risk, examples, or summaries.
+:::
+
+:::note
+A neutral note for supporting information.
+:::
+
+:::info
+Information a reader should notice while scanning.
+:::
+
+:::tip
+Optional advice that helps the reader succeed.
+:::
+
+:::important
+Essential information required to complete the task.
+:::
+
+:::caution
+Potential negative consequences if the reader proceeds carelessly.
+:::
+
+:::warning
+Serious risk or high-impact consequences.
+:::
+
+:::danger
+Destructive, unsafe, or severe outcomes.
+:::
+
+:::example {title="Nested content stays normal"}
+Callouts can contain regular blocks:
+
+::code {lang="sh"}
+nodx html document.nodx > document.html
+::
+:::
+
+:::note {type="warning" title="Backward-compatible note syntax"}
+The existing `note {type="warning"}` form remains valid and renders as the
+same semantic warning callout.
+:::

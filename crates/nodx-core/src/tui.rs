@@ -194,8 +194,8 @@ fn render_tui_node(out: &mut String, node: &Node, indent: usize, ansi: bool) {
             plain_node_text(node)
         )),
         _ => {
-            if node.node_type == "note" {
-                let label = node.attrs.get("type").map(String::as_str).unwrap_or("note");
+            if is_callout_node(node) {
+                let label = callout_type(node);
                 out.push_str(&format!(
                     "{}{} {}\n",
                     pad,
@@ -220,10 +220,38 @@ fn render_tui_node(out: &mut String, node: &Node, indent: usize, ansi: bool) {
             }
             if node.node_type == "list" {
                 out.push('\n');
-            } else if node.node_type == "note" {
+            } else if is_callout_node(node) {
                 out.push_str(&format!("{}{}\n\n", pad, paint(ansi, "33", "╰─")));
             }
         }
+    }
+}
+
+fn is_callout_node(node: &Node) -> bool {
+    matches!(
+        node.node_type.as_str(),
+        "note"
+            | "info"
+            | "tip"
+            | "important"
+            | "caution"
+            | "warning"
+            | "danger"
+            | "example"
+            | "summary"
+    )
+}
+
+fn callout_type(node: &Node) -> &str {
+    let raw = if node.node_type == "note" {
+        node.attrs.get("type").map(String::as_str).unwrap_or("note")
+    } else {
+        node.node_type.as_str()
+    };
+    match raw {
+        "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger" | "example"
+        | "summary" => raw,
+        _ => "note",
     }
 }
 

@@ -255,6 +255,39 @@ textarea.no-wrap {
   background: #ecfdf5;
 }
 
+.doc .nodx-callout {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--nodx-callout-border, var(--line));
+  border-inline-start-width: 4px;
+  border-radius: 8px;
+  background: var(--nodx-callout-bg, var(--panel-alt));
+  color: inherit;
+}
+
+.doc .nodx-callout__label {
+  margin: 0 0 6px;
+  color: var(--nodx-callout-fg, var(--muted));
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.doc .nodx-callout--note { --nodx-callout-border: #94a3b8; --nodx-callout-bg: #f8fafc; --nodx-callout-fg: #475569; }
+.doc .nodx-callout--info { --nodx-callout-border: #38bdf8; --nodx-callout-bg: #f0f9ff; --nodx-callout-fg: #0369a1; }
+.doc .nodx-callout--tip { --nodx-callout-border: #2dd4bf; --nodx-callout-bg: #f0fdfa; --nodx-callout-fg: #0f766e; }
+.doc .nodx-callout--important { --nodx-callout-border: #a78bfa; --nodx-callout-bg: #f5f3ff; --nodx-callout-fg: #6d28d9; }
+.doc .nodx-callout--caution { --nodx-callout-border: #f59e0b; --nodx-callout-bg: #fffbeb; --nodx-callout-fg: #b45309; }
+.doc .nodx-callout--warning { --nodx-callout-border: #f97316; --nodx-callout-bg: #fff7ed; --nodx-callout-fg: #c2410c; }
+.doc .nodx-callout--danger { --nodx-callout-border: #ef4444; --nodx-callout-bg: #fef2f2; --nodx-callout-fg: #b91c1c; }
+.doc .nodx-callout--example { --nodx-callout-border: #22c55e; --nodx-callout-bg: #f0fdf4; --nodx-callout-fg: #15803d; }
+.doc .nodx-callout--summary { --nodx-callout-border: #64748b; --nodx-callout-bg: #f8fafc; --nodx-callout-fg: #334155; }
+
+:root[data-ui-mode="dark"] .doc .nodx-callout {
+  --nodx-callout-bg: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+
 .doc blockquote {
   border-inline-start: 4px solid var(--line);
   margin: 16px 0;

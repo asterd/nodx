@@ -1,0 +1,47 @@
+---
+schema: nodx/1.0
+title: Callouts
+profiles:
+  requires:
+    - core
+---
+
+# Callouts #callouts
+
+:::summary {title="Summary label"}
+Summary text.
+:::
+
+:::info
+Info text.
+:::
+
+:::tip
+Tip text.
+:::
+
+:::important
+Important text.
+:::
+
+:::caution
+Caution text.
+:::
+
+:::warning
+Warning text.
+:::
+
+:::danger
+Danger text.
+:::
+
+:::example
+::code {lang="sh"}
+nodx html doc.nodx
+::
+:::
+
+:::note {type="warning" aria-label="Custom accessible label"}
+Legacy warning note.
+:::

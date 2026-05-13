@@ -408,10 +408,15 @@ NODX 1.0 reserves these standard theme names:
 | `web` | Responsive browser-oriented defaults. |
 | `print` | Print/PDF-oriented defaults, including page margins and page breaks. |
 | `presentation` | Large-type defaults for slide-like previews. |
+| `docs` | Documentation shell defaults for a navigable left sidebar and right outline. |
 
 A package-local `.nodt` path MAY be used by renderers that implement the theme
 format. Theme files are declarative resources, not executable code. Remote theme
 fetching is outside baseline NODX 1.0.
+
+The `docs` theme MAY imply the same structural shell as `layout: docs`.
+Authors who want the documentation shell with a different visual theme SHOULD
+use `layout: docs` plus another `theme` value.
 
 ---
 
@@ -646,7 +651,15 @@ and renderers assign normative meaning to the following standard nodes.
 | `list` | core | children | Ordered, unordered, or task list. |
 | `item` | core | inlines | List item. |
 | `section` | core/rich | children | Semantic grouping. |
-| `note` | rich | children | Note, callout, aside, warning, or fallback container. |
+| `note` | core | children | Neutral callout or legacy typed callout via `type`. |
+| `info` | core | children | Informational callout. |
+| `tip` | core | children | Optional advice callout. |
+| `important` | core | children | Essential information callout. |
+| `caution` | core | children | Potential negative consequence callout. |
+| `warning` | core | children | Serious risk callout. |
+| `danger` | core | children | Severe or destructive outcome callout. |
+| `example` | core | children | Example callout containing prose, code, or other blocks. |
+| `summary` | core | children | Summary or abstract-style callout. |
 | `quote` | rich | children | Quoted block. |
 | `code` | core/rich | text | Literal code or preformatted text. |
 | `pre` | core/rich | text | Preformatted text. |
@@ -674,6 +687,12 @@ and renderers assign normative meaning to the following standard nodes.
 | `citation-entry` | rich | children | Citation metadata/fallback entry. |
 | `speaker-notes` | presentation reserved | children | Preserved fallback notes; presentation semantics are deferred. |
 | `slide` | presentation reserved | children | Preserved custom block unless presentation profile is implemented. |
+
+The standard callout nodes are semantic structures, not fixed UI widgets.
+Renderers SHOULD expose their type in output styling and accessibility while
+preserving normal child content. The legacy form `:::note {type="warning"}`
+MUST remain equivalent for rendering purposes to a `warning` callout, but new
+documents SHOULD prefer direct block names such as `:::warning`.
 
 Custom component names containing hyphens are allowed. If a custom component is
 not declared in front matter and lacks an explicit `fallback` attribute, a

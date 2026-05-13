@@ -143,10 +143,16 @@ fn write_semantic_node(node: &Node, lines: &mut Vec<String>) {
                 lines.push(format!("> {line}"));
             }
         }
-        "note" => lines.push(
-            format!("Note{}: {}", semantic_attrs(node), semantic_node_text(node))
-                .trim()
-                .to_string(),
+        "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger" | "example"
+        | "summary" => lines.push(
+            format!(
+                "{}{}: {}",
+                callout_label(callout_type(node)),
+                semantic_attrs(node),
+                semantic_node_text(node)
+            )
+            .trim()
+            .to_string(),
         ),
         "form" => {
             lines.push(format!("Form{}:", semantic_id(node)));
@@ -322,6 +328,34 @@ fn semantic_attrs(node: &Node) -> String {
         String::new()
     } else {
         format!(" [{}]", attrs.join(" "))
+    }
+}
+
+fn callout_type(node: &Node) -> &str {
+    let raw = if node.node_type == "note" {
+        node.attrs.get("type").map(String::as_str).unwrap_or("note")
+    } else {
+        node.node_type.as_str()
+    };
+    match raw {
+        "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger" | "example"
+        | "summary" => raw,
+        _ => "note",
+    }
+}
+
+fn callout_label(callout_type: &str) -> &str {
+    match callout_type {
+        "note" => "Note",
+        "info" => "Info",
+        "tip" => "Tip",
+        "important" => "Important",
+        "caution" => "Caution",
+        "warning" => "Warning",
+        "danger" => "Danger",
+        "example" => "Example",
+        "summary" => "Summary",
+        _ => "Note",
     }
 }
 

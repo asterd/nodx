@@ -20,7 +20,7 @@ besides my laptop?*
 | Profile | Adds | When you need it |
 |---|---|---|
 | `plain` | Paragraphs, headings (1–6), inline emphasis/code, ordered/unordered lists. | Plain prose. README files. Notes. |
-| `core` | Everything in `plain` plus delimited blocks (`note`, `section`, `quote`, …), links with attributes, pipe tables, `::toc`, variables. | The default for everyday docs. |
+| `core` | Everything in `plain` plus delimited blocks (`note`, `info`, `tip`, `important`, `caution`, `warning`, `danger`, `example`, `summary`, `section`, `quote`, …), links with attributes, pipe tables, `::toc`, variables. | The default for everyday docs. |
 | `rich` | Figures, captions, images, footnotes, citations, mentions, forms, math, custom components. | Reports, articles, technical docs. |
 | `style` | Document-level `::style` blocks and the safe NODS subset, `theme:` front matter. | Branded documents, print layouts. |
 | `package` | The document expects a `.nodx` ZIP container with assets, components, or themes. | Anything that ships its own resources. |

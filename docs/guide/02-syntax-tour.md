@@ -88,7 +88,9 @@ the same colon count.
 
 | Block | Purpose |
 |---|---|
-| `note` | callout / aside (renders as `<aside>`) |
+| `note`, `info`, `tip` | neutral, informational, or advisory callouts |
+| `important`, `caution`, `warning`, `danger` | callouts for required information and increasing risk |
+| `example`, `summary` | semantic example and summary callouts |
 | `section` | logical grouping (renders as `<section>`) |
 | `figure` + `caption` | image / diagram with caption |
 | `image` | bare image (block form) |

@@ -34,7 +34,15 @@ if the names disagree.
 | Name | HTML | Notes |
 |---|---|---|
 | `section` | `<section>` | Logical grouping. Common parent for navigation. |
-| `note` | `<aside>` | `type` attribute drives styling: `info`, `warning`, `danger`, `success`, `note`. |
+| `note` | `<aside class="nodx-callout">` | Neutral callout. Existing `type` values such as `warning` still select a standard callout tone. |
+| `info` | `<aside class="nodx-callout">` | Information a reader should notice while scanning. |
+| `tip` | `<aside class="nodx-callout">` | Optional advice that helps the reader succeed. |
+| `important` | `<aside class="nodx-callout">` | Essential information required for user success. |
+| `caution` | `<aside class="nodx-callout">` | Potential negative consequences. |
+| `warning` | `<aside class="nodx-callout">` | Serious risk or high-impact consequences. |
+| `danger` | `<aside class="nodx-callout">` | Severe, unsafe, or destructive outcomes. |
+| `example` | `<section class="nodx-callout">` | Example content; may contain prose, lists, code, images, or other blocks. |
+| `summary` | `<section class="nodx-callout">` | Summary or abstract-style content. |
 | `quote` | `<blockquote>` | Optional `cite` attribute for the source URL. |
 | `figure` | `<figure>` | Wraps an `image`, `code`, or other media plus an optional `caption`. |
 | `caption` | `<figcaption>` | Only valid inside `figure`. |
@@ -58,6 +66,10 @@ if the names disagree.
 | `bibliography` | `<ol>` | Wraps citation entries. |
 | `citation-entry` | `<li>` | Has `id`, optional `label`. |
 | `speaker-notes` | `<aside class="speaker-notes">` | Hidden in display renderers, exposed in presentation/agent modes. |
+
+HTML renderers expose standard callout labels to assistive technology with
+`aria-label` unless the author already supplied `aria-label` or
+`aria-labelledby`.
 
 ## Built-in literal blocks
 

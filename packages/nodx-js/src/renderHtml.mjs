@@ -30,18 +30,18 @@ export function themeStylesheet(theme = "base") {
   const tokens = standardTokens();
   const common = commonStyles();
   if (name === "print") {
-    return tokens + "body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common;
+    return tokens + ":root{--nodx-font-body:Georgia,\"Times New Roman\",serif;--nodx-font-heading:var(--nodx-font-body);--nodx-color-heading:#111827;--nodx-color-primary:#374151;--nodx-color-accent:#7f1d1d;--nodx-color-surface:#ffffff}body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside,.nodx-callout{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common;
   }
   if (name === "presentation") {
-    return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}" + common;
+    return tokens + ":root{--nodx-color-bg:#f8f7ff;--nodx-color-heading:#312e81;--nodx-color-primary:#7c3aed;--nodx-color-accent:#e11d48;--nodx-color-rule:#ddd6fe;--nodx-color-surface:#ffffff}body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}" + common;
   }
   if (name === "web") {
-    return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
+    return tokens + ":root{--nodx-color-bg:#f8fafc;--nodx-color-heading:#0f172a;--nodx-color-primary:#2563eb;--nodx-color-accent:#be123c;--nodx-color-rule:#cbd5e1;--nodx-color-surface:#ffffff}body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
   }
   if (name === "docs") {
-    return tokens + docsStyles() + common;
+    return tokens + ":root{--nodx-color-bg:#ffffff;--nodx-color-heading:#172554;--nodx-color-primary:#1d4ed8;--nodx-color-accent:#7c3aed;--nodx-color-rule:#dbe3ef;--nodx-color-surface:#f8fafc}" + docsStyles() + common;
   }
-  return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
+  return tokens + ":root{--nodx-color-heading:#111827;--nodx-color-surface:#f9fafb}body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
 }
 
 function renderDocsBody(doc, options) {
@@ -137,8 +137,8 @@ function writeSemanticNode(node, lines, path) {
     for (const line of semanticNodeText(node).split(/\r?\n/)) lines.push(`> ${line}`);
     return;
   }
-  if (node.type === "note") {
-    lines.push(`Note${semanticAttrs(node)}: ${semanticNodeText(node)}`.trim());
+  if (isCalloutNode(node)) {
+    lines.push(`${calloutLabel(calloutType(node))}${semanticAttrs(node)}: ${semanticNodeText(node)}`.trim());
     return;
   }
   if (node.type === "form") {
@@ -262,7 +262,15 @@ function renderNode(node, path, navigation, options) {
     }
     case "paragraph": return wrapInlines("p", node, path, navigation, options);
     case "section": return wrapChildren("section", node, path, navigation, options);
-    case "note": return wrapChildren("aside", node, path, navigation, options);
+    case "note": return renderCallout(node, path, navigation, options);
+    case "info":
+    case "tip":
+    case "important":
+    case "caution":
+    case "warning":
+    case "danger":
+    case "example":
+    case "summary": return renderCallout(node, path, navigation, options);
     case "quote": return wrapChildren("blockquote", node, path, navigation, options);
     case "list": return wrapChildren(node.attrs.kind === "ordered" ? "ol" : "ul", node, path, navigation, options);
     case "item": return wrapInlines("li", node, path, navigation, options);
@@ -301,6 +309,40 @@ function renderNode(node, path, navigation, options) {
 function renderTable(node, path, navigation, options) {
   const caption = node.attrs.caption || node.attrs.title || "";
   return `<table${htmlAttrs(node)}>${caption.trim() ? `<caption>${escapeHtml(caption)}</caption>` : ""}${renderChildren(node, path, navigation, options)}</table>`;
+}
+
+function renderCallout(node, path, navigation, options) {
+  const type = calloutType(node);
+  const tag = type === "example" || type === "summary" ? "section" : "aside";
+  const label = node.attrs.title || calloutLabel(type);
+  return `<${tag}${htmlAttrsWithExtraClass(node, `nodx-callout nodx-callout--${type}`)}${calloutA11yAttr(node, label)}><p class="nodx-callout__label">${escapeHtml(label)}</p>${renderChildren(node, path, navigation, options)}</${tag}>`;
+}
+
+function calloutA11yAttr(node, label) {
+  return node.attrs["aria-label"] || node.attrs["aria-labelledby"] ? "" : ` aria-label="${escapeAttr(label)}"`;
+}
+
+function calloutType(node) {
+  const raw = node.type === "note" ? (node.attrs.type || "note") : node.type;
+  return ["note", "info", "tip", "important", "caution", "warning", "danger", "example", "summary"].includes(raw) ? raw : "note";
+}
+
+function calloutLabel(type) {
+  return {
+    note: "Note",
+    info: "Info",
+    tip: "Tip",
+    important: "Important",
+    caution: "Caution",
+    warning: "Warning",
+    danger: "Danger",
+    example: "Example",
+    summary: "Summary",
+  }[type] ?? "Note";
+}
+
+function isCalloutNode(node) {
+  return node.type === "note" || ["info", "tip", "important", "caution", "warning", "danger", "example", "summary"].includes(node.type);
 }
 
 function wrapLayoutChildren(className, node, path, navigation, options) {
@@ -608,7 +650,20 @@ function standardTokens() {
 }
 
 function commonStyles() {
-  return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}";
+  return [
+    "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:var(--nodx-color-heading,#0f172a);margin-top:1.4em}",
+    "p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}",
+    "aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}",
+    ".nodx-callout{margin:1em 0;padding:.85em 1em;border:1px solid var(--nodx-callout-border,#d1d5db);border-inline-start-width:4px;border-radius:8px;background:var(--nodx-callout-bg,#f8fafc);color:var(--nodx-color-text)}",
+    ".nodx-callout__label{margin:0 0 .35em;font-size:.78em;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--nodx-callout-fg,var(--nodx-color-muted))}",
+    ".nodx-callout--note{--nodx-callout-border:#94a3b8;--nodx-callout-bg:#f8fafc;--nodx-callout-fg:#475569}.nodx-callout--info{--nodx-callout-border:#38bdf8;--nodx-callout-bg:#f0f9ff;--nodx-callout-fg:#0369a1}.nodx-callout--tip{--nodx-callout-border:#2dd4bf;--nodx-callout-bg:#f0fdfa;--nodx-callout-fg:#0f766e}",
+    ".nodx-callout--important{--nodx-callout-border:#a78bfa;--nodx-callout-bg:#f5f3ff;--nodx-callout-fg:#6d28d9}.nodx-callout--caution{--nodx-callout-border:#f59e0b;--nodx-callout-bg:#fffbeb;--nodx-callout-fg:#b45309}.nodx-callout--warning{--nodx-callout-border:#f97316;--nodx-callout-bg:#fff7ed;--nodx-callout-fg:#c2410c}",
+    ".nodx-callout--danger{--nodx-callout-border:#ef4444;--nodx-callout-bg:#fef2f2;--nodx-callout-fg:#b91c1c}.nodx-callout--example{--nodx-callout-border:#22c55e;--nodx-callout-bg:#f0fdf4;--nodx-callout-fg:#15803d}.nodx-callout--summary{--nodx-callout-border:#64748b;--nodx-callout-bg:#f8fafc;--nodx-callout-fg:#334155}",
+    "table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}",
+    "figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}",
+    ".nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}",
+    ".nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}",
+  ].join("");
 }
 
 function docsStyles() {

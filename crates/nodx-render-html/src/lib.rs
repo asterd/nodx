@@ -222,31 +222,32 @@ fn base_stylesheet(doc: &Document) -> String {
         "none" | "plain" => String::from("html[dir=\"rtl\"]{direction:rtl}"),
         "print" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}");
+            css.push_str(":root{--nodx-font-body:Georgia,\"Times New Roman\",serif;--nodx-font-heading:var(--nodx-font-body);--nodx-color-heading:#111827;--nodx-color-primary:#374151;--nodx-color-accent:#7f1d1d;--nodx-color-surface:#ffffff}body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside,.nodx-callout{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}");
             css.push_str(common_styles());
             css
         }
         "presentation" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}");
+            css.push_str(":root{--nodx-color-bg:#f8f7ff;--nodx-color-heading:#312e81;--nodx-color-primary:#7c3aed;--nodx-color-accent:#e11d48;--nodx-color-rule:#ddd6fe;--nodx-color-surface:#ffffff}body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}");
             css.push_str(common_styles());
             css
         }
         "web" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
+            css.push_str(":root{--nodx-color-bg:#f8fafc;--nodx-color-heading:#0f172a;--nodx-color-primary:#2563eb;--nodx-color-accent:#be123c;--nodx-color-rule:#cbd5e1;--nodx-color-surface:#ffffff}body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
             css.push_str(common_styles());
             css
         }
         "docs" => {
             let mut css = String::from(standard_tokens());
+            css.push_str(":root{--nodx-color-bg:#ffffff;--nodx-color-heading:#172554;--nodx-color-primary:#1d4ed8;--nodx-color-accent:#7c3aed;--nodx-color-rule:#dbe3ef;--nodx-color-surface:#f8fafc}");
             css.push_str(docs_styles());
             css.push_str(common_styles());
             css
         }
         _ => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
+            css.push_str(":root{--nodx-color-heading:#111827;--nodx-color-surface:#f9fafb}body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
             css.push_str(common_styles());
             css
         }
@@ -258,7 +259,20 @@ fn standard_tokens() -> &'static str {
 }
 
 fn common_styles() -> &'static str {
-    "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
+    concat!(
+        "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:var(--nodx-color-heading,#0f172a);margin-top:1.4em}",
+        "p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}",
+        "aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}",
+        ".nodx-callout{margin:1em 0;padding:.85em 1em;border:1px solid var(--nodx-callout-border,#d1d5db);border-inline-start-width:4px;border-radius:8px;background:var(--nodx-callout-bg,#f8fafc);color:var(--nodx-color-text)}",
+        ".nodx-callout__label{margin:0 0 .35em;font-size:.78em;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--nodx-callout-fg,var(--nodx-color-muted))}",
+        ".nodx-callout--note{--nodx-callout-border:#94a3b8;--nodx-callout-bg:#f8fafc;--nodx-callout-fg:#475569}.nodx-callout--info{--nodx-callout-border:#38bdf8;--nodx-callout-bg:#f0f9ff;--nodx-callout-fg:#0369a1}.nodx-callout--tip{--nodx-callout-border:#2dd4bf;--nodx-callout-bg:#f0fdfa;--nodx-callout-fg:#0f766e}",
+        ".nodx-callout--important{--nodx-callout-border:#a78bfa;--nodx-callout-bg:#f5f3ff;--nodx-callout-fg:#6d28d9}.nodx-callout--caution{--nodx-callout-border:#f59e0b;--nodx-callout-bg:#fffbeb;--nodx-callout-fg:#b45309}.nodx-callout--warning{--nodx-callout-border:#f97316;--nodx-callout-bg:#fff7ed;--nodx-callout-fg:#c2410c}",
+        ".nodx-callout--danger{--nodx-callout-border:#ef4444;--nodx-callout-bg:#fef2f2;--nodx-callout-fg:#b91c1c}.nodx-callout--example{--nodx-callout-border:#22c55e;--nodx-callout-bg:#f0fdf4;--nodx-callout-fg:#15803d}.nodx-callout--summary{--nodx-callout-border:#64748b;--nodx-callout-bg:#f8fafc;--nodx-callout-fg:#334155}",
+        "table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}",
+        "figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}",
+        ".nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}",
+        ".nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
+    )
 }
 
 fn docs_styles() -> &'static str {
@@ -329,7 +343,8 @@ fn render_node(
         }
         "paragraph" => wrap_inlines(out, "p", node, path, navigation, policy, doc),
         "section" => wrap_children(out, "section", node, path, navigation, policy, doc),
-        "note" => wrap_children(out, "aside", node, path, navigation, policy, doc),
+        "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger" | "example"
+        | "summary" => render_callout(out, node, path, navigation, policy, doc),
         "quote" => wrap_children(out, "blockquote", node, path, navigation, policy, doc),
         "list" => {
             let tag = if node.attrs.get("kind").map(|s| s.as_str()) == Some("ordered") {
@@ -497,7 +512,15 @@ fn render_node(
                 out.push_str("</video>");
             } else {
                 out.push_str("<div class=\"media-fallback\">");
-                render_media_fallback_content(out, node, path, navigation, policy, doc, safe_src.as_ref());
+                render_media_fallback_content(
+                    out,
+                    node,
+                    path,
+                    navigation,
+                    policy,
+                    doc,
+                    safe_src.as_ref(),
+                );
                 out.push_str("</div>");
             }
             for (i, child) in node.children.iter().enumerate() {
@@ -564,6 +587,80 @@ fn render_table(
         render_node(out, child, &child_path(path, i), navigation, policy, doc);
     }
     out.push_str("</table>");
+}
+
+fn render_callout(
+    out: &mut String,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+    doc: &Document,
+) {
+    let callout_type = callout_type(node);
+    let tag = if matches!(callout_type, "example" | "summary") {
+        "section"
+    } else {
+        "aside"
+    };
+    let label = callout_label(node, callout_type);
+    out.push('<');
+    out.push_str(tag);
+    out.push_str(&html_attrs_with_extra_class(
+        node,
+        &format!("nodx-callout nodx-callout--{callout_type}"),
+        policy,
+    ));
+    append_callout_a11y_attr(out, node, &label);
+    out.push_str("><p class=\"nodx-callout__label\">");
+    escape_html(out, &label);
+    out.push_str("</p>");
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(out, child, &child_path(path, i), navigation, policy, doc);
+    }
+    out.push_str("</");
+    out.push_str(tag);
+    out.push('>');
+}
+
+fn append_callout_a11y_attr(out: &mut String, node: &Node, label: &str) {
+    if node.attrs.contains_key("aria-label") || node.attrs.contains_key("aria-labelledby") {
+        return;
+    }
+    out.push_str(" aria-label=\"");
+    escape_attr(out, label);
+    out.push('"');
+}
+
+fn callout_type(node: &Node) -> &str {
+    let raw = if node.node_type == "note" {
+        node.attrs.get("type").map(String::as_str).unwrap_or("note")
+    } else {
+        node.node_type.as_str()
+    };
+    match raw {
+        "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger" | "example"
+        | "summary" => raw,
+        _ => "note",
+    }
+}
+
+fn callout_label(node: &Node, callout_type: &str) -> String {
+    node.attrs.get("title").cloned().unwrap_or_else(|| {
+        match callout_type {
+            "note" => "Note",
+            "info" => "Info",
+            "tip" => "Tip",
+            "important" => "Important",
+            "caution" => "Caution",
+            "warning" => "Warning",
+            "danger" => "Danger",
+            "example" => "Example",
+            "summary" => "Summary",
+            _ => "Note",
+        }
+        .to_string()
+    })
 }
 
 fn wrap_layout_children(

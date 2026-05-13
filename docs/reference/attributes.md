@@ -50,7 +50,7 @@ overload them.
 | `rowspan` | `cell` | Positive integer row span. Preserved for renderers. |
 | `align` | table/cell | `left`, `center`, `right`, `start`, `end` for structural table alignment. Use `text-align` for a CSS style shorthand. |
 | `valign` | `cell` | `top`, `middle`, `bottom`, or `baseline`. |
-| `type` | `note` | `info`, `warning`, `danger`, `success`, `note`. |
+| `type` | `note` | Compatibility selector for typed callouts: `note`, `info`, `tip`, `important`, `caution`, `warning`, `danger`, `example`, `summary`. Prefer direct block names for new documents. |
 | `src` | `image`, `media`, `embed` | Source URL or package-relative path. |
 | `alt` | `image` | Required. Validator emits `NODX-E009` if missing. |
 | `cite` | `quote` | Source URL. |

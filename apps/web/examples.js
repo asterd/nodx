@@ -91,6 +91,13 @@ export const examples = [
     path: "../../examples/playground/16-light-integrity.nodx",
   },
   {
+    group: "Document structure",
+    id: "semantic-callouts",
+    label: "Semantic callouts",
+    kind: "file",
+    path: "../../examples/playground/17-semantic-callouts.nodx",
+  },
+  {
     group: "Integration",
     id: "remote-styles",
     label: "Remote styles",

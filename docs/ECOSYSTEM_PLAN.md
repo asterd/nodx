@@ -36,8 +36,8 @@ Deliverables:
 
 - Quickstart and cheat sheet aimed at Markdown users.
 - Examples index that explains which file to open first.
-- Standard themes documented as author choices: `none`, `base`, `web`,
-  `print`, and `presentation`.
+- Standard themes documented as author choices: `none`, `plain`, `base`,
+  `web`, `print`, `presentation`, and `docs`.
 - Style guide for safe NODS/CSS and YAML style blocks.
 - Accessibility guide that explains `alt`, headings, TOC labels, table scope,
   and link labels without assuming HTML expertise.
