@@ -58,6 +58,13 @@ const STYLE_SHORTHANDS = {
   color: "color",
   border: "border",
   radius: "border-radius",
+  margin: "margin",
+  m: "margin",
+  gap: "gap",
+  width: "width",
+  height: "height",
+  display: "display",
+  columns: "grid-template-columns",
   pad: "padding",
   padding: "padding",
   font: "font",
@@ -65,7 +72,7 @@ const STYLE_SHORTHANDS = {
 };
 
 const ALLOWED_INLINE_PROPERTIES = new Set([
-  "background-color", "border-radius", "font-weight",
+  "background-color", "border-radius", "font-weight", "grid-template-columns", "text-align",
 ]);
 
 function safeInlineStyleValue(value) {

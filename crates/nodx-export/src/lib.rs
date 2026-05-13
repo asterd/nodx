@@ -295,9 +295,12 @@ fn collect_inline_losses(inlines: &[Inline], path: &str, report: &mut LossReport
             )),
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => {
+                collect_inline_losses(children, &format!("{inline_path}.children"), report)
+            }
+            Inline::Mark { children, .. } => {
                 collect_inline_losses(children, &format!("{inline_path}.children"), report)
             }
             Inline::Span { children, .. } => {
@@ -452,9 +455,10 @@ fn inline_text(inlines: &[Inline]) -> String {
             Inline::Text(text) | Inline::Code(text) => out.push_str(text),
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => out.push_str(&inline_text(children)),
+            Inline::Mark { children, .. } => out.push_str(&inline_text(children)),
             Inline::Link { label, target, .. } => {
                 out.push_str(&inline_text(label));
                 out.push_str(" (");

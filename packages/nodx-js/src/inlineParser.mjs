@@ -39,7 +39,14 @@ export function parseInlines(input) {
       i += end + 1;
     } else if (rest.startsWith("==") && rest.slice(2).includes("==")) {
       const end = rest.slice(2).indexOf("==") + 2;
-      out.push({ children: parseInlines(rest.slice(2, end)), type: "mark" });
+      const suffix = parseSpanSuffix(rest.slice(end + 2));
+      const item = { children: parseInlines(rest.slice(2, end)), type: "mark" };
+      if (suffix.consumed > 0) item.attrs = suffix.attrs;
+      out.push(item);
+      i += end + 2 + suffix.consumed;
+    } else if (rest.startsWith("~~") && rest.slice(2).includes("~~")) {
+      const end = rest.slice(2).indexOf("~~") + 2;
+      out.push({ children: parseInlines(rest.slice(2, end)), type: "strike" });
       i += end + 2;
     } else if (rest.startsWith("~") && rest.slice(1).includes("~")) {
       const end = rest.slice(1).indexOf("~") + 1;

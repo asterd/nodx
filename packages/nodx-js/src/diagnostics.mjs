@@ -257,7 +257,9 @@ function validateTable(item, diagnostics) {
   let width = null;
   for (const row of item.children) {
     if (row.type !== "row") continue;
-    const cells = row.children.filter((child) => child.type === "cell").length;
+    const cells = row.children
+      .filter((child) => child.type === "cell")
+      .reduce((sum, child) => sum + cellWidth(child), 0);
     if (width !== null && width !== cells) {
       diagnostics.push(
         validationDiag(
@@ -271,6 +273,11 @@ function validateTable(item, diagnostics) {
       width = cells;
     }
   }
+}
+
+function cellWidth(cell) {
+  const width = Number(cell.attrs?.colspan ?? 1);
+  return Number.isInteger(width) && width > 0 ? width : 1;
 }
 
 function validateToc(item, diagnostics) {
@@ -434,7 +441,8 @@ function validateTocScopes(nodes, ids, diagnostics) {
 
 function collectInlineRefs(inlines, refs, vars, diagnostics) {
   for (const item of inlines) {
-    if (["strong", "em", "mark", "sub", "sup"].includes(item.type)) {
+    if (["strong", "em", "mark", "strike", "sub", "sup"].includes(item.type)) {
+      if (item.type === "mark" && item.attrs) validateInlineAttrs(item.attrs, diagnostics);
       collectInlineRefs(item.children, refs, vars, diagnostics);
     } else if (item.type === "link") {
       const result = classifyUri(ReferenceKind.Link, item.target);
@@ -471,6 +479,22 @@ function collectInlineRefs(inlines, refs, vars, diagnostics) {
     } else if (["ref", "footnote-ref", "citation-ref"].includes(item.type)) {
       refs.push(item.target);
     }
+  }
+}
+
+function validateInlineAttrs(attrs, diagnostics) {
+  if (
+    attrs?.attrs?.dir &&
+    !["ltr", "rtl", "auto"].includes(attrs.attrs.dir)
+  ) {
+    diagnostics.push(
+      validationDiag(
+        "NODX-E004",
+        "error",
+        "Invalid inline dir attribute.",
+        attrs.attrs.dir,
+      ),
+    );
   }
 }
 

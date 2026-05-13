@@ -75,7 +75,7 @@ def collect_manual_inline_entries(inlines, ids, out):
                 id_ = item["target"][1:]
                 out.append({"id": id_, "level": 1, "path": ids.get(id_, ""), "title": plain_inlines(item["label"])})
             collect_manual_inline_entries(item["label"], ids, out)
-        elif item["type"] in ("strong", "em", "mark", "sub", "sup", "span"):
+        elif item["type"] in ("strong", "em", "mark", "strike", "sub", "sup", "span"):
             collect_manual_inline_entries(item["children"], ids, out)
 
 

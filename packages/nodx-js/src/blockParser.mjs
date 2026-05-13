@@ -125,10 +125,11 @@ function parseList(state) {
 }
 
 function parseTable(state) {
-  const rows = [tableRow(splitPipe(state.lines[state.pos]), true)];
+  const aligns = splitPipeAlignments(state.lines[state.pos + 1]);
+  const rows = [tableRow(splitPipe(state.lines[state.pos]), true, aligns)];
   state.pos += 2;
   while (state.pos < state.lines.length && state.lines[state.pos].includes("|") && state.lines[state.pos].trim()) {
-    rows.push(tableRow(splitPipe(state.lines[state.pos]), false));
+    rows.push(tableRow(splitPipe(state.lines[state.pos]), false, aligns));
     state.pos++;
   }
   return node("table", emptyAttrs(), rows, [], null);
@@ -227,13 +228,40 @@ function splitPipe(line) {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((x) => x.trim());
 }
 
-function tableRow(cells, header) {
-  return node("row", emptyAttrs(), cells.map((cell) => {
-    const attrs = emptyAttrs();
+function splitPipeAlignments(line) {
+  return splitPipe(line).map((cell) => {
+    const left = cell.startsWith(":");
+    const right = cell.endsWith(":");
+    if (left && right) return "center";
+    if (left) return "left";
+    if (right) return "right";
+    return null;
+  });
+}
+
+function tableRow(cells, header, aligns) {
+  return node("row", emptyAttrs(), cells.map((cell, index) => {
+    const [attrs, content] = parsePipeCellAttrs(cell);
     if (header) {
       attrs.attrs.header = "true";
       attrs.attrs.scope = "col";
     }
-    return node("cell", attrs, [], parseInlines(cell), null);
+    if (aligns[index] && !attrs.attrs.align) attrs.attrs.align = aligns[index];
+    return node("cell", attrs, [], parseInlines(content), null);
   }), [], null);
+}
+
+function parsePipeCellAttrs(cell) {
+  const trimmed = cell.trimStart();
+  if (!trimmed.startsWith("{")) return [emptyAttrs(), cell];
+  const end = trimmed.indexOf("}");
+  if (end < 0) return [emptyAttrs(), cell];
+  const after = trimmed.slice(end + 1);
+  if (after && !after.startsWith(" ")) return [emptyAttrs(), cell];
+  const attrs = parseAttrs(trimmed.slice(0, end + 1));
+  return attrsAreEmpty(attrs) ? [emptyAttrs(), cell] : [attrs, after.trimStart()];
+}
+
+function attrsAreEmpty(attrs) {
+  return !attrs.id && !attrs.classes.length && !Object.keys(attrs.attrs).length && !Object.keys(attrs.styles ?? {}).length;
 }

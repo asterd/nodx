@@ -16,6 +16,7 @@
         { route: "guide/03-authoring",    label: "Authoring" },
         { route: "guide/04-packaging",    label: "Packaging" },
         { route: "guide/05-cli",          label: "CLI" },
+        { route: "guide/06-quick-syntax", label: "Quick syntax" },
       ],
     },
     {

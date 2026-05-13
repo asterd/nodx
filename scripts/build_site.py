@@ -47,6 +47,7 @@ ROUTES: dict[str, Path] = {
     "guide/03-authoring":    DOCS / "guide" / "03-authoring.md",
     "guide/04-packaging":    DOCS / "guide" / "04-packaging.md",
     "guide/05-cli":          DOCS / "guide" / "05-cli.md",
+    "guide/06-quick-syntax": DOCS / "guide" / "06-quick-syntax.md",
     # reference
     "reference/blocks":       DOCS / "reference" / "blocks.md",
     "reference/inline":       DOCS / "reference" / "inline.md",

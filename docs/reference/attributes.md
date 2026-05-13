@@ -44,6 +44,12 @@ overload them.
 | `checked` | `item` (in task list) | `true` or `false`. |
 | `scope` | `cell` | `col` or `row`. Set automatically on header cells. |
 | `header` | `cell` | `true` for header cells. |
+| `caption` | `table` | Visible table caption. HTML renderers also accept `title` as a caption alias. |
+| `background` | `page`, front matter `page` | Package-local background image shortcut. Uses normal asset URL policy. |
+| `colspan` | `cell` | Positive integer column span. Counts toward table grid validation. |
+| `rowspan` | `cell` | Positive integer row span. Preserved for renderers. |
+| `align` | table/cell | `left`, `center`, `right`, `start`, `end` for structural table alignment. Use `text-align` for a CSS style shorthand. |
+| `valign` | `cell` | `top`, `middle`, `bottom`, or `baseline`. |
 | `type` | `note` | `info`, `warning`, `danger`, `success`, `note`. |
 | `src` | `image`, `media`, `embed` | Source URL or package-relative path. |
 | `alt` | `image` | Required. Validator emits `NODX-E009` if missing. |
@@ -66,11 +72,19 @@ look like CSS breakouts:
 | `border` | `border` |
 | `radius` | `border-radius` |
 | `pad`, `padding` | `padding` |
+| `m`, `margin` | `margin` |
+| `gap` | `gap` |
+| `width` | `width` |
+| `height` | `height` |
+| `display` | `display` |
+| `columns` | `grid-template-columns` |
+| `text-align` | `text-align` |
 | `font` | `font` |
 | `weight` | `font-weight` |
 | `background-color` | (passthrough) |
 | `border-radius` | (passthrough) |
 | `font-weight` | (passthrough) |
+| `grid-template-columns` | (passthrough) |
 
 The bare flag `highlight` expands to a default-styled highlight (rounded
 corners, accent color background). Values that contain `<`, `>`, `{`, `}`,

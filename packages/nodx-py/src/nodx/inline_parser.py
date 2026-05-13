@@ -50,7 +50,15 @@ def parse_inlines(input_):
             i += end + 1
         elif rest.startswith("==") and "==" in rest[2:]:
             end = rest[2:].find("==") + 2
-            out.append({"children": parse_inlines(rest[2:end]), "type": "mark"})
+            suffix = parse_span_suffix(rest[end + 2 :])
+            item = {"children": parse_inlines(rest[2:end]), "type": "mark"}
+            if suffix["consumed"] > 0:
+                item["attrs"] = suffix["attrs"]
+            out.append(item)
+            i += end + 2 + suffix["consumed"]
+        elif rest.startswith("~~") and "~~" in rest[2:]:
+            end = rest[2:].find("~~") + 2
+            out.append({"children": parse_inlines(rest[2:end]), "type": "strike"})
             i += end + 2
         elif rest.startswith("~") and "~" in rest[1:]:
             end = rest[1:].find("~") + 1

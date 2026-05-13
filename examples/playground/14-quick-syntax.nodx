@@ -1,0 +1,79 @@
+---
+schema: nodx/1.0
+title: Quick syntax showcase
+theme: web
+page:
+  bg: "#101827"
+  color: "#f8fafc"
+profiles:
+  requires:
+    - core
+    - rich
+  optional:
+    - style
+---
+
+# Quick syntax showcase #quick-syntax
+
+NODX keeps common authoring tasks compact:
+**strong**, *emphasis*, ~~deleted text~~,
+==highlight with theme override=={bg="#ffe08a" color="#111827"},
+H~2~O, and x^2^.
+
+[[Approved]].status.success and [[Needs review]]{bg="#fff7ed" color="#9a3412" pad="0.1em 0.35em" radius="999px"}
+are inline spans without a style block.
+
+::::page {bg="#f8fafc" color="#111827" pad="1.25rem" radius="10px"}
+## Page-like section #page-like
+
+This region uses `:::page` plus quick attributes. It can have a local
+background color, text color, spacing, border, and background image when the
+asset is packaged.
+
+:::grid {columns="repeat(3,1fr)" gap="1rem"}
+::frame {bg="#ffffff" border="1px solid #d1d5db" pad="1rem" radius="8px"}
+### Frame A
+
+Compact frame syntax.
+::
+
+::frame {bg="#ecfeff" border="1px solid #67e8f9" pad="1rem" radius="8px"}
+### Frame B
+
+Uses `bg`, `border`, `pad`, and `radius`.
+::
+
+::frame {bg="#fef3c7" border="1px solid #fbbf24" pad="1rem" radius="8px"}
+### Frame C
+
+No `::style` needed.
+::
+:::
+
+:::table {caption="Compact rich table"}
+:::row
+:::cell {header="true"}
+Item
+:::
+:::cell {header="true" align="right"}
+Amount
+:::
+:::
+:::row
+:::cell {colspan=2 align="center" bg="#dcfce7"}
+Total: 120K
+:::
+:::
+:::
+::::
+
+## Pipe-table cell attributes #pipe-table-attrs
+
+| Item | Amount |
+| :--- | ---: |
+| Alpha | 40K |
+| Beta | 80K |
+| {colspan=2 align="center" bg="#dcfce7"} Total: 120K |
+
+Use `::style` only when a rule needs to be shared across many nodes,
+targets media queries, or belongs to a reusable theme.

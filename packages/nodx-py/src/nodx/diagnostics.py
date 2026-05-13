@@ -152,11 +152,16 @@ def validate_table(item, diagnostics):
     for row in item["children"]:
         if row["type"] != "row":
             continue
-        cells = len([child for child in row["children"] if child["type"] == "cell"])
+        cells = sum(cell_width(child) for child in row["children"] if child["type"] == "cell")
         if width is not None and width != cells:
             diagnostics.append(validation_diag("NODX-E025", "error", "Table rows must have the same number of cells.", item["id"] or "table"))
         elif width is None:
             width = cells
+
+
+def cell_width(cell):
+    value = cell["attrs"].get("colspan", "1")
+    return int(value) if str(value).isdigit() and int(value) > 0 else 1
 
 
 def validate_toc(item, diagnostics):
@@ -270,7 +275,9 @@ def validate_toc_scopes(nodes, ids, diagnostics):
 
 def collect_inline_refs(inlines, refs, vars_, diagnostics):
     for item in inlines:
-        if item["type"] in ("strong", "em", "mark", "sub", "sup"):
+        if item["type"] in ("strong", "em", "mark", "strike", "sub", "sup"):
+            if item["type"] == "mark" and item.get("attrs"):
+                validate_inline_attrs(item["attrs"], diagnostics)
             collect_inline_refs(item["children"], refs, vars_, diagnostics)
         elif item["type"] == "link":
             if not classify_uri(ReferenceKind.Link, item["target"])["ok"]:
@@ -285,6 +292,12 @@ def collect_inline_refs(inlines, refs, vars_, diagnostics):
             diagnostics.append(validation_diag("NODX-E013", "warning", "Variable referenced but not declared.", item["name"]))
         elif item["type"] in ("ref", "footnote-ref", "citation-ref"):
             refs.append(item["target"])
+
+
+def validate_inline_attrs(attrs, diagnostics):
+    values = attrs.get("attrs", {}) if isinstance(attrs, dict) else {}
+    if values.get("dir") and values["dir"] not in ("ltr", "rtl", "auto"):
+        diagnostics.append(validation_diag("NODX-E004", "error", "Invalid inline dir attribute.", values["dir"]))
 
 
 def valid_name(name):

@@ -8,6 +8,54 @@ test("renders class suffix on styled spans", () => {
   assert.match(renderFragment(doc), /<span class="status-pill success">status text<\/span>/);
 });
 
+test("renders table captions, cell spans, and layout blocks", () => {
+  const doc = parse(`:::table {caption="Revenue"}
+:::row
+:::cell {header="true" colspan=2 align="center"}
+Total
+:::
+:::
+:::
+
+:::grid {gap="2rem"}
+:::frame {bg="#f8fafc"}
+A
+:::
+:::
+`);
+  const html = renderHtml(doc);
+  assert.match(html, /<caption>Revenue<\/caption>/);
+  assert.match(html, /colspan="2"/);
+  assert.match(html, /align="center"/);
+  assert.match(html, /class="nodx-grid"/);
+  assert.match(html, /class="nodx-frame"/);
+  assert.match(html, /gap: 2rem/);
+  assert.match(html, /background-color: #f8fafc/);
+});
+
+test("renders quick mark, strike, and page backgrounds", () => {
+  const doc = parse(`---
+schema: nodx/1.0
+page:
+  bg: "#101827"
+  color: "#f8fafc"
+  background: "assets/bg.png"
+---
+
+==Marked=={bg="#ffe08a" color="#111827"} and ~~removed~~.
+
+:::page {bg="#ffffff" background="assets/page.png"}
+Page body.
+:::
+`);
+  const html = renderHtml(doc);
+  assert.match(html, /body\{background-color:#101827;color:#f8fafc;background-image:url\('assets\/bg.png'\)\}/);
+  assert.match(html, /<mark style="background-color: #ffe08a; color: #111827">Marked<\/mark>/);
+  assert.match(html, /<s>removed<\/s>/);
+  assert.match(html, /class="nodx-page"/);
+  assert.match(html, /background-image:url\(&#x27;assets\/page.png&#x27;\)/);
+});
+
 test("renders docs layout as a two-navigation document shell", () => {
   const doc = parse(`---
 schema: nodx/1.0

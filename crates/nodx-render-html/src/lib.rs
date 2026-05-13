@@ -58,7 +58,11 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
     }
 
     let stylesheet = base_stylesheet(doc);
+    let page_stylesheet = page_stylesheet(doc, policy);
     let mut style_hashes = vec![sha256_base64_for_csp(stylesheet.as_bytes())];
+    if !page_stylesheet.is_empty() {
+        style_hashes.push(sha256_base64_for_csp(page_stylesheet.as_bytes()));
+    }
     for component in component_definitions(doc) {
         if let Some(style) = component_style(component) {
             let sanitized = sanitize_stylesheet(style, policy.limits());
@@ -112,6 +116,11 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
     out.push_str("<style>");
     out.push_str(&stylesheet);
     out.push_str("</style>");
+    if !page_stylesheet.is_empty() {
+        out.push_str("<style>");
+        out.push_str(&page_stylesheet);
+        out.push_str("</style>");
+    }
 
     let title = match doc.meta.get("title") {
         Some(Value::String(s)) => Some(s.clone()),
@@ -184,19 +193,19 @@ fn base_stylesheet(doc: &Document) -> String {
         "none" | "plain" => String::from("html[dir=\"rtl\"]{direction:rtl}"),
         "print" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}");
+            css.push_str("body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}");
             css.push_str(common_styles());
             css
         }
         "presentation" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text)}h1{font-size:2.4em}h2{font-size:1.8em}");
+            css.push_str("body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}");
             css.push_str(common_styles());
             css
         }
         "web" => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}");
+            css.push_str("body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
             css.push_str(common_styles());
             css
         }
@@ -208,7 +217,7 @@ fn base_stylesheet(doc: &Document) -> String {
         }
         _ => {
             let mut css = String::from(standard_tokens());
-            css.push_str("body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}");
+            css.push_str("body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}");
             css.push_str(common_styles());
             css
         }
@@ -216,11 +225,11 @@ fn base_stylesheet(doc: &Document) -> String {
 }
 
 fn standard_tokens() -> &'static str {
-    "html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}"
+    "html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-bg:#ffffff;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-color-rule:#e5e7eb;--nodx-color-surface:transparent;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}"
 }
 
 fn common_styles() -> &'static str {
-    "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
+    "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:0.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:0.4em}.nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}"
 }
 
 fn docs_styles() -> &'static str {
@@ -336,7 +345,7 @@ fn render_node(
             out.push_str(&sanitize_stylesheet(source, policy.limits()));
             out.push_str("</style>");
         }
-        "table" => wrap_children(out, "table", node, path, navigation, policy, doc),
+        "table" => render_table(out, node, path, navigation, policy, doc),
         "row" => wrap_children(out, "tr", node, path, navigation, policy, doc),
         "cell" => {
             let tag = if node.attrs.get("header").map(|s| s.as_str()) == Some("true") {
@@ -478,6 +487,10 @@ fn render_node(
             }
             out.push_str("</aside>");
         }
+        "grid" => wrap_layout_children(out, "nodx-grid", node, path, navigation, policy, doc),
+        "columns" => wrap_layout_children(out, "nodx-columns", node, path, navigation, policy, doc),
+        "frame" => wrap_layout_children(out, "nodx-frame", node, path, navigation, policy, doc),
+        "page" => wrap_layout_children(out, "nodx-page", node, path, navigation, policy, doc),
         _ if node.node_type.contains('-') => {
             out.push_str("<section");
             out.push_str(&html_attrs(node));
@@ -494,6 +507,49 @@ fn render_node(
         }
         _ => wrap_children(out, "div", node, path, navigation, policy, doc),
     }
+}
+
+fn render_table(
+    out: &mut String,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+    doc: &Document,
+) {
+    out.push_str(tag_open("table", node).as_str());
+    if let Some(caption) = node
+        .attrs
+        .get("caption")
+        .or_else(|| node.attrs.get("title"))
+        .filter(|caption| !caption.trim().is_empty())
+    {
+        out.push_str("<caption>");
+        escape_html(out, caption);
+        out.push_str("</caption>");
+    }
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(out, child, &child_path(path, i), navigation, policy, doc);
+    }
+    out.push_str("</table>");
+}
+
+fn wrap_layout_children(
+    out: &mut String,
+    class_name: &str,
+    node: &Node,
+    path: &str,
+    navigation: &NavigationGraph,
+    policy: ResourcePolicy,
+    doc: &Document,
+) {
+    out.push_str("<div");
+    out.push_str(&html_attrs_with_extra_class(node, class_name, policy));
+    out.push('>');
+    for (i, child) in node.children.iter().enumerate() {
+        render_node(out, child, &child_path(path, i), navigation, policy, doc);
+    }
+    out.push_str("</div>");
 }
 
 fn wrap_children(
@@ -764,9 +820,15 @@ fn collect_inline_style_values(inlines: &[Inline], out: &mut Vec<String>) {
         match inline {
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => collect_inline_style_values(children, out),
+            Inline::Mark { children, attrs } => {
+                if !attrs.styles.is_empty() {
+                    out.push(style_attr(&attrs.styles));
+                }
+                collect_inline_style_values(children, out);
+            }
             Inline::Link { label, .. } => collect_inline_style_values(label, out),
             Inline::Span { children, attrs } => {
                 if !attrs.styles.is_empty() {
@@ -854,7 +916,129 @@ fn html_attrs(node: &Node) -> String {
         escape_attr(&mut s, title);
         s.push('"');
     }
+    append_safe_structural_attrs(&mut s, node);
     s
+}
+
+fn html_attrs_with_extra_class(node: &Node, extra: &str, policy: ResourcePolicy) -> String {
+    let mut s = html_id(node);
+    s.push_str(" class=\"");
+    escape_attr(&mut s, extra);
+    for class in &node.classes {
+        s.push(' ');
+        escape_attr(&mut s, class);
+    }
+    s.push('"');
+    let background_image = safe_background_image_css(node.attrs.get("background"), policy);
+    if !node.styles.is_empty() || background_image.is_some() {
+        s.push_str(" style=\"");
+        let mut style = style_attr(&node.styles);
+        if let Some(bg) = background_image {
+            if !style.is_empty() {
+                style.push_str("; ");
+            }
+            style.push_str(&bg);
+        }
+        escape_attr(&mut s, &style);
+        s.push('"');
+    }
+    if let Some(lang) = node.attrs.get("lang") {
+        s.push_str(" lang=\"");
+        escape_attr(&mut s, lang);
+        s.push('"');
+    }
+    if let Some(dir) = node.attrs.get("dir")
+        && matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+    {
+        s.push_str(" dir=\"");
+        escape_attr(&mut s, dir);
+        s.push('"');
+    }
+    if let Some(title) = node.attrs.get("title") {
+        s.push_str(" title=\"");
+        escape_attr(&mut s, title);
+        s.push('"');
+    }
+    append_safe_structural_attrs(&mut s, node);
+    s
+}
+
+fn page_stylesheet(doc: &Document, policy: ResourcePolicy) -> String {
+    let Some(Value::Map(page)) = doc.meta.get("page") else {
+        return String::new();
+    };
+    let mut rules = Vec::new();
+    if let Some(Value::String(bg)) = page
+        .get("bg")
+        .or_else(|| page.get("background-color"))
+        .filter(|value| matches!(value, Value::String(_)))
+        && safe_quick_style_value(bg)
+    {
+        rules.push(format!("background-color:{bg}"));
+    }
+    if let Some(Value::String(color)) = page.get("color")
+        && safe_quick_style_value(color)
+    {
+        rules.push(format!("color:{color}"));
+    }
+    if let Some(bg) = page
+        .get("background")
+        .or_else(|| page.get("background-image"))
+        .and_then(|value| match value {
+            Value::String(raw) => safe_background_image_css(Some(raw), policy),
+            _ => None,
+        })
+    {
+        rules.push(bg);
+    }
+    if rules.is_empty() {
+        String::new()
+    } else {
+        format!("body{{{}}}", rules.join(";"))
+    }
+}
+
+fn safe_background_image_css(raw: Option<&String>, policy: ResourcePolicy) -> Option<String> {
+    let raw = raw?;
+    let safe = policy.classify_uri(ReferenceKind::Asset, raw).ok()?.raw;
+    if safe.contains(['\'', '"', '(', ')', '\\']) {
+        return None;
+    }
+    Some(format!("background-image:url('{safe}')"))
+}
+
+fn safe_quick_style_value(value: &str) -> bool {
+    value.len() <= 240
+        && !value
+            .chars()
+            .any(|c| matches!(c, '<' | '>' | '{' | '}' | ';'))
+}
+
+fn append_safe_structural_attrs(out: &mut String, node: &Node) {
+    for (key, value) in &node.attrs {
+        if !safe_structural_attr(key, value) {
+            continue;
+        }
+        out.push(' ');
+        out.push_str(key);
+        out.push_str("=\"");
+        escape_attr(out, value);
+        out.push('"');
+    }
+}
+
+fn safe_structural_attr(key: &str, value: &str) -> bool {
+    match key {
+        "role" => value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'),
+        "scope" => matches!(value, "col" | "row" | "colgroup" | "rowgroup"),
+        "align" => matches!(value, "left" | "center" | "right" | "start" | "end"),
+        "valign" => matches!(value, "top" | "middle" | "bottom" | "baseline"),
+        "colspan" | "rowspan" => value
+            .parse::<u16>()
+            .is_ok_and(|number| (1..=1000).contains(&number)),
+        _ if key.starts_with("data-") || key.starts_with("aria-") => value.len() <= 240,
+        _ => false,
+    }
 }
 
 fn style_attr(styles: &std::collections::BTreeMap<String, String>) -> String {
@@ -970,10 +1154,17 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 render_inlines(out, children, policy);
                 out.push_str("</span>");
             }
-            Inline::Mark(children) => {
-                out.push_str("<mark>");
+            Inline::Mark { children, attrs } => {
+                out.push_str("<mark");
+                render_inline_attrs(out, attrs);
+                out.push('>');
                 render_inlines(out, children, policy);
                 out.push_str("</mark>");
+            }
+            Inline::Strike(children) => {
+                out.push_str("<s>");
+                render_inlines(out, children, policy);
+                out.push_str("</s>");
             }
             Inline::Sub(children) => {
                 out.push_str("<sub>");
@@ -1031,6 +1222,46 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 out.push_str("</code>");
             }
         }
+    }
+}
+
+fn render_inline_attrs(out: &mut String, attrs: &nodx_core::Attrs) {
+    if !attrs.classes.is_empty() {
+        out.push_str(" class=\"");
+        for (i, class) in attrs.classes.iter().enumerate() {
+            if i > 0 {
+                out.push(' ');
+            }
+            escape_attr(out, class);
+        }
+        out.push('"');
+    }
+    if let Some(id) = &attrs.id {
+        out.push_str(" id=\"");
+        escape_attr(out, id);
+        out.push('"');
+    }
+    if !attrs.styles.is_empty() {
+        out.push_str(" style=\"");
+        escape_attr(out, &style_attr(&attrs.styles));
+        out.push('"');
+    }
+    if let Some(lang) = attrs.attrs.get("lang") {
+        out.push_str(" lang=\"");
+        escape_attr(out, lang);
+        out.push('"');
+    }
+    if let Some(dir) = attrs.attrs.get("dir")
+        && matches!(dir.as_str(), "ltr" | "rtl" | "auto")
+    {
+        out.push_str(" dir=\"");
+        escape_attr(out, dir);
+        out.push('"');
+    }
+    if let Some(title) = attrs.attrs.get("title") {
+        out.push_str(" title=\"");
+        escape_attr(out, title);
+        out.push('"');
     }
 }
 
@@ -1179,6 +1410,40 @@ mod tests {
         let doc = parse_str("[٩٨ ريال]{lang=\"ar\" dir=\"rtl\" title=\"price\"}\n");
         let html = render_html(&doc);
         assert!(html.contains("<span lang=\"ar\" dir=\"rtl\" title=\"price\">"));
+    }
+
+    #[test]
+    fn table_caption_spans_and_layout_blocks_render_to_html() {
+        let doc = parse_str(
+            ":::table {caption=\"Revenue\"}\n:::row\n:::cell {header=\"true\" colspan=2 align=\"center\"}\nTotal\n:::\n:::\n:::\n\n:::grid {gap=\"2rem\"}\n:::frame {bg=\"#f8fafc\"}\nA\n:::\n:::\n",
+        );
+        let html = render_html(&doc);
+        assert!(html.contains("<caption>Revenue</caption>"));
+        assert!(html.contains("colspan=\"2\""));
+        assert!(html.contains("align=\"center\""));
+        assert!(html.contains("class=\"nodx-grid\""));
+        assert!(html.contains("class=\"nodx-frame\""));
+        assert!(html.contains("gap: 2rem"));
+        assert!(html.contains("background-color: #f8fafc"));
+    }
+
+    #[test]
+    fn quick_mark_strike_and_page_background_render_to_html() {
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\npage:\n  bg: \"#101827\"\n  color: \"#f8fafc\"\n  background: \"assets/bg.png\"\n---\n\n==Marked=={bg=\"#ffe08a\" color=\"#111827\"} and ~~removed~~.\n\n:::page {bg=\"#ffffff\" background=\"assets/page.png\"}\nPage body.\n:::\n",
+        );
+        let html = render_html(&doc);
+        assert!(html.contains(
+            "body{background-color:#101827;color:#f8fafc;background-image:url('assets/bg.png')}"
+        ));
+        assert!(
+            html.contains(
+                "<mark style=\"background-color: #ffe08a; color: #111827\">Marked</mark>"
+            )
+        );
+        assert!(html.contains("<s>removed</s>"));
+        assert!(html.contains("class=\"nodx-page\""));
+        assert!(html.contains("background-image:url(&#x27;assets/page.png&#x27;)"));
     }
 
     #[test]

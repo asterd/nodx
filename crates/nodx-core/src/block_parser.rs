@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::ResourceLimits;
 use crate::ast::{Attrs, Document, Node, Value};
 use crate::attrs::{
-    parse_heading, parse_heading_with_cap, parse_matching_close, parse_opener,
+    parse_attrs, parse_heading, parse_heading_with_cap, parse_matching_close, parse_opener,
     parse_opener_with_cap, valid_name,
 };
 use crate::diagnostic::{Diagnostic, diag};
@@ -423,10 +423,11 @@ impl Parser<'_> {
     fn parse_pipe_table(&mut self) -> Node {
         let header_line = self.pos + 1;
         let header = split_pipe_row(self.lines[self.pos]);
+        let aligns = split_pipe_alignments(self.lines[self.pos + 1]);
         self.pos += 2;
         let mut rows = Vec::new();
         if self.count_node(header_line) {
-            rows.push(table_row(header, true));
+            rows.push(table_row(header, true, &aligns));
         }
         while self.pos < self.lines.len()
             && self.lines[self.pos].contains('|')
@@ -436,7 +437,11 @@ impl Parser<'_> {
             if !self.count_node(row_line) {
                 break;
             }
-            rows.push(table_row(split_pipe_row(self.lines[self.pos]), false));
+            rows.push(table_row(
+                split_pipe_row(self.lines[self.pos]),
+                false,
+                &aligns,
+            ));
             self.pos += 1;
         }
         Node::container("table", Attrs::default(), rows)
@@ -527,17 +532,66 @@ fn split_pipe_row(line: &str) -> Vec<String> {
         .collect()
 }
 
-fn table_row(cells: Vec<String>, header: bool) -> Node {
-    let children = cells
+fn split_pipe_alignments(line: &str) -> Vec<Option<String>> {
+    split_pipe_row(line)
         .into_iter()
         .map(|cell| {
-            let mut attrs = Attrs::default();
+            let trimmed = cell.trim();
+            match (trimmed.starts_with(':'), trimmed.ends_with(':')) {
+                (true, true) => Some("center".to_string()),
+                (true, false) => Some("left".to_string()),
+                (false, true) => Some("right".to_string()),
+                (false, false) => None,
+            }
+        })
+        .collect()
+}
+
+fn table_row(cells: Vec<String>, header: bool, aligns: &[Option<String>]) -> Node {
+    let children = cells
+        .into_iter()
+        .enumerate()
+        .map(|(index, cell)| {
+            let (mut attrs, content) = parse_pipe_cell_attrs(&cell);
             if header {
                 attrs.attrs.insert("header".to_string(), "true".to_string());
                 attrs.attrs.insert("scope".to_string(), "col".to_string());
             }
-            Node::textual("cell", attrs, parse_inlines(&cell))
+            if let Some(Some(align)) = aligns.get(index) {
+                attrs
+                    .attrs
+                    .entry("align".to_string())
+                    .or_insert_with(|| align.clone());
+            }
+            Node::textual("cell", attrs, parse_inlines(content))
         })
         .collect();
     Node::container("row", Attrs::default(), children)
+}
+
+fn parse_pipe_cell_attrs(cell: &str) -> (Attrs, &str) {
+    let trimmed = cell.trim_start();
+    if !trimmed.starts_with('{') {
+        return (Attrs::default(), cell);
+    }
+    let Some(end) = trimmed.find('}') else {
+        return (Attrs::default(), cell);
+    };
+    let raw_attrs = &trimmed[..=end];
+    let after = &trimmed[end + 1..];
+    if !(after.is_empty() || after.starts_with(' ')) {
+        return (Attrs::default(), cell);
+    }
+    match parse_attrs(raw_attrs) {
+        Some(attrs) if !attrs_is_empty(&attrs) => (attrs, after.trim_start()),
+        None => (Attrs::default(), cell),
+        Some(_) => (Attrs::default(), cell),
+    }
+}
+
+fn attrs_is_empty(attrs: &Attrs) -> bool {
+    attrs.id.is_none()
+        && attrs.classes.is_empty()
+        && attrs.attrs.is_empty()
+        && attrs.styles.is_empty()
 }

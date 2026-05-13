@@ -80,7 +80,7 @@ function collectManualInlineEntries(inlines, ids, out) {
         out.push({ id, level: 1, path: ids.get(id) ?? "", title: plainInlines(item.label) });
       }
       collectManualInlineEntries(item.label, ids, out);
-    } else if (["strong", "em", "mark", "sub", "sup"].includes(item.type)) {
+    } else if (["strong", "em", "mark", "strike", "sub", "sup"].includes(item.type)) {
       collectManualInlineEntries(item.children, ids, out);
     } else if (item.type === "span") {
       collectManualInlineEntries(item.children, ids, out);

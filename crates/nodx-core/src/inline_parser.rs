@@ -58,10 +58,23 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
             i += end + 3;
         } else if let Some(stripped) = rest.strip_prefix("==") {
             if let Some(end) = stripped.find("==") {
-                out.push(Inline::Mark(parse_inlines(&stripped[..end])));
-                i += end + 4;
+                let after = &stripped[end + 2..];
+                let (attrs, consumed) = parse_span_suffix(after);
+                out.push(Inline::Mark {
+                    children: parse_inlines(&stripped[..end]),
+                    attrs,
+                });
+                i += end + 4 + consumed;
             } else {
                 push_text(&mut out, "=");
+                i += 1;
+            }
+        } else if let Some(stripped) = rest.strip_prefix("~~") {
+            if let Some(end) = stripped.find("~~") {
+                out.push(Inline::Strike(parse_inlines(&stripped[..end])));
+                i += end + 4;
+            } else {
+                push_text(&mut out, "~");
                 i += 1;
             }
         } else if let Some(stripped) = rest.strip_prefix('~') {
@@ -255,9 +268,10 @@ pub fn plain_inlines(inlines: &[Inline]) -> String {
             Inline::Text(s) | Inline::Code(s) | Inline::MathInline { source: s } => out.push_str(s),
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => out.push_str(&plain_inlines(children)),
+            Inline::Mark { children, .. } => out.push_str(&plain_inlines(children)),
             Inline::Link { label, .. }
             | Inline::Span {
                 children: label, ..

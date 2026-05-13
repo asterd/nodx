@@ -120,10 +120,11 @@ def parse_list(state):
 
 
 def parse_table(state):
-    rows = [table_row(split_pipe(state["lines"][state["pos"]]), True)]
+    aligns = split_pipe_alignments(state["lines"][state["pos"] + 1])
+    rows = [table_row(split_pipe(state["lines"][state["pos"]]), True, aligns)]
     state["pos"] += 2
     while state["pos"] < len(state["lines"]) and "|" in state["lines"][state["pos"]] and state["lines"][state["pos"]].strip():
-        rows.append(table_row(split_pipe(state["lines"][state["pos"]]), False))
+        rows.append(table_row(split_pipe(state["lines"][state["pos"]]), False, aligns))
         state["pos"] += 1
     return node("table", empty_attrs(), rows, [], None)
 
@@ -232,12 +233,48 @@ def split_pipe(line):
     return [part.strip() for part in line.strip().strip("|").split("|")]
 
 
-def table_row(cells, header):
+def split_pipe_alignments(line):
+    out = []
+    for cell in split_pipe(line):
+        left = cell.startswith(":")
+        right = cell.endswith(":")
+        if left and right:
+            out.append("center")
+        elif left:
+            out.append("left")
+        elif right:
+            out.append("right")
+        else:
+            out.append(None)
+    return out
+
+
+def table_row(cells, header, aligns):
     children = []
-    for cell in cells:
-        attrs = empty_attrs()
+    for index, cell in enumerate(cells):
+        attrs, content = parse_pipe_cell_attrs(cell)
         if header:
             attrs["attrs"]["header"] = "true"
             attrs["attrs"]["scope"] = "col"
-        children.append(node("cell", attrs, [], parse_inlines(cell), None))
+        if index < len(aligns) and aligns[index] and "align" not in attrs["attrs"]:
+            attrs["attrs"]["align"] = aligns[index]
+        children.append(node("cell", attrs, [], parse_inlines(content), None))
     return node("row", empty_attrs(), children, [], None)
+
+
+def parse_pipe_cell_attrs(cell):
+    trimmed = cell.lstrip()
+    if not trimmed.startswith("{"):
+        return empty_attrs(), cell
+    end = trimmed.find("}")
+    if end < 0:
+        return empty_attrs(), cell
+    after = trimmed[end + 1 :]
+    if after and not after.startswith(" "):
+        return empty_attrs(), cell
+    attrs = parse_attrs(trimmed[: end + 1])
+    return (empty_attrs(), cell) if attrs_are_empty(attrs) else (attrs, after.lstrip())
+
+
+def attrs_are_empty(attrs):
+    return not attrs.get("id") and not attrs.get("classes") and not attrs.get("attrs") and not attrs.get("styles")

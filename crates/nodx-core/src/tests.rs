@@ -40,6 +40,32 @@ fn parses_tables_and_lists() {
 }
 
 #[test]
+fn pipe_tables_preserve_alignment_and_cell_attrs() {
+    let doc =
+        parse_str("| Name | Amount |\n| :--- | ---: |\n| {colspan=2 align=\"center\"} Total | |\n");
+    let table = &doc.body[0];
+    let header = &table.children[0].children;
+    assert_eq!(
+        header[0].attrs.get("align").map(String::as_str),
+        Some("left")
+    );
+    assert_eq!(
+        header[1].attrs.get("align").map(String::as_str),
+        Some("right")
+    );
+    let first_body_cell = &table.children[1].children[0];
+    assert_eq!(
+        first_body_cell.attrs.get("colspan").map(String::as_str),
+        Some("2")
+    );
+    assert_eq!(
+        first_body_cell.attrs.get("align").map(String::as_str),
+        Some("center")
+    );
+    assert_eq!(plain_inlines(&first_body_cell.inlines), "Total");
+}
+
+#[test]
 fn unclosed_delimited_block_emits_diagnostic() {
     let doc = parse_str("::::section\nbody\n:::note\nx\n");
     assert!(
@@ -208,10 +234,12 @@ fn parser_leaves_semantic_validation_to_validator() {
 }
 
 #[test]
-fn parses_mark_sub_and_sup() {
-    let doc = parse_str("==mark== ~sub~ ^sup^\n");
+fn parses_mark_strike_sub_and_sup() {
+    let doc = parse_str("==mark=={bg=\"#ffe08a\"} ~~strike~~ ~sub~ ^sup^\n");
     let json = canonical_json(&doc);
     assert!(json.contains("\"type\":\"mark\""));
+    assert!(json.contains("\"background-color\":\"#ffe08a\""));
+    assert!(json.contains("\"type\":\"strike\""));
     assert!(json.contains("\"type\":\"sub\""));
     assert!(json.contains("\"type\":\"sup\""));
 }

@@ -426,7 +426,8 @@ fn validate_table(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             .children
             .iter()
             .filter(|child| child.node_type == "cell")
-            .count();
+            .map(cell_width)
+            .sum::<usize>();
         match width {
             Some(expected) if expected != cells => diagnostics.push(validation_diag(
                 "NODX-E025",
@@ -438,6 +439,14 @@ fn validate_table(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             _ => {}
         }
     }
+}
+
+fn cell_width(cell: &Node) -> usize {
+    cell.attrs
+        .get("colspan")
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(1)
 }
 
 fn validate_toc(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
@@ -607,10 +616,14 @@ fn collect_inline_refs(
         match item {
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => {
                 collect_inline_refs(children, refs, vars, diagnostics, limits)
+            }
+            Inline::Mark { children, attrs } => {
+                validate_inline_attrs(attrs, diagnostics);
+                collect_inline_refs(children, refs, vars, diagnostics, limits);
             }
             Inline::Link {
                 label,

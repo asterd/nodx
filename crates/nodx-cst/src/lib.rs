@@ -503,10 +503,15 @@ fn serialize_inlines(inlines: &[nodx_core::Inline], out: &mut String) {
                 serialize_inlines(children, out);
                 out.push('*');
             }
-            Inline::Mark(children) => {
+            Inline::Mark { children, .. } => {
                 out.push_str("==");
                 serialize_inlines(children, out);
                 out.push_str("==");
+            }
+            Inline::Strike(children) => {
+                out.push_str("~~");
+                serialize_inlines(children, out);
+                out.push_str("~~");
             }
             Inline::Sub(children) => {
                 out.push('~');

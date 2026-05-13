@@ -9,6 +9,7 @@ The tutorial track. Start here, follow the numbered pages in order.
 | [03 — Authoring guide](./03-authoring.md) | Patterns for real documents that age well. |
 | [04 — Packaging](./04-packaging.md) | The `.nodx` ZIP container, manifests, signatures. |
 | [05 — CLI](./05-cli.md) | All subcommands, exit codes, common pipelines. |
+| [06 — Quick syntax](./06-quick-syntax.md) | Markdown/AsciiDoc-style shortcuts for marks, layout, page backgrounds, and rich tables. |
 
 When you are done with the guide, the [reference](../reference/index.md)
 catalogs every construct, code, profile, theme, and limit. The

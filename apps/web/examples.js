@@ -42,6 +42,13 @@ export const examples = [
     path: "../../examples/playground/06-docs-theme.nodx",
   },
   {
+    group: "Quick syntax",
+    id: "quick-syntax",
+    label: "Marks, layout, backgrounds",
+    kind: "file",
+    path: "../../examples/playground/14-quick-syntax.nodx",
+  },
+  {
     group: "Document structure",
     id: "rich-blocks",
     label: "Tables and forms",

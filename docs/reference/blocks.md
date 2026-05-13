@@ -44,7 +44,11 @@ if the names disagree.
 | `include` | `<figure class="media-fallback">` | Reserved for include extensions. Core renderer does not fetch. |
 | `table` | `<table>` | Either authored as a block or implicitly via pipe-table syntax. |
 | `row` | `<tr>` | Direct child of `table`. |
-| `cell` | `<td>` or `<th>` | Header cells when `header="true"`. |
+| `cell` | `<td>` or `<th>` | Header cells when `header="true"`. Supports `colspan`, `rowspan`, `align`, `valign`, and `scope`. |
+| `grid` | `<div class="nodx-grid">` | Responsive grid layout container. Tune with `columns`, `gap`, `pad`, `bg`, etc. |
+| `columns` | `<div class="nodx-columns">` | Multicolumn flow container. Tune with `gap`, `width`, and style blocks. |
+| `frame` | `<div class="nodx-frame">` | Bordered/padded frame container for grouped content. |
+| `page` | `<div class="nodx-page">` | Page-like region with quick `bg`, `background`, spacing, and frame attributes. |
 | `list` | `<ul>` or `<ol>` | `kind` attribute is one of `unordered`, `ordered`, `task`. |
 | `item` | `<li>` | Optional `checked="true|false"` for task lists. |
 | `form` | `<dl>` | Document-style forms; fields render as `dt`/`dd` pairs. |
@@ -86,9 +90,33 @@ These hold inline content directly, not nested blocks:
 ```
 
 The header row uses `header="true" scope="col"` on each cell. Column
-alignment is encoded as `align="left|center|right"` on the data cells
+alignment is encoded as `align="left|center|right"` on the header and data cells
 based on the `:` markers in the separator row. Inconsistent column counts
 raise `NODX-E025`.
+
+Cells may start with a normal attribute block for compact rich tables:
+
+```nodx
+| Item | Amount |
+| :--- | ---: |
+| {colspan=2 align="center"} Total | |
+```
+
+The attribute block is removed from the visible cell text. Explicit cell
+attributes override separator-row alignment. `colspan` contributes to the
+validated table grid width, so a row with one `colspan=2` cell matches a
+two-cell row. Use block-form tables when a cell needs nested paragraphs,
+lists, images, or other blocks:
+
+```nodx
+:::table {caption="Quarterly revenue"}
+:::row
+:::cell {header="true" colspan=2 align="center"}
+Total
+:::
+:::
+:::
+```
 
 ## Custom components
 
@@ -120,6 +148,11 @@ Some attributes are reserved across blocks:
 | `title` | links, headings | Renders as the tooltip / accessible name. |
 | `role` | `toc`, custom | ARIA role. The renderer keeps it as-is. |
 | `data-*` | any | Pass-through; useful for tool integration. |
+| `caption` | `table` | Renders as `<caption>`. `title` is accepted as a table-caption alias by HTML renderers. |
+| `colspan` | `cell` | Positive integer column span. Counts toward table grid validation. |
+| `rowspan` | `cell` | Positive integer row span. Preserved for renderers. |
+| `align` | `table`, `cell` | Horizontal alignment. Pipe tables set this from separator markers. Use `text-align` for CSS-style alignment on other nodes. |
+| `valign` | `cell` | Vertical alignment hint: `top`, `middle`, `bottom`, `baseline`. |
 
 All other attributes are block-specific. The renderer escapes every
 attribute value into the right HTML context — there is no path by which

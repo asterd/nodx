@@ -27,7 +27,11 @@ pub enum Inline {
     Text(String),
     Strong(Vec<Inline>),
     Em(Vec<Inline>),
-    Mark(Vec<Inline>),
+    Mark {
+        children: Vec<Inline>,
+        attrs: Attrs,
+    },
+    Strike(Vec<Inline>),
     Sub(Vec<Inline>),
     Sup(Vec<Inline>),
     Code(String),

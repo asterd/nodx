@@ -40,6 +40,7 @@ export function plainInlines(inlines) {
       case "strong":
       case "em":
       case "mark":
+      case "strike":
       case "sub":
       case "sup":
         out += plainInlines(item.children);

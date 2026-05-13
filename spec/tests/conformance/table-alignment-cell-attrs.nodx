@@ -1,0 +1,11 @@
+---
+schema: nodx/1.0
+profiles:
+  requires:
+    - core
+---
+
+| Name | Amount |
+| :--- | ---: |
+| {colspan=2 align="center"} Total | |
+

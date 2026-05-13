@@ -25,7 +25,8 @@ def render_html(doc, options=None):
     dir_ = ' dir="' + escape_attr(doc["meta"]["dir"]) + '"' if isinstance(doc["meta"].get("dir"), str) and doc["meta"].get("dir") != "auto" else ""
     title_html = "<title>" + escape_html(title) + "</title>" if title else ""
     body = render_docs_body(doc, options) if is_docs_layout(doc) else "<body>" + render_fragment(doc, options) + "</body>"
-    return "<!doctype html><html" + lang + dir_ + '><meta charset="utf-8"><style>' + theme_stylesheet(doc["meta"].get("theme")) + "</style>" + title_html + body + "</html>"
+    page_css = page_stylesheet(doc)
+    return "<!doctype html><html" + lang + dir_ + '><meta charset="utf-8"><style>' + theme_stylesheet(doc["meta"].get("theme")) + "</style>" + ("<style>" + page_css + "</style>" if page_css else "") + title_html + body + "</html>"
 
 
 def theme_stylesheet(theme="base"):
@@ -33,18 +34,18 @@ def theme_stylesheet(theme="base"):
     if name == "none":
         return 'html[dir="rtl"]{direction:rtl}'
     if name == "plain":
-        return 'html[dir="rtl"]{direction:rtl}body{font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1f2937}'
+        return 'html[dir="rtl"]{direction:rtl}body{font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1f2937;background:#ffffff}'
     tokens = standard_tokens()
     common = common_styles()
     if name == "print":
-        return tokens + "body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common
+        return tokens + "body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common
     if name == "presentation":
-        return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text)}h1{font-size:2.4em}h2{font-size:1.8em}" + common
+        return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}" + common
     if name == "web":
-        return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}" + common
+        return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common
     if name == "docs":
         return tokens + docs_styles() + common
-    return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}" + common
+    return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common
 
 
 def render_docs_body(doc, options):
@@ -214,7 +215,7 @@ def render_node(node, path, navigation, options):
     if type_ == "style":
         return "<style>" + render_style(node) + "</style>"
     if type_ == "table":
-        return wrap_children("table", node, path, navigation, options)
+        return render_table(node, path, navigation, options)
     if type_ == "row":
         return wrap_children("tr", node, path, navigation, options)
     if type_ == "cell":
@@ -241,6 +242,14 @@ def render_node(node, path, navigation, options):
         return wrap_inlines("li", node, path, navigation, options)
     if type_ == "speaker-notes":
         return '<aside' + html_attrs_without_class(node) + ' class="' + class_attr(node, "speaker-notes") + '" aria-label="Speaker notes">' + render_inlines(node["inlines"], options) + render_children(node, path, navigation, options) + "</aside>"
+    if type_ == "grid":
+        return wrap_layout_children("nodx-grid", node, path, navigation, options)
+    if type_ == "columns":
+        return wrap_layout_children("nodx-columns", node, path, navigation, options)
+    if type_ == "frame":
+        return wrap_layout_children("nodx-frame", node, path, navigation, options)
+    if type_ == "page":
+        return wrap_layout_children("nodx-page", node, path, navigation, options)
     if "-" in type_:
         return '<section' + html_attrs_without_class(node) + ' class="' + class_attr(node, "nodx-component nodx-component--fallback") + '" data-component="' + escape_attr(type_) + '"><p class="nodx-component__title">' + escape_html(type_) + " fallback</p>" + render_inlines(node["inlines"], options) + render_children(node, path, navigation, options) + "</section>"
     return wrap_children("div", node, path, navigation, options)
@@ -248,6 +257,16 @@ def render_node(node, path, navigation, options):
 
 def render_children(node, path, navigation, options):
     return "".join(render_node(child, child_path(path, index), navigation, options) for index, child in enumerate(node["children"]))
+
+
+def render_table(node, path, navigation, options):
+    caption = node["attrs"].get("caption") or node["attrs"].get("title") or ""
+    caption_html = "<caption>" + escape_html(caption) + "</caption>" if caption.strip() else ""
+    return "<table" + html_attrs(node) + ">" + caption_html + render_children(node, path, navigation, options) + "</table>"
+
+
+def wrap_layout_children(class_name, node, path, navigation, options):
+    return "<div" + html_attrs_with_extra_class(node, class_name) + ">" + render_children(node, path, navigation, options) + "</div>"
 
 
 def render_component_template(component, node, path, navigation, options):
@@ -325,8 +344,12 @@ def render_inlines(inlines, options=None):
         type_ = item["type"]
         if type_ == "text":
             out.append(escape_html(item["text"]))
-        elif type_ in ("strong", "em", "mark", "sub", "sup"):
+        elif type_ in ("strong", "em", "sub", "sup"):
             out.append("<" + type_ + ">" + render_inlines(item["children"], options) + "</" + type_ + ">")
+        elif type_ == "mark":
+            out.append("<mark" + inline_attrs(item.get("attrs")) + ">" + render_inlines(item["children"], options) + "</mark>")
+        elif type_ == "strike":
+            out.append("<s>" + render_inlines(item["children"], options) + "</s>")
         elif type_ == "code":
             out.append("<code>" + escape_html(item["text"]) + "</code>")
         elif type_ == "math-inline":
@@ -368,6 +391,7 @@ def html_attrs(node):
         out += ' dir="' + escape_attr(node["attrs"]["dir"]) + '"'
     if node["attrs"].get("title"):
         out += ' title="' + escape_attr(node["attrs"]["title"]) + '"'
+    out += structural_attrs(node)
     return out
 
 
@@ -379,7 +403,75 @@ def html_attrs_without_class(node):
         out += ' dir="' + escape_attr(node["attrs"]["dir"]) + '"'
     if node["attrs"].get("title"):
         out += ' title="' + escape_attr(node["attrs"]["title"]) + '"'
+    out += structural_attrs(node)
     return out
+
+
+def html_attrs_with_extra_class(node, extra):
+    out = html_id(node)
+    out += ' class="' + escape_attr(" ".join([extra] + (node.get("classes") or []))) + '"'
+    background_image = safe_background_image_css(node["attrs"].get("background"))
+    if node.get("styles") or background_image:
+        style = "; ".join(item for item in (style_attr(node.get("styles") or {}), background_image) if item)
+        out += ' style="' + escape_attr(style) + '"'
+    if node["attrs"].get("lang"):
+        out += ' lang="' + escape_attr(node["attrs"]["lang"]) + '"'
+    if node["attrs"].get("dir") in ("ltr", "rtl", "auto"):
+        out += ' dir="' + escape_attr(node["attrs"]["dir"]) + '"'
+    if node["attrs"].get("title"):
+        out += ' title="' + escape_attr(node["attrs"]["title"]) + '"'
+    out += structural_attrs(node)
+    return out
+
+
+def page_stylesheet(doc):
+    page = doc.get("meta", {}).get("page")
+    if not isinstance(page, dict):
+        return ""
+    rules = []
+    bg = page.get("bg") or page.get("background-color")
+    if isinstance(bg, str) and safe_quick_style_value(bg):
+        rules.append("background-color:" + bg)
+    color = page.get("color")
+    if isinstance(color, str) and safe_quick_style_value(color):
+        rules.append("color:" + color)
+    bg_image = safe_background_image_css(page.get("background") or page.get("background-image"))
+    if bg_image:
+        rules.append(bg_image)
+    return "body{" + ";".join(rules) + "}" if rules else ""
+
+
+def safe_background_image_css(raw):
+    if not isinstance(raw, str) or not safe_image_url(raw) or re.search(r"""['"()\\]""", raw):
+        return ""
+    return "background-image:url('" + raw + "')"
+
+
+def safe_quick_style_value(value):
+    return len(value) <= 240 and not any(ch in value for ch in "<>{};")
+
+
+def structural_attrs(node):
+    out = ""
+    for key, value in node.get("attrs", {}).items():
+        value = str(value)
+        if safe_structural_attr(key, value):
+            out += ' ' + key + '="' + escape_attr(value) + '"'
+    return out
+
+
+def safe_structural_attr(key, value):
+    if key == "role":
+        return re.match(r"^[A-Za-z0-9-]+$", value) is not None
+    if key == "scope":
+        return value in ("col", "row", "colgroup", "rowgroup")
+    if key == "align":
+        return value in ("left", "center", "right", "start", "end")
+    if key == "valign":
+        return value in ("top", "middle", "bottom", "baseline")
+    if key in ("colspan", "rowspan"):
+        return value.isdigit() and 1 <= int(value) <= 1000
+    return (key.startswith("data-") or key.startswith("aria-")) and len(value) <= 240
 
 
 def inline_attrs(attrs):
@@ -450,7 +542,7 @@ def plain_inlines(inlines):
             out += item["text"]
         elif type_ == "math-inline":
             out += item["source"]
-        elif type_ in ("strong", "em", "mark", "sub", "sup"):
+        elif type_ in ("strong", "em", "mark", "strike", "sub", "sup"):
             out += plain_inlines(item["children"])
         elif type_ == "link":
             out += plain_inlines(item["label"])
@@ -466,11 +558,11 @@ def plain_inlines(inlines):
 
 
 def standard_tokens():
-    return 'html{font-family:system-ui}html[dir="rtl"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}'
+    return 'html{font-family:system-ui}html[dir="rtl"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-bg:#ffffff;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-color-rule:#e5e7eb;--nodx-color-surface:transparent;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}'
 
 
 def common_styles():
-    return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}"
+    return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}"
 
 
 def docs_styles():

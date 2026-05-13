@@ -10,6 +10,7 @@ mean to cross: an unclosed delimiter is treated as text.
 |---|---|---|
 | `**bold**` | `strong` | `<strong>bold</strong>` |
 | `*italic*` | `em` | `<em>italic</em>` |
+| `~~deleted~~` | `strike` | `<s>deleted</s>` |
 | `` `code` `` | `code` | `<code>code</code>` |
 | `==marked==` | `mark` | `<mark>marked</mark>` |
 | `~sub~` | `sub` | `<sub>sub</sub>` |
@@ -19,6 +20,16 @@ mean to cross: an unclosed delimiter is treated as text.
 The delimiter pairs must close on the same line in the same paragraph; an
 unmatched marker is treated as a literal character. This is intentional:
 NODX trades a few extra escapes for *predictable* tokenization.
+
+`mark` accepts the normal attribute suffix for quick theme overrides:
+
+```nodx
+==review=={bg="#ffe08a" color="#111827"}
+==review==.critical
+```
+
+Use this for local highlight color changes. Use `::style` only when the same
+rule needs to apply across many nodes or media modes.
 
 ## Links
 

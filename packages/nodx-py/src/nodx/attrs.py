@@ -51,12 +51,19 @@ STYLE_SHORTHANDS = {
     "color": "color",
     "border": "border",
     "radius": "border-radius",
+    "margin": "margin",
+    "m": "margin",
+    "gap": "gap",
+    "width": "width",
+    "height": "height",
+    "display": "display",
+    "columns": "grid-template-columns",
     "pad": "padding",
     "padding": "padding",
     "font": "font",
     "weight": "font-weight",
 }
-ALLOWED_INLINE_PROPERTIES = {"background-color", "border-radius", "font-weight"}
+ALLOWED_INLINE_PROPERTIES = {"background-color", "border-radius", "font-weight", "grid-template-columns", "text-align"}
 
 
 def apply_attr(attrs, key, value):

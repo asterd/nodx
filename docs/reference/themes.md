@@ -44,6 +44,7 @@ theme is built, and they are stable across releases.
   --nodx-color-primary: #0f766e;  /* links, accents */
   --nodx-color-accent:  #b91c1c;  /* highlights, callouts */
   --nodx-color-rule:    #e5e7eb;  /* dividers, table borders */
+  --nodx-color-surface: transparent; /* framed surfaces */
 
   --nodx-font-body:    system-ui, sans-serif;
   --nodx-font-heading: var(--nodx-font-body);
@@ -68,6 +69,67 @@ Override them in a `::style` block:
 
 That is the most portable way to brand a document. Everything else falls
 back to the same defaults.
+
+## Local layout and visual shorthands
+
+For common authoring cases, use attributes before writing a full `::style`
+block:
+
+```nodx
+:::frame {bg="#f8fafc" border="1px solid #d1d5db" pad="1rem"}
+Framed content.
+:::
+
+:::grid {columns="repeat(3,1fr)" gap="1rem"}
+::frame
+One
+::
+::frame
+Two
+::
+:::
+```
+
+Supported shorthands include `bg`, `color`, `border`, `radius`, `pad`,
+`margin`/`m`, `gap`, `width`, `height`, `display`, `columns`, `text-align`,
+`font`, and `weight`. Values are still audited as safe inline style values:
+no `url(...)`, no CSS breakouts, and no executable constructs.
+
+Use `layout: docs` or a theme for page-level layout. Use `::style` tokens for
+dark/light variants. For the common case, front matter is shorter:
+
+```nodx
+---
+page:
+  bg: "#101827"
+  color: "#f8fafc"
+  background: "assets/background.png"
+---
+```
+
+`page.bg` maps to `body` background color, `page.color` maps to text color, and
+`page.background` maps to a package-local background image. The image path uses
+the normal asset URL policy.
+
+For one page-like region rather than the whole document:
+
+```nodx
+:::page {bg="#ffffff" background="assets/page-bg.png" pad="2rem"}
+Content.
+:::
+```
+
+Use `::style` tokens only when you need media-query variants or reusable rules:
+
+```nodx
+::style
+:root { --nodx-color-bg: #ffffff; --nodx-color-text: #111827; }
+@media (prefers-color-scheme: dark) {
+  :root { --nodx-color-bg: #0f172a; --nodx-color-text: #e5e7eb; }
+}
+body { background: var(--nodx-color-bg); color: var(--nodx-color-text); }
+::
+```
 
 ## Selectors that survive the audit
 
@@ -104,6 +166,9 @@ Renderer-stable HTML for every block:
 | `math` | `<pre class="math">` | `pre.math` |
 | inline math | `<code class="math-inline">` | `.math-inline` |
 | `table` | `<table>` | `table`, `thead`, `tr`, `th`, `td` |
+| `grid` | `<div class="nodx-grid">` | `.nodx-grid`, `.nodx-grid > *` |
+| `columns` | `<div class="nodx-columns">` | `.nodx-columns` |
+| `frame` | `<div class="nodx-frame">` | `.nodx-frame` |
 | `figure` | `<figure>` | `figure` |
 | `caption` | `<figcaption>` | `figcaption` |
 | `image` | `<img>` or `<span class="nodx-blocked-image">` | `img`, `.nodx-blocked-image` |

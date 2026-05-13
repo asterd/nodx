@@ -533,8 +533,20 @@ Pipe table syntax:
 ```
 
 Markdown-compatible separator rows such as `|---|---|` and alignment markers
-such as `|---:|:---|` are accepted and map to the same table AST. Alignment
-markers are authoring sugar unless a renderer/profile explicitly consumes them.
+such as `|---:|:---|` are accepted. Alignment markers map to
+`align="left|center|right"` on the corresponding header and body cells.
+
+Pipe cells MAY start with a compact cell attribute block:
+
+```nodx
+| Metric | Amount |
+| :--- | ---: |
+| {colspan=2 align="center"} Total | |
+```
+
+The attribute block uses the normal NODX attribute grammar and is removed from
+the visible cell content. Explicit cell attributes override separator-row
+alignment sugar.
 
 Canonical nodes:
 
@@ -543,8 +555,9 @@ Canonical nodes:
 3. child `cell`;
 4. header row cells carry `header="true"` and `scope="col"`.
 
-All table rows MUST have the same number of cells. Violations produce
-`NODX-E025`.
+All table rows MUST have the same effective grid width. `colspan` contributes
+to the effective width; `rowspan` is preserved for renderers but does not change
+row width. Violations produce `NODX-E025`.
 
 ### 10.5 Delimited Blocks
 
@@ -619,6 +632,10 @@ and renderers assign normative meaning to the following standard nodes.
 | `table` | rich | children | Table container. |
 | `row` | rich | children | Table row. |
 | `cell` | rich | inlines/children | Table cell. |
+| `grid` | style/rich | children | Responsive grid layout container. |
+| `columns` | style/rich | children | Multicolumn flow container. |
+| `frame` | style/rich | children | Bordered/padded frame container. |
+| `page` | style/rich | children | Page-like region with quick background and spacing attributes. |
 | `figure` | rich | children | Figure container. |
 | `caption` | rich | inlines/children | Figure/table caption. |
 | `image` | rich | attrs/children | Static image reference. |
@@ -656,7 +673,9 @@ other textual nodes.
 | `` `code` `` | `code` | `text` |
 | `**strong**` | `strong` | `children` |
 | `*emphasis*` | `em` | `children` |
-| `==mark==` | `mark` | `children` |
+| `~~strike~~` | `strike` | `children` |
+| `==mark==` | `mark` | `children`, optional `attrs` |
+| `==mark=={attrs}` | `mark` | `children`, `attrs` |
 | `~sub~` | `sub` | `children` |
 | `^sup^` | `sup` | `children` |
 | `[label](target)` | `link` | `label`, `target` |
@@ -926,6 +945,44 @@ breakout properties MUST produce `NODX-E027` with severity `error`.
 
 Style URLs use the Style reference policy: package-relative paths only.
 
+Authors MAY use safe style shorthands in attribute blocks for common local
+layout and visual intent. The reference shorthands are:
+
+| Shorthand | CSS property |
+|---|---|
+| `bg`, `background-color` | `background-color` |
+| `color` | `color` |
+| `border` | `border` |
+| `radius`, `border-radius` | `border-radius` |
+| `pad`, `padding` | `padding` |
+| `m`, `margin` | `margin` |
+| `gap` | `gap` |
+| `width`, `height` | `width`, `height` |
+| `display` | `display` |
+| `columns`, `grid-template-columns` | `grid-template-columns` |
+| `text-align` | `text-align` |
+| `font` | `font` |
+| `weight`, `font-weight` | `font-weight` |
+
+These shorthands are intentionally small: they cover page background, section
+or node backgrounds, borders, frames, padding/margins, grids, columns, and text
+alignment without admitting arbitrary inline CSS.
+
+For document-level background and foreground color, authors MAY use front
+matter `page` metadata:
+
+```yaml
+page:
+  bg: "#101827"
+  color: "#f8fafc"
+  background: "assets/background.png"
+```
+
+`page.bg` maps to the document background color. `page.color` maps to document
+text color. `page.background` or `page.background-image` maps to a package-local
+background image after the normal asset URL policy. These fields are authoring
+shortcuts; processors that do not render style MAY preserve them as metadata.
+
 ### 18.5 Standard Design Tokens
 
 Standard themes expose these custom properties for safe overrides:
@@ -933,8 +990,10 @@ Standard themes expose these custom properties for safe overrides:
 ```css
 --nodx-color-text
 --nodx-color-muted
+--nodx-color-bg
 --nodx-color-primary
 --nodx-color-accent
+--nodx-color-rule
 --nodx-font-body
 --nodx-font-heading
 --nodx-font-mono
@@ -1452,6 +1511,7 @@ task-item       = "- [" (" " / "x") "] " inline-text LF
 
 pipe-table      = pipe-row LF pipe-separator LF *pipe-row
 pipe-row        = ["|"] cell *("|" cell) ["|"]
+cell            = [attrs SP] inline-text
 pipe-separator  = ["|"] 1*("-" / ":" / SP / "|") ["|"]
 
 paragraph       = inline-text *(LF inline-text)

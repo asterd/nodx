@@ -71,7 +71,8 @@ fn write_inlines(out: &mut String, inlines: &[Inline]) {
             }
             Inline::Strong(children) => inline_children(out, "strong", children),
             Inline::Em(children) => inline_children(out, "em", children),
-            Inline::Mark(children) => inline_children(out, "mark", children),
+            Inline::Mark { children, attrs } => inline_children_attrs(out, "mark", children, attrs),
+            Inline::Strike(children) => inline_children(out, "strike", children),
             Inline::Sub(children) => inline_children(out, "sub", children),
             Inline::Sup(children) => inline_children(out, "sup", children),
             Inline::Code(text) => {
@@ -140,6 +141,20 @@ fn write_inlines(out: &mut String, inlines: &[Inline]) {
         }
     }
     out.push(']');
+}
+
+fn inline_children_attrs(out: &mut String, typ: &str, children: &[Inline], attrs: &Attrs) {
+    out.push('{');
+    if attrs != &Attrs::default() {
+        out.push_str("\"attrs\":");
+        write_attrs(out, attrs);
+        out.push(',');
+    }
+    out.push_str("\"children\":");
+    write_inlines(out, children);
+    out.push_str(",\"type\":");
+    write_json_string(out, typ);
+    out.push('}');
 }
 
 fn inline_children(out: &mut String, typ: &str, children: &[Inline]) {

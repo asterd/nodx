@@ -44,7 +44,7 @@ def plain_inlines(inlines):
             out += item["text"]
         elif type_ == "math-inline":
             out += item["source"]
-        elif type_ in ("strong", "em", "mark", "sub", "sup"):
+        elif type_ in ("strong", "em", "mark", "strike", "sub", "sup"):
             out += plain_inlines(item["children"])
         elif type_ == "link":
             out += plain_inlines(item["label"])

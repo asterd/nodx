@@ -49,8 +49,10 @@ slugs when you want stable URLs.
 |---|---|
 | `**strong**` | bold emphasis |
 | `*emphasis*` | italic emphasis |
+| `~~deleted~~` | struck/deleted text |
 | `` `code` `` | inline code |
 | `==mark==` | highlighted text |
+| `==mark=={bg="#ffe08a"}` | highlighted text with a local color override |
 | `~sub~` | subscript |
 | `^sup^` | superscript |
 | `$$x+1$$` | inline math (raw, not evaluated) |
@@ -91,6 +93,7 @@ the same colon count.
 | `figure` + `caption` | image / diagram with caption |
 | `image` | bare image (block form) |
 | `table` (or pipe tables) | tabular data |
+| `grid`, `columns`, `frame` | lightweight document layout containers |
 | `code`, `pre` | literal block, never re-parsed |
 | `math` | block math, raw |
 | `style` | inline NODS stylesheet (safe subset only) |
@@ -111,6 +114,64 @@ the same colon count.
 ```
 
 Right- or left-align columns by putting `:` on the dash row.
+
+For richer cells, put a normal attribute block at the start of the cell:
+
+```nodx
+| Item | Amount |
+| :--- | ---: |
+| {colspan=2 align="center"} Total | |
+```
+
+For nested content, use block-form tables:
+
+```nodx
+:::table {caption="Quarterly revenue"}
+:::row
+:::cell {header="true" colspan=2 align="center"}
+Total
+:::
+:::
+:::
+```
+
+### Layout containers
+
+```nodx
+:::grid {columns="repeat(3,1fr)" gap="1rem"}
+::frame {bg="#f8fafc" pad="1rem"}
+One
+::
+::frame
+Two
+::
+:::
+```
+
+`grid`, `columns`, and `frame` are semantic containers with safe default HTML
+classes. Tune them with the same attribute shorthands used elsewhere:
+`bg`, `border`, `radius`, `pad`, `margin`, `gap`, `width`, `display`,
+`columns`, and `text-align`.
+
+For page-level background and color, use front matter instead of a `::style`
+block:
+
+```nodx
+---
+page:
+  bg: "#101827"
+  color: "#f8fafc"
+  background: "assets/background.png"
+---
+```
+
+For a single page-like region, use a `page` block:
+
+```nodx
+:::page {bg="#ffffff" background="assets/page-bg.png"}
+Page content.
+:::
+```
 
 ### Lists
 

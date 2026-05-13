@@ -195,9 +195,10 @@ fn collect_manual_inline_entries(
             }
             Inline::Strong(children)
             | Inline::Em(children)
-            | Inline::Mark(children)
+            | Inline::Strike(children)
             | Inline::Sub(children)
             | Inline::Sup(children) => collect_manual_inline_entries(children, ids, out),
+            Inline::Mark { children, .. } => collect_manual_inline_entries(children, ids, out),
             Inline::Span { children, .. } => collect_manual_inline_entries(children, ids, out),
             Inline::Text(_)
             | Inline::Code(_)
