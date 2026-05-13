@@ -3,6 +3,7 @@ export { canonicalJson } from "./canonical.mjs";
 export {
   diagnosticsJson,
   exitCodeFor,
+  integrityDigest,
   validate,
   SCHEMA_1_0,
 } from "./diagnostics.mjs";

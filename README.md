@@ -160,6 +160,7 @@ target/release/nodx html doc.nodx > doc.html
 target/release/nodx tui doc.nodx
 target/release/nodx ncp doc.nodx
 target/release/nodx semantic doc.nodx
+target/release/nodx integrity doc.nodx
 target/release/nodx package inspect bundle.nodx
 target/release/nodx package verify  bundle.nodx
 target/release/nodx export pdf  doc.nodx -o doc.pdf

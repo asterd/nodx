@@ -42,11 +42,20 @@ pub enum UrlError {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ResourcePolicy {
     limits: ResourceLimits,
+    remote_assets: bool,
 }
 
 impl ResourcePolicy {
     pub fn new(limits: ResourceLimits) -> Self {
-        Self { limits }
+        Self {
+            limits,
+            remote_assets: false,
+        }
+    }
+
+    pub fn with_remote_assets(mut self, enabled: bool) -> Self {
+        self.remote_assets = enabled;
+        self
     }
 
     pub fn limits(&self) -> ResourceLimits {
@@ -99,6 +108,16 @@ impl ResourcePolicy {
         }
         match kind {
             ReferenceKind::Link if matches!(scheme, "http" | "https" | "mailto" | "tel") => {
+                Ok(ClassifiedUri {
+                    raw: raw.to_string(),
+                    class: UriClass::Absolute {
+                        scheme: scheme.to_string(),
+                    },
+                })
+            }
+            ReferenceKind::Asset | ReferenceKind::MediaFallback
+                if self.remote_assets && matches!(scheme, "http" | "https") =>
+            {
                 Ok(ClassifiedUri {
                     raw: raw.to_string(),
                     class: UriClass::Absolute {
@@ -397,6 +416,21 @@ mod tests {
             policy
                 .classify_uri(ReferenceKind::Asset, "https://example.test/x.png")
                 .is_err()
+        );
+        assert!(
+            ResourcePolicy::default()
+                .with_remote_assets(true)
+                .classify_uri(ReferenceKind::Asset, "https://example.test/x.png")
+                .is_ok()
+        );
+        assert!(
+            ResourcePolicy::default()
+                .with_remote_assets(true)
+                .classify_uri(
+                    ReferenceKind::MediaFallback,
+                    "https://example.test/demo.mp4"
+                )
+                .is_ok()
         );
     }
 

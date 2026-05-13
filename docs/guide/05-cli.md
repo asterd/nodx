@@ -31,6 +31,7 @@ to stderr. Exit codes are predictable:
 | `tui` | Render to a terminal-friendly representation. |
 | `ncp` | Emit the agent-readable NCP projection. |
 | `semantic` | Emit compact semantic text for LLM context and search. |
+| `integrity` | Print the lightweight front matter integrity digest for this document. |
 | `package inspect` | Show manifest, entries, and check declared sizes/digests. |
 | `package verify` | Recompute every entry's SHA-256 and compare to the manifest. |
 | `export pdf` | Render a paged HTML pipeline preview suitable for headless print. |
@@ -85,6 +86,24 @@ nodx ncp doc.nodx | jq .
 The NCP projection is a node-level extraction designed for retrieval and
 batch agent workflows. It preserves node paths, IDs, hashes, attributes,
 children, and resolved navigation entries.
+
+### Add light integrity metadata
+
+```sh
+nodx integrity doc.nodx
+```
+
+Copy the printed `sha256-...` value into front matter:
+
+```yaml
+integrity:
+  alg: sha256
+  scope: canonical-ast
+  value: sha256-...
+```
+
+The validator recomputes the same digest with the `integrity` field excluded.
+If the document changes afterwards, validation emits `NODX-E028`.
 
 ### Extract compact LLM context
 

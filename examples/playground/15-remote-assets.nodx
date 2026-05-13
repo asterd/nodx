@@ -1,0 +1,20 @@
+---
+schema: nodx/1.0
+title: Remote assets
+theme: web
+features:
+  remote-assets: true
+---
+
+# Remote assets #remote-assets
+
+This document opts into host-gated remote image and media rendering.
+
+:::image {src="https://raw.githubusercontent.com/asterd/nodx/main/examples/assets/pipeline.svg" alt="Remote pipeline diagram"}
+:::
+
+:::media {src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" alt="Remote sample video"}
+:::media-fallback
+Remote video fallback text.
+:::
+:::

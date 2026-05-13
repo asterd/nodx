@@ -124,6 +124,7 @@ use the full profile identifier.
 | `style` | `NODX-Style-1.0` | safe subset | Inline `style` blocks and safe NODS audit/sanitization. |
 | `package` | `NODX-Package-1.0` | stable reader | ZIP package opening, manifest validation, assets, digest checks. |
 | `agent-read` | `NODX-Agent-Read-1.0` | stable | NCP semantic projection, semantic text projection, and stable node hashes. |
+| `remote-assets` | `NODX-Remote-Assets-1.0` | host-gated | `http`/`https` image and media references may be emitted by renderers when host policy allows. |
 | `agent-mutate` | `NODX-Agent-Mutate-1.1` | reserved | Validated mutation records and patch application. |
 | `signature` | `NODX-Signature-1.1` | reserved | JWS signatures, manifest signing, trust hooks. |
 | `editor` | `NODX-Editor-1.2` | reserved | Lossless CST, source maps, local rewrites. |
@@ -349,9 +350,30 @@ The following constructs MUST produce `NODX-E019`:
 | `components` | list of mappings | Custom component declarations. |
 | `keywords` | list of strings | Informative indexing metadata. |
 | `theme` | string | Optional standard theme name or package-local `.nodt` path. |
+| `features.remote-assets` | boolean | Optional shorthand for enabling remote image/media references under host policy. |
+| `integrity` | mapping | Optional lightweight SHA-256 integrity metadata over the Canonical AST with `integrity` excluded. |
 
 Processors MUST preserve unknown metadata fields in the Canonical AST unless the
 field itself violates the front matter safe subset.
+
+### 7.3.1 Lightweight Integrity Metadata
+
+The optional `integrity` metadata records a non-identity integrity digest:
+
+```yaml
+integrity:
+  alg: sha256
+  scope: canonical-ast
+  value: sha256-BASE64URLDIGEST
+```
+
+`alg` MUST be `sha256`. `scope` MUST be `canonical-ast`. The digest input is
+the Canonical AST JSON for the document after removing the top-level
+`integrity` metadata field. A mismatch produces `NODX-E028`.
+
+This mechanism is tamper evidence for editors, CI, caches, and review tools. It
+is not an authorship signature and does not replace the reserved Signature
+profile for certified packages.
 
 ### 7.4 Profiles
 
@@ -794,8 +816,8 @@ containers when available.
 
 ### 14.3 Media and Embed
 
-`media` and `embed` reference package-local resources. Renderers that cannot
-display the resource MUST render fallback children if present.
+`media` and `embed` reference safe local resources by default. Renderers that
+cannot display the resource MUST render fallback children if present.
 
 ```nodx
 :::media {src="media/demo.mp4" alt="Demo video"}
@@ -805,7 +827,10 @@ Demo transcript.
 :::
 ```
 
-Remote media fetching is not part of NODX 1.0.
+Remote image and media URLs are allowed only when the document declares
+`features.remote-assets: true` or the `remote-assets` profile and the host
+renderer explicitly allows network rendering. NODX libraries MUST NOT fetch
+remote resources while parsing, validating, projecting, or packaging.
 
 ---
 
@@ -1030,11 +1055,11 @@ and `about`.
 | Reference kind | Allowed |
 |---|---|
 | Link | fragments, `http`, `https`, `mailto`, `tel`, and safe package-relative paths. |
-| Asset | safe package-relative paths and allowed image data URIs. |
+| Asset | safe package-relative paths, allowed image data URIs, and `http`/`https` only under `remote-assets`. |
 | Style | safe package-relative paths only. |
 | Include | safe package-relative paths only. |
 | Font | safe package-relative paths only. |
-| Media fallback | safe package-relative paths only. |
+| Media fallback | safe package-relative paths, and `http`/`https` only under `remote-assets`. |
 
 Unsafe link targets produce `NODX-E020`. Unsafe assets produce `NODX-E008`.
 Unsafe package paths produce `NODX-E010`.
@@ -1323,6 +1348,7 @@ JSON diagnostics MUST be deterministic for deterministic input.
 | `NODX-E025` | error | validate | Table rows have inconsistent cell counts. |
 | `NODX-E026` | warning | export | Lossy export or preview bridge warning. |
 | `NODX-E027` | error/warning | style | Forbidden or unsupported NODS construct. |
+| `NODX-E028` | error | validate | Front matter integrity declaration is malformed or does not match the Canonical AST digest. |
 
 ---
 
@@ -1339,6 +1365,7 @@ nodx html <file> [--standalone|--fragment] [--csp|--no-csp]
 nodx tui <file>
 nodx ncp <file> [--mode semantic]
 nodx semantic <file>
+nodx integrity <file>
 nodx package inspect <file>
 nodx package verify <file>
 ```

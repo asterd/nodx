@@ -11,7 +11,7 @@ reviewing.
 | [Attributes](./attributes.md) | The `{…}` attribute grammar and the reserved keys. |
 | [AST](./ast.md) | Canonical document, node, and inline JSON shapes. |
 | [Diagnostics](./diagnostics.md) | The `NODX-Exxx` catalog and exit codes. |
-| [Profiles](./profiles.md) | The six built-in profiles. |
+| [Profiles](./profiles.md) | Built-in profiles and host-gated capabilities. |
 | [Themes & styling](./themes.md) | Built-in themes, design tokens, the safe NODS subset. |
 | [Limits](./limits.md) | Default resource caps and how to tune them. |
 | [NCP projection](./ncp.md) | Agent-readable view of a document. |

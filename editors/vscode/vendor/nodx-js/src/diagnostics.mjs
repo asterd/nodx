@@ -1,5 +1,7 @@
 import { auditStylesheet } from "./nods.mjs";
 import { classifyUri, ReferenceKind } from "./url.mjs";
+import { canonicalJson } from "./canonical.mjs";
+import { sha256Base64Url } from "./bytes.mjs";
 
 export const SCHEMA_1_0 = "nodx/1.0";
 
@@ -14,6 +16,7 @@ const SUPPORTED_PROFILES = new Set([
   "style",
   "package",
   "agent-read",
+  "remote-assets",
 ]);
 
 export function diagnosticsJson(diagnostics) {
@@ -46,6 +49,7 @@ export function exitCodeFor(diagnostics) {
 export function validate(doc, requestedProfile = null) {
   const diagnostics = [...doc.diagnostics];
   validateMeta(doc, requestedProfile, diagnostics);
+  validateIntegrity(doc, diagnostics);
   const components = componentNames(doc);
   const vars = new Set(
     doc.meta.vars && typeof doc.meta.vars === "object" && !Array.isArray(doc.meta.vars)
@@ -55,7 +59,7 @@ export function validate(doc, requestedProfile = null) {
   const ids = new Set();
   const refs = [];
   const previousHeading = { level: 0 };
-  validateNodes(doc.body, ids, refs, components, vars, previousHeading, diagnostics);
+  validateNodes(doc.body, ids, refs, components, vars, previousHeading, diagnostics, documentAllowsRemoteAssets(doc));
   validateTocScopes(doc.body, ids, diagnostics);
   for (const target of refs) {
     if (!ids.has(target)) {
@@ -70,6 +74,43 @@ export function validate(doc, requestedProfile = null) {
     }
   }
   return diagnostics;
+}
+
+export function integrityDigest(doc) {
+  const unsigned = {
+    ...doc,
+    meta: Object.fromEntries(Object.entries(doc.meta).filter(([key]) => key !== "integrity")),
+  };
+  return sha256Base64Url(canonicalJson(unsigned));
+}
+
+function validateIntegrity(doc, diagnostics) {
+  const integrity = doc.meta.integrity;
+  if (!integrity || typeof integrity !== "object" || Array.isArray(integrity)) return;
+  const alg = typeof integrity.alg === "string" ? integrity.alg : "";
+  const scope = typeof integrity.scope === "string" ? integrity.scope : "canonical-ast";
+  const value = typeof integrity.value === "string" ? integrity.value : "";
+  if (alg !== "sha256" || scope !== "canonical-ast" || !value.startsWith("sha256-")) {
+    diagnostics.push(validationDiag("NODX-E028", "error", "Invalid integrity declaration.", "integrity"));
+    return;
+  }
+  if (value !== integrityDigest(doc)) {
+    diagnostics.push(validationDiag("NODX-E028", "error", "Document integrity digest does not match.", "integrity"));
+  }
+}
+
+function documentAllowsRemoteAssets(doc) {
+  const features = doc.meta.features;
+  if (features && typeof features === "object" && !Array.isArray(features) && features["remote-assets"] === true) {
+    return true;
+  }
+  const profiles = doc.meta.profiles;
+  if (profiles && typeof profiles === "object" && !Array.isArray(profiles)) {
+    for (const key of ["requires", "optional"]) {
+      if (Array.isArray(profiles[key]) && profiles[key].includes("remote-assets")) return true;
+    }
+  }
+  return false;
 }
 
 function validateMeta(doc, requestedProfile, diagnostics) {
@@ -153,7 +194,7 @@ function componentNames(doc) {
   return out;
 }
 
-function validateNodes(nodes, ids, refs, components, vars, previousHeading, diagnostics) {
+function validateNodes(nodes, ids, refs, components, vars, previousHeading, diagnostics, allowRemoteAssets) {
   for (const item of nodes) {
     if (item.id !== null) {
       if (!validName(item.id) || new TextEncoder().encode(item.id).length > 256) {
@@ -185,13 +226,14 @@ function validateNodes(nodes, ids, refs, components, vars, previousHeading, diag
       );
     }
     if (item.type === "heading") validateHeading(item, previousHeading, diagnostics);
-    else if (item.type === "image") validateImage(item, diagnostics);
-    else if (["media", "embed", "include"].includes(item.type)) validateAssetNode(item, diagnostics);
+    else if (item.type === "image") validateImage(item, diagnostics, allowRemoteAssets);
+    else if (["media", "embed"].includes(item.type)) validateAssetNode(item, diagnostics, allowRemoteAssets, ReferenceKind.MediaFallback);
+    else if (item.type === "include") validateAssetNode(item, diagnostics, false, ReferenceKind.Include);
     else if (item.type === "table") validateTable(item, diagnostics);
     else if (item.type === "toc") validateToc(item, diagnostics);
     else if (item.type === "style") validateStyleBlock(item, diagnostics);
     collectInlineRefs(item.inlines, refs, vars, diagnostics);
-    validateNodes(item.children, ids, refs, components, vars, previousHeading, diagnostics);
+    validateNodes(item.children, ids, refs, components, vars, previousHeading, diagnostics, allowRemoteAssets);
   }
 }
 
@@ -228,7 +270,7 @@ function validateHeading(item, previousHeading, diagnostics) {
   previousHeading.level = level;
 }
 
-function validateImage(item, diagnostics) {
+function validateImage(item, diagnostics, allowRemoteAssets) {
   if (item.attrs.decorative !== "true" && !(item.attrs.alt ?? "").trim()) {
     diagnostics.push(
       validationDiag(
@@ -239,12 +281,12 @@ function validateImage(item, diagnostics) {
       ),
     );
   }
-  validateAssetNode(item, diagnostics);
+  validateAssetNode(item, diagnostics, allowRemoteAssets, ReferenceKind.Asset);
 }
 
-function validateAssetNode(item, diagnostics) {
+function validateAssetNode(item, diagnostics, allowRemoteAssets, kind) {
   if (typeof item.attrs.src === "string") {
-    const result = classifyUri(ReferenceKind.Asset, item.attrs.src);
+    const result = classifyUri(kind, item.attrs.src, undefined, { remoteAssets: allowRemoteAssets });
     if (!result.ok) {
       diagnostics.push(
         validationDiag("NODX-E008", "error", "Unresolvable asset.", item.attrs.src),
@@ -257,7 +299,9 @@ function validateTable(item, diagnostics) {
   let width = null;
   for (const row of item.children) {
     if (row.type !== "row") continue;
-    const cells = row.children.filter((child) => child.type === "cell").length;
+    const cells = row.children
+      .filter((child) => child.type === "cell")
+      .reduce((sum, child) => sum + cellWidth(child), 0);
     if (width !== null && width !== cells) {
       diagnostics.push(
         validationDiag(
@@ -271,6 +315,11 @@ function validateTable(item, diagnostics) {
       width = cells;
     }
   }
+}
+
+function cellWidth(cell) {
+  const width = Number(cell.attrs?.colspan ?? 1);
+  return Number.isInteger(width) && width > 0 ? width : 1;
 }
 
 function validateToc(item, diagnostics) {
@@ -434,7 +483,8 @@ function validateTocScopes(nodes, ids, diagnostics) {
 
 function collectInlineRefs(inlines, refs, vars, diagnostics) {
   for (const item of inlines) {
-    if (["strong", "em", "mark", "sub", "sup"].includes(item.type)) {
+    if (["strong", "em", "mark", "strike", "sub", "sup"].includes(item.type)) {
+      if (item.type === "mark" && item.attrs) validateInlineAttrs(item.attrs, diagnostics);
       collectInlineRefs(item.children, refs, vars, diagnostics);
     } else if (item.type === "link") {
       const result = classifyUri(ReferenceKind.Link, item.target);
@@ -471,6 +521,22 @@ function collectInlineRefs(inlines, refs, vars, diagnostics) {
     } else if (["ref", "footnote-ref", "citation-ref"].includes(item.type)) {
       refs.push(item.target);
     }
+  }
+}
+
+function validateInlineAttrs(attrs, diagnostics) {
+  if (
+    attrs?.attrs?.dir &&
+    !["ltr", "rtl", "auto"].includes(attrs.attrs.dir)
+  ) {
+    diagnostics.push(
+      validationDiag(
+        "NODX-E004",
+        "error",
+        "Invalid inline dir attribute.",
+        attrs.attrs.dir,
+      ),
+    );
   }
 }
 

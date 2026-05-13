@@ -29,7 +29,7 @@ const ALLOWED_DATA_MIMES = new Set([
   "image/gif",
 ]);
 
-export function classifyUri(kind, raw, limits = DEFAULT_LIMITS) {
+export function classifyUri(kind, raw, limits = DEFAULT_LIMITS, options = {}) {
   const trimmed = trimAsciiWhitespace(raw);
   if (trimmed.length === 0) return { ok: false, error: "empty" };
   if (trimmed.length > limits.urlBytes) return { ok: false, error: "too-long" };
@@ -45,7 +45,7 @@ export function classifyUri(kind, raw, limits = DEFAULT_LIMITS) {
 
   const scheme = schemePrefix(trimmed);
   if (scheme === "error") return { ok: false, error: "unsafe-scheme" };
-  if (scheme !== null) return classifyScheme(kind, trimmed, scheme, limits);
+  if (scheme !== null) return classifyScheme(kind, trimmed, scheme, limits, options);
 
   const path = normalizePackagePath(trimmed, limits);
   if (path === null) return { ok: false, error: "invalid-package-path" };
@@ -81,7 +81,7 @@ export function normalizePackagePath(raw, limits = DEFAULT_LIMITS) {
   return normalized.join("/");
 }
 
-function classifyScheme(kind, raw, scheme, limits) {
+function classifyScheme(kind, raw, scheme, limits, options) {
   if (FORBIDDEN_SCHEMES.has(scheme)) return { ok: false, error: "unsafe-scheme" };
   if (
     kind === ReferenceKind.Link &&
@@ -93,6 +93,13 @@ function classifyScheme(kind, raw, scheme, limits) {
     const mime = validateDataUri(raw, limits);
     if (mime === null) return { ok: false, error: "unsafe-data" };
     return { ok: true, class: { type: "data", value: raw, mime } };
+  }
+  if (
+    options.remoteAssets === true &&
+    [ReferenceKind.Asset, ReferenceKind.MediaFallback].includes(kind) &&
+    ["http", "https"].includes(scheme)
+  ) {
+    return { ok: true, class: { type: "absolute", value: raw, scheme } };
   }
   return { ok: false, error: "unsafe-scheme" };
 }

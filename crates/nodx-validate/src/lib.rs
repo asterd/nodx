@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use nodx_core::{
-    Diagnostic, Document, Inline, Node, ResourceLimits, Value, default_navigation_label,
-    resolve_navigation, valid_name,
+    Diagnostic, Document, Inline, Node, ResourceLimits, Value, canonical_json,
+    default_navigation_label, resolve_navigation, sha256_base64url, valid_name,
 };
 use nodx_style::{audit_stylesheet, yaml_style_to_css};
 use nodx_url::{ReferenceKind, ResourcePolicy};
@@ -24,7 +24,15 @@ pub struct Validator {
 
 impl Default for ProfileSet {
     fn default() -> Self {
-        Self::new(["plain", "core", "rich", "style", "package", "agent-read"])
+        Self::new([
+            "plain",
+            "core",
+            "rich",
+            "style",
+            "package",
+            "agent-read",
+            "remote-assets",
+        ])
     }
 }
 
@@ -82,8 +90,10 @@ impl Validator {
         requested_profile: Option<&str>,
     ) {
         validate_meta(doc, &self.profiles, requested_profile, diagnostics);
+        validate_integrity(doc, diagnostics);
         let declared_components = component_names(doc);
         let declared_vars = declared_vars(doc);
+        let allow_remote_assets = document_allows_remote_assets(doc);
         let mut state = NodeValidationState {
             ids: BTreeSet::new(),
             refs: Vec::new(),
@@ -95,6 +105,7 @@ impl Validator {
             &declared_components,
             &declared_vars,
             self.limits,
+            allow_remote_assets,
             &mut state,
         );
         validate_navigation(doc, &state.ids, state.diagnostics);
@@ -238,6 +249,68 @@ fn is_valid_theme(theme: &str) -> bool {
         && !theme.contains('\\'))
 }
 
+pub fn document_allows_remote_assets(doc: &Document) -> bool {
+    if let Some(Value::Map(features)) = doc.meta.get("features")
+        && matches!(features.get("remote-assets"), Some(Value::Bool(true)))
+    {
+        return true;
+    }
+    if let Some(Value::Map(profiles)) = doc.meta.get("profiles") {
+        for key in ["requires", "optional"] {
+            if let Some(Value::List(items)) = profiles.get(key)
+                && items.iter().any(
+                    |item| matches!(item, Value::String(profile) if profile == "remote-assets"),
+                )
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn validate_integrity(doc: &Document, diagnostics: &mut Vec<Diagnostic>) {
+    let Some(Value::Map(integrity)) = doc.meta.get("integrity") else {
+        return;
+    };
+    let alg = match integrity.get("alg") {
+        Some(Value::String(alg)) => alg.as_str(),
+        _ => "",
+    };
+    let scope = match integrity.get("scope") {
+        Some(Value::String(scope)) => scope.as_str(),
+        _ => "canonical-ast",
+    };
+    let value = match integrity.get("value") {
+        Some(Value::String(value)) => value.as_str(),
+        _ => "",
+    };
+    if alg != "sha256" || scope != "canonical-ast" || !value.starts_with("sha256-") {
+        diagnostics.push(validation_diag(
+            "NODX-E028",
+            "error",
+            "Invalid integrity declaration.",
+            "integrity",
+        ));
+        return;
+    }
+    let expected = integrity_digest(doc);
+    if value != expected {
+        diagnostics.push(validation_diag(
+            "NODX-E028",
+            "error",
+            "Document integrity digest does not match.",
+            "integrity",
+        ));
+    }
+}
+
+pub fn integrity_digest(doc: &Document) -> String {
+    let mut unsigned = doc.clone();
+    unsigned.meta.remove("integrity");
+    sha256_base64url(canonical_json(&unsigned).as_bytes())
+}
+
 fn validate_required_profile(
     profile: &str,
     profiles: &ProfileSet,
@@ -288,6 +361,7 @@ fn validate_nodes(
     components: &BTreeSet<String>,
     vars: &BTreeSet<String>,
     limits: ResourceLimits,
+    allow_remote_assets: bool,
     state: &mut NodeValidationState<'_>,
 ) {
     for node in nodes {
@@ -324,8 +398,21 @@ fn validate_nodes(
         }
         match node.node_type.as_str() {
             "heading" => validate_heading(node, &mut state.previous_heading, state.diagnostics),
-            "image" => validate_image(node, state.diagnostics, limits),
-            "media" | "embed" | "include" => validate_asset_node(node, state.diagnostics, limits),
+            "image" => validate_image(node, state.diagnostics, limits, allow_remote_assets),
+            "media" | "embed" => validate_asset_node(
+                node,
+                state.diagnostics,
+                limits,
+                allow_remote_assets,
+                ReferenceKind::MediaFallback,
+            ),
+            "include" => validate_asset_node(
+                node,
+                state.diagnostics,
+                limits,
+                false,
+                ReferenceKind::Include,
+            ),
             "table" => validate_table(node, state.diagnostics),
             "toc" => validate_toc(node, state.diagnostics),
             "style" => validate_style_block(node, state.diagnostics, limits),
@@ -338,7 +425,14 @@ fn validate_nodes(
             state.diagnostics,
             limits,
         );
-        validate_nodes(&node.children, components, vars, limits, state);
+        validate_nodes(
+            &node.children,
+            components,
+            vars,
+            limits,
+            allow_remote_assets,
+            state,
+        );
     }
 }
 
@@ -387,7 +481,12 @@ fn validate_heading(node: &Node, previous_heading: &mut usize, diagnostics: &mut
     *previous_heading = level;
 }
 
-fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
+fn validate_image(
+    node: &Node,
+    diagnostics: &mut Vec<Diagnostic>,
+    limits: ResourceLimits,
+    allow_remote_assets: bool,
+) {
     let decorative = node.attrs.get("decorative").map(String::as_str) == Some("true");
     let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
     if !decorative && alt.trim().is_empty() {
@@ -398,13 +497,26 @@ fn validate_image(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: Resour
             node.id.as_deref().unwrap_or("image"),
         ));
     }
-    validate_asset_node(node, diagnostics, limits);
+    validate_asset_node(
+        node,
+        diagnostics,
+        limits,
+        allow_remote_assets,
+        ReferenceKind::Asset,
+    );
 }
 
-fn validate_asset_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, limits: ResourceLimits) {
+fn validate_asset_node(
+    node: &Node,
+    diagnostics: &mut Vec<Diagnostic>,
+    limits: ResourceLimits,
+    allow_remote_assets: bool,
+    kind: ReferenceKind,
+) {
     if let Some(src) = node.attrs.get("src")
         && ResourcePolicy::new(limits)
-            .classify_uri(ReferenceKind::Asset, src)
+            .with_remote_assets(allow_remote_assets)
+            .classify_uri(kind, src)
             .is_err()
     {
         diagnostics.push(validation_diag(
@@ -725,7 +837,7 @@ mod tests {
 
     use nodx_core::parse_str;
 
-    use super::{ProfileSet, Validator, diagnostics_json, exit_code_for};
+    use super::{ProfileSet, Validator, diagnostics_json, exit_code_for, integrity_digest};
 
     #[test]
     fn unsupported_required_profile_exits_three() {
@@ -762,6 +874,39 @@ mod tests {
         let diagnostics = Validator::default().validate(&doc);
         assert!(diagnostics.iter().any(|d| d.code == "NODX-E023"));
         assert_eq!(exit_code_for(&diagnostics), 0);
+    }
+
+    #[test]
+    fn remote_assets_profile_allows_remote_media() {
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nprofiles:\n  optional:\n    - remote-assets\n---\n\n:::image {src=\"https://example.test/a.png\" alt=\"A\"}\n:::\n\n:::media {src=\"https://example.test/a.mp4\" alt=\"A\"}\n:::\n",
+        );
+        let diagnostics = Validator::default().validate(&doc);
+        assert!(!diagnostics.iter().any(|d| d.code == "NODX-E008"));
+    }
+
+    #[test]
+    fn integrity_digest_is_verified_excluding_integrity_header() {
+        let mut doc = parse_str("---\nschema: nodx/1.0\n---\n\n# A\n");
+        let digest = integrity_digest(&doc);
+        let mut integrity = std::collections::BTreeMap::new();
+        integrity.insert(
+            "alg".to_string(),
+            nodx_core::Value::String("sha256".to_string()),
+        );
+        integrity.insert(
+            "scope".to_string(),
+            nodx_core::Value::String("canonical-ast".to_string()),
+        );
+        integrity.insert("value".to_string(), nodx_core::Value::String(digest));
+        doc.meta
+            .insert("integrity".to_string(), nodx_core::Value::Map(integrity));
+        assert!(Validator::default().validate(&doc).is_empty());
+        doc.body[0]
+            .attrs
+            .insert("class".to_string(), "changed".to_string());
+        let diagnostics = Validator::default().validate(&doc);
+        assert!(diagnostics.iter().any(|d| d.code == "NODX-E028"));
     }
 
     #[test]

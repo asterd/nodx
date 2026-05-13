@@ -16,8 +16,9 @@ FORBIDDEN_SCHEMES = {"javascript", "vbscript", "file", "jar", "chrome", "about"}
 ALLOWED_DATA_MIMES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 
 
-def classify_uri(kind, raw, limits=None):
+def classify_uri(kind, raw, limits=None, options=None):
     limits = limits or DEFAULT_LIMITS
+    options = options or {}
     trimmed = trim_ascii_whitespace(raw)
     if len(trimmed) == 0:
         return {"ok": False, "error": "empty"}
@@ -35,7 +36,7 @@ def classify_uri(kind, raw, limits=None):
     if scheme == "error":
         return {"ok": False, "error": "unsafe-scheme"}
     if scheme is not None:
-        return classify_scheme(kind_value, trimmed, scheme, limits)
+        return classify_scheme(kind_value, trimmed, scheme, limits, options)
     path = normalize_package_path(trimmed, limits)
     if path is None:
         return {"ok": False, "error": "invalid-package-path"}
@@ -69,7 +70,7 @@ def normalize_package_path(raw, limits=None):
     return "/".join(normalized)
 
 
-def classify_scheme(kind, raw, scheme, limits):
+def classify_scheme(kind, raw, scheme, limits, options):
     if scheme in FORBIDDEN_SCHEMES:
         return {"ok": False, "error": "unsafe-scheme"}
     if kind == ReferenceKind.Link.value and scheme in ("http", "https", "mailto", "tel"):
@@ -79,6 +80,8 @@ def classify_scheme(kind, raw, scheme, limits):
         if mime is None:
             return {"ok": False, "error": "unsafe-data"}
         return {"ok": True, "class": {"type": "data", "value": raw, "mime": mime}}
+    if options.get("remoteAssets") is True and kind in (ReferenceKind.Asset.value, ReferenceKind.MediaFallback.value) and scheme in ("http", "https"):
+        return {"ok": True, "class": {"type": "absolute", "value": raw, "scheme": scheme}}
     return {"ok": False, "error": "unsafe-scheme"}
 
 

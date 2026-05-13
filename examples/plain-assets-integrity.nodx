@@ -1,0 +1,32 @@
+---
+schema: nodx/1.0
+title: Plain assets and integrity
+theme: web
+features:
+  remote-assets: true
+integrity:
+  alg: sha256
+  scope: canonical-ast
+  value: sha256-nBxstUqgeDufW3CZPtSpWhp-zfOsAU9qkQGzW72BHMk
+---
+
+# Plain assets and integrity #plain-assets
+
+Plain NODX can reference local assets while it remains easy to diff.
+
+:::image {src="assets/pipeline.svg" alt="Reference pipeline"}
+:::
+
+:::image {src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Inline pixel"}
+:::
+
+Remote assets are explicit and host-gated.
+
+:::image {src="https://example.test/chart.png" alt="Remote chart preview"}
+:::
+
+:::media {src="https://example.test/demo.mp4" alt="Remote demo video"}
+:::media-fallback
+Video transcript fallback.
+:::
+:::

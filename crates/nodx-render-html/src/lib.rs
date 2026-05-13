@@ -51,7 +51,8 @@ pub fn render_fragment(doc: &Document) -> String {
 
 pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> String {
     let navigation = resolve_navigation(doc);
-    let policy = ResourcePolicy::new(options.limits);
+    let remote_assets = document_allows_remote_assets(doc);
+    let policy = ResourcePolicy::new(options.limits).with_remote_assets(remote_assets);
     let body = render_body(doc, &navigation, policy);
     if !options.standalone {
         return body;
@@ -100,7 +101,15 @@ pub fn render_html_with_options(doc: &Document, options: RenderOptions) -> Strin
     out.push_str(&html_attrs);
     out.push_str("><meta charset=\"utf-8\">");
     if options.include_csp {
-        out.push_str("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data:; style-src 'sha256-");
+        out.push_str("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data:");
+        if remote_assets {
+            out.push_str(" http: https:");
+        }
+        out.push_str("; media-src 'self'");
+        if remote_assets {
+            out.push_str(" http: https:");
+        }
+        out.push_str("; style-src 'sha256-");
         out.push_str(&style_hashes.join("' 'sha256-"));
         out.push('\'');
         if !inline_style_hashes.is_empty() {
@@ -182,6 +191,26 @@ fn derive_title(nodes: &[Node]) -> Option<String> {
         }
     }
     None
+}
+
+fn document_allows_remote_assets(doc: &Document) -> bool {
+    if let Some(Value::Map(features)) = doc.meta.get("features")
+        && matches!(features.get("remote-assets"), Some(Value::Bool(true)))
+    {
+        return true;
+    }
+    if let Some(Value::Map(profiles)) = doc.meta.get("profiles") {
+        for key in ["requires", "optional"] {
+            if let Some(Value::List(items)) = profiles.get(key)
+                && items.iter().any(
+                    |item| matches!(item, Value::String(profile) if profile == "remote-assets"),
+                )
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn base_stylesheet(doc: &Document) -> String {
@@ -450,7 +479,20 @@ fn render_node(
         "media" | "embed" => {
             out.push_str("<figure");
             out.push_str(&html_id(node));
-            out.push_str("><div class=\"media-fallback\">");
+            out.push('>');
+            let safe_src = node
+                .attrs
+                .get("src")
+                .and_then(|src| policy.classify_uri(ReferenceKind::MediaFallback, src).ok())
+                .map(|uri| uri.raw);
+            if node.node_type == "media"
+                && let Some(src) = &safe_src
+            {
+                out.push_str("<video controls src=\"");
+                escape_attr(out, src);
+                out.push_str("\"></video>");
+            }
+            out.push_str("<div class=\"media-fallback\">");
             escape_html(
                 out,
                 node.attrs
@@ -458,16 +500,9 @@ fn render_node(
                     .map(String::as_str)
                     .unwrap_or(&node.node_type),
             );
-            if let Some(src) = node.attrs.get("src")
-                && (ResourcePolicy::new(policy.limits())
-                    .classify_uri(ReferenceKind::MediaFallback, src)
-                    .is_ok()
-                    || ResourcePolicy::new(policy.limits())
-                        .classify_uri(ReferenceKind::Asset, src)
-                        .is_ok())
-            {
+            if let Some(src) = safe_src {
                 out.push_str(" - ");
-                escape_html(out, src);
+                escape_html(out, &src);
             }
             out.push_str("</div>");
             for (i, child) in node.children.iter().enumerate() {
@@ -1534,6 +1569,18 @@ mod tests {
         // Blocked link/image markers must be present
         assert!(html.contains("nodx-blocked-link"));
         assert!(html.contains("nodx-blocked-image"));
+    }
+
+    #[test]
+    fn remote_assets_render_when_declared() {
+        let doc = parse_str(
+            "---\nschema: nodx/1.0\nfeatures:\n  remote-assets: true\n---\n\n:::image {src=\"https://example.test/a.png\" alt=\"A\"}\n:::\n\n:::media {src=\"https://example.test/a.mp4\" alt=\"A\"}\n:::\n",
+        );
+        let html = render_html(&doc);
+        assert!(html.contains("src=\"https://example.test/a.png\""));
+        assert!(html.contains("<video controls src=\"https://example.test/a.mp4\""));
+        assert!(html.contains("img-src 'self' data: http: https:"));
+        assert!(html.contains("media-src 'self' http: https:"));
     }
 
     #[test]

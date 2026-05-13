@@ -34,6 +34,7 @@
     "onCommand:nodx.openPreviewToSide",
     "onCommand:nodx.openSemanticPreview",
     "onCommand:nodx.showInfo",
+    "onCommand:nodx.enableRemoteAssets",
     "onCommand:nodx.createPlain",
     "onCommand:nodx.createPackage"
   ],
@@ -93,6 +94,11 @@
         "icon": "$(info)"
       },
       {
+        "command": "nodx.enableRemoteAssets",
+        "title": "Enable Remote Asset Sources",
+        "icon": "$(radio-tower)"
+      },
+      {
         "command": "nodx.createPlain",
         "title": "New NODX File",
         "icon": "$(new-file)"
@@ -119,6 +125,11 @@
           "command": "nodx.showInfo",
           "when": "resourceExtname == .nodx",
           "group": "navigation@3"
+        },
+        {
+          "command": "nodx.enableRemoteAssets",
+          "when": "resourceExtname == .nodx",
+          "group": "navigation@4"
         }
       ],
       "explorer/context": [

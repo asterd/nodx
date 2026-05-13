@@ -14,7 +14,7 @@ def render_fragment(doc, options=None):
     stylesheets = list(doc.get("meta", {}).get("stylesheets") or []) + list(options.get("stylesheets", []))
     extra_styles = "".join("<style>" + sanitize_stylesheet(css) + "</style>" for css in stylesheets)
     component_styles = "".join("<style>" + sanitize_stylesheet(item["style"]) + "</style>" for item in component_definitions(doc) if isinstance(item.get("style"), str))
-    render_options = {**options, "doc": doc}
+    render_options = {**options, "doc": doc, "remoteAssets": document_allows_remote_assets(doc)}
     return extra_styles + component_styles + "".join(render_node(node, str(index), navigation, render_options) for index, node in enumerate(doc["body"]))
 
 
@@ -314,7 +314,7 @@ def render_image(node, options):
     alt = node["attrs"].get("alt", "")
     raw = node["attrs"].get("src", "")
     resolver = options.get("assetResolver") or options.get("asset_resolver")
-    src = resolver(raw, node) if resolver else safe_image_url(raw)
+    src = resolver(raw, node) if resolver else safe_image_url(raw, options.get("remoteAssets") is True)
     if not src:
         return '<span class="nodx-blocked-image">' + escape_html(alt or "blocked image") + "</span>"
     return '<img src="' + escape_attr(src) + '" alt="' + escape_attr(alt) + '">'
@@ -333,8 +333,10 @@ def render_toc(node, path, navigation):
 def render_media_fallback(node, path, navigation, options):
     raw = node["attrs"].get("src", "")
     text_resolver = options.get("textAssetResolver") or options.get("text_asset_resolver")
-    text = text_resolver(raw) if node["type"] == "include" and text_resolver else (node["attrs"].get("alt") or node["type"]) + (" - " + raw if raw else "")
-    return "<figure" + html_attrs(node) + '><div class="media-fallback">' + escape_html(text) + "</div>" + render_children(node, path, navigation, options) + "</figure>"
+    src = safe_media_url(raw, options.get("remoteAssets") is True)
+    video = '<video controls src="' + escape_attr(src) + '"></video>' if node["type"] == "media" and src else ""
+    text = text_resolver(raw) if node["type"] == "include" and text_resolver else (node["attrs"].get("alt") or node["type"]) + (" - " + src if src else "")
+    return "<figure" + html_attrs(node) + ">" + video + '<div class="media-fallback">' + escape_html(text) + "</div>" + render_children(node, path, navigation, options) + "</figure>"
 
 
 def render_inlines(inlines, options=None):
@@ -512,8 +514,24 @@ def safe_link_url(raw):
     return raw if classify_uri(ReferenceKind.Link, raw)["ok"] else None
 
 
-def safe_image_url(raw):
-    return raw if classify_uri(ReferenceKind.Asset, raw)["ok"] else None
+def safe_image_url(raw, remote_assets=False):
+    return raw if classify_uri(ReferenceKind.Asset, raw, options={"remoteAssets": remote_assets})["ok"] else None
+
+
+def safe_media_url(raw, remote_assets=False):
+    return raw if classify_uri(ReferenceKind.MediaFallback, raw, options={"remoteAssets": remote_assets})["ok"] else None
+
+
+def document_allows_remote_assets(doc):
+    features = doc.get("meta", {}).get("features")
+    if isinstance(features, dict) and features.get("remote-assets") is True:
+        return True
+    profiles = doc.get("meta", {}).get("profiles")
+    if isinstance(profiles, dict):
+        for key in ("requires", "optional"):
+            if isinstance(profiles.get(key), list) and "remote-assets" in profiles[key]:
+                return True
+    return False
 
 
 def child_path(prefix, index):

@@ -119,11 +119,14 @@ cp doc.nodx.sig examples/release-bundle/
 python3 scripts/build_package.py examples/release-bundle
 ```
 
-The receiving side:
+The receiving side can validate the package envelope and manifest digests:
 
 ```sh
-nodx package verify release-bundle.nodx --signature release-bundle.nodx.sig
+nodx package verify release-bundle.nodx
 ```
+
+Signature verification is currently an experimental library API in
+`nodx-sign`, not a stable CLI subcommand.
 
 ## Render a multi-page report to PDF (preview)
 

@@ -47,6 +47,7 @@ handle this document* from *the document is wrong*.
 | `NODX-E025` | error | validator | Pipe table grid has inconsistent column counts. |
 | `NODX-E026` | warning | renderer | A capability used by the document is not supported in the active renderer. |
 | `NODX-E027` | error | style | NODS stylesheet contains a forbidden construct; the rule is dropped. |
+| `NODX-E028` | error | validator | Front matter `integrity` is malformed or does not match the canonical AST digest. |
 
 > Codes E011, E015 are reserved for future use and intentionally absent
 > from the emitter map. Do not assume a contiguous range.

@@ -89,6 +89,61 @@ This release shipped on **2026-05-11**.
 Use this form when the document needs an explicit contract — for CI, for
 agents, or for archival.
 
+## Referencing assets
+
+Plain text NODX can reference local assets with safe relative paths:
+
+```nodx
+:::image {src="assets/chart.png" alt="Revenue chart"}
+:::
+
+:::media {src="media/demo.mp4" alt="Product demo"}
+:::media-fallback
+Demo transcript.
+:::
+:::
+```
+
+The parser only validates the path shape. A renderer or host resolves the path
+relative to the source document or to the package root. Image `src` may also be
+a safe static image data URI (`png`, `jpeg`, `webp`, or `gif`).
+
+Remote image and media URLs are opt-in:
+
+```yaml
+features:
+  remote-assets: true
+```
+
+or:
+
+```yaml
+profiles:
+  optional:
+    - remote-assets
+```
+
+Even then, NODX libraries do not fetch the network. They only preserve safe
+`http`/`https` URLs for a host renderer that explicitly allows them. For
+distribution, prefer packaging or freezing assets into a `.nodx` ZIP.
+
+## Light integrity
+
+Plain text documents can carry a lightweight integrity digest in front matter:
+
+```yaml
+integrity:
+  alg: sha256
+  scope: canonical-ast
+  value: sha256-...
+```
+
+The digest is computed from the Canonical AST with the `integrity` field
+itself excluded. Run `nodx integrity doc.nodx` to compute the value, insert it,
+and then `nodx validate doc.nodx` will report `NODX-E028` if later edits change
+the document. This is tamper evidence for tools and editors, not identity or
+DRM; signed/certified distribution belongs in the package Signature profile.
+
 ## Use stable ids
 
 Heading auto-slugs are convenient but fragile: renaming a section silently

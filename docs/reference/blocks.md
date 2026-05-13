@@ -39,7 +39,7 @@ if the names disagree.
 | `figure` | `<figure>` | Wraps an `image`, `code`, or other media plus an optional `caption`. |
 | `caption` | `<figcaption>` | Only valid inside `figure`. |
 | `image` | `<img>` or `<span class="nodx-blocked-image">` | Required `src` and `alt`. Unsafe URLs are blocked, not silently rewritten. |
-| `media` | `<figure class="media-fallback">` | Future-facing media block. Renders a fallback for now. |
+| `media` | `<video>` plus fallback when `src` is safe | Video/media block. Local paths are allowed; remote URLs require `remote-assets`. |
 | `embed` | `<figure class="media-fallback">` | Same fallback shape; reserved. |
 | `include` | `<figure class="media-fallback">` | Reserved for include extensions. Core renderer does not fetch. |
 | `table` | `<table>` | Either authored as a block or implicitly via pipe-table syntax. |

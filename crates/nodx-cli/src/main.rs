@@ -7,7 +7,7 @@ use nodx_export::{ExportFormat, export_document, loss_report_json};
 use nodx_ncp::{ncp_json, semantic_text};
 use nodx_package::{Package, apply_package_extensions};
 use nodx_render_html::{RenderOptions, render_html_with_options};
-use nodx_validate::{ProfileSet, Validator, diagnostics_json, exit_code_for};
+use nodx_validate::{ProfileSet, Validator, diagnostics_json, exit_code_for, integrity_digest};
 
 const USAGE: &str = concat!(
     "nodx 1.0\n",
@@ -21,6 +21,7 @@ const USAGE: &str = concat!(
     "  nodx tui <file>\n",
     "  nodx ncp <file> [--mode semantic]\n",
     "  nodx semantic <file>\n",
+    "  nodx integrity <file>\n",
     "  nodx package inspect <file>\n",
     "  nodx package verify <file>\n",
     "  nodx export pdf|docx|pptx <file> -o <out>   (unstable preview)\n",
@@ -133,6 +134,15 @@ fn document_command(command: &str, rest: &[String]) -> i32 {
             };
             print!("{}", semantic_text(&doc));
             diagnostic_exit_code(&doc)
+        }
+        "integrity" => {
+            reject_irrelevant(&options, &[]);
+            let doc = match load_document(&bytes) {
+                Ok(doc) => doc,
+                Err(code) => return code,
+            };
+            println!("{}", integrity_digest(&doc));
+            0
         }
         "diagnostics" => {
             reject_irrelevant(&options, &["format"]);

@@ -7,10 +7,11 @@ export const THEME_NAMES = ["none", "plain", "base", "web", "print", "presentati
 
 export function renderFragment(doc, options = {}) {
   const navigation = resolveNavigation(doc);
+  const renderOptions = { ...options, remoteAssets: documentAllowsRemoteAssets(doc) };
   const stylesheets = [...(Array.isArray(doc.meta.stylesheets) ? doc.meta.stylesheets : []), ...(options.stylesheets ?? [])];
   const extraStyles = stylesheets.map((css) => `<style>${sanitizeStylesheet(css)}</style>`).join("");
   const componentStyles = componentDefinitions(doc).map((def) => def.style ? `<style>${sanitizeStylesheet(def.style)}</style>` : "").join("");
-  return extraStyles + componentStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, { ...options, doc })).join("");
+  return extraStyles + componentStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, { ...renderOptions, doc })).join("");
 }
 
 export function renderHtml(doc, options = {}) {
@@ -350,7 +351,7 @@ function renderStyle(node) {
 function renderImage(node, options) {
   const alt = node.attrs.alt ?? "";
   const raw = node.attrs.src ?? "";
-  const src = options.assetResolver?.(raw, node) ?? safeImageUrl(raw);
+  const src = options.assetResolver?.(raw, node) ?? safeImageUrl(raw, options.remoteAssets);
   if (!src) return `<span class="nodx-blocked-image">${escapeHtml(alt || "blocked image")}</span>`;
   return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
 }
@@ -367,8 +368,10 @@ function renderToc(node, path, navigation) {
 
 function renderMediaFallback(node, path, navigation, options) {
   const raw = node.attrs.src ?? "";
-  const text = node.type === "include" && options.textAssetResolver?.(raw) ? options.textAssetResolver(raw) : `${node.attrs.alt ?? node.type}${raw ? " - " + raw : ""}`;
-  return `<figure${htmlAttrs(node)}><div class="media-fallback">${escapeHtml(text)}</div>${renderChildren(node, path, navigation, options)}</figure>`;
+  const src = safeMediaUrl(raw, options.remoteAssets);
+  const video = node.type === "media" && src ? `<video controls src="${escapeAttr(src)}"></video>` : "";
+  const text = node.type === "include" && options.textAssetResolver?.(raw) ? options.textAssetResolver(raw) : `${node.attrs.alt ?? node.type}${src ? " - " + src : ""}`;
+  return `<figure${htmlAttrs(node)}>${video}<div class="media-fallback">${escapeHtml(text)}</div>${renderChildren(node, path, navigation, options)}</figure>`;
 }
 
 function renderInlines(inlines, options) {
@@ -446,7 +449,7 @@ function pageStylesheet(doc) {
 }
 
 function safeBackgroundImageCss(raw) {
-  if (typeof raw !== "string" || !safeImageUrl(raw) || /['"()\\]/.test(raw)) return "";
+  if (typeof raw !== "string" || !safeImageUrl(raw, false) || /['"()\\]/.test(raw)) return "";
   return `background-image:url('${raw}')`;
 }
 
@@ -501,8 +504,24 @@ function safeLinkUrl(raw) {
   return classifyUri(ReferenceKind.Link, raw).ok ? raw : null;
 }
 
-function safeImageUrl(raw) {
-  return classifyUri(ReferenceKind.Asset, raw).ok ? raw : null;
+function safeImageUrl(raw, remoteAssets = false) {
+  return classifyUri(ReferenceKind.Asset, raw, undefined, { remoteAssets }).ok ? raw : null;
+}
+
+function safeMediaUrl(raw, remoteAssets = false) {
+  return classifyUri(ReferenceKind.MediaFallback, raw, undefined, { remoteAssets }).ok ? raw : null;
+}
+
+function documentAllowsRemoteAssets(doc) {
+  const features = doc.meta?.features;
+  if (features && typeof features === "object" && !Array.isArray(features) && features["remote-assets"] === true) return true;
+  const profiles = doc.meta?.profiles;
+  if (profiles && typeof profiles === "object" && !Array.isArray(profiles)) {
+    for (const key of ["requires", "optional"]) {
+      if (Array.isArray(profiles[key]) && profiles[key].includes("remote-assets")) return true;
+    }
+  }
+  return false;
 }
 
 function childPath(prefix, index) {

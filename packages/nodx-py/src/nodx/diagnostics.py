@@ -1,12 +1,14 @@
 import json
 import re
 
+from .bytes import sha256_base64_url
+from .canonical import canonical_json
 from .navigation import default_navigation_label
 from .nods import audit_stylesheet
 from .url import ReferenceKind, classify_uri
 
 SCHEMA_1_0 = "nodx/1.0"
-SUPPORTED_PROFILES = {"plain", "core", "rich", "style", "package", "agent-read"}
+SUPPORTED_PROFILES = {"plain", "core", "rich", "style", "package", "agent-read", "remote-assets"}
 
 
 def diag(code, severity, message, line, column, target=None):
@@ -39,17 +41,50 @@ def exit_code_for(diagnostics):
 def validate(doc, requested_profile=None):
     diagnostics = list(doc["diagnostics"])
     validate_meta(doc, requested_profile, diagnostics)
+    validate_integrity(doc, diagnostics)
     components = component_names(doc)
     vars_ = set(doc["meta"].get("vars", {}).keys()) if isinstance(doc["meta"].get("vars"), dict) else set()
     ids = set()
     refs = []
     previous_heading = {"level": 0}
-    validate_nodes(doc["body"], ids, refs, components, vars_, previous_heading, diagnostics)
+    validate_nodes(doc["body"], ids, refs, components, vars_, previous_heading, diagnostics, document_allows_remote_assets(doc))
     validate_toc_scopes(doc["body"], ids, diagnostics)
     for target in refs:
         if target not in ids:
             diagnostics.append(validation_diag("NODX-E007", "error", "Unresolved reference `#" + target + "`.", "#" + target))
     return diagnostics
+
+
+def integrity_digest(doc):
+    unsigned = dict(doc)
+    unsigned["meta"] = {k: v for k, v in doc["meta"].items() if k != "integrity"}
+    return sha256_base64_url(canonical_json(unsigned))
+
+
+def validate_integrity(doc, diagnostics):
+    integrity = doc["meta"].get("integrity")
+    if not isinstance(integrity, dict):
+        return
+    alg = integrity.get("alg") if isinstance(integrity.get("alg"), str) else ""
+    scope = integrity.get("scope") if isinstance(integrity.get("scope"), str) else "canonical-ast"
+    value = integrity.get("value") if isinstance(integrity.get("value"), str) else ""
+    if alg != "sha256" or scope != "canonical-ast" or not value.startswith("sha256-"):
+        diagnostics.append(validation_diag("NODX-E028", "error", "Invalid integrity declaration.", "integrity"))
+        return
+    if value != integrity_digest(doc):
+        diagnostics.append(validation_diag("NODX-E028", "error", "Document integrity digest does not match.", "integrity"))
+
+
+def document_allows_remote_assets(doc):
+    features = doc["meta"].get("features")
+    if isinstance(features, dict) and features.get("remote-assets") is True:
+        return True
+    profiles = doc["meta"].get("profiles")
+    if isinstance(profiles, dict):
+        for key in ("requires", "optional"):
+            if isinstance(profiles.get(key), list) and "remote-assets" in profiles[key]:
+                return True
+    return False
 
 
 def validate_meta(doc, requested_profile, diagnostics):
@@ -95,7 +130,7 @@ def component_names(doc):
     return out
 
 
-def validate_nodes(nodes, ids, refs, components, vars_, previous_heading, diagnostics):
+def validate_nodes(nodes, ids, refs, components, vars_, previous_heading, diagnostics, allow_remote_assets):
     for item in nodes:
         if item["id"] is not None:
             if not valid_name(item["id"]) or len(item["id"].encode("utf-8")) > 256:
@@ -109,9 +144,11 @@ def validate_nodes(nodes, ids, refs, components, vars_, previous_heading, diagno
         if item["type"] == "heading":
             validate_heading(item, previous_heading, diagnostics)
         elif item["type"] == "image":
-            validate_image(item, diagnostics)
-        elif item["type"] in ("media", "embed", "include"):
-            validate_asset_node(item, diagnostics)
+            validate_image(item, diagnostics, allow_remote_assets)
+        elif item["type"] in ("media", "embed"):
+            validate_asset_node(item, diagnostics, allow_remote_assets, ReferenceKind.MediaFallback)
+        elif item["type"] == "include":
+            validate_asset_node(item, diagnostics, False, ReferenceKind.Include)
         elif item["type"] == "table":
             validate_table(item, diagnostics)
         elif item["type"] == "toc":
@@ -119,7 +156,7 @@ def validate_nodes(nodes, ids, refs, components, vars_, previous_heading, diagno
         elif item["type"] == "style":
             validate_style_block(item, diagnostics)
         collect_inline_refs(item["inlines"], refs, vars_, diagnostics)
-        validate_nodes(item["children"], ids, refs, components, vars_, previous_heading, diagnostics)
+        validate_nodes(item["children"], ids, refs, components, vars_, previous_heading, diagnostics, allow_remote_assets)
 
 
 def validate_common_attrs(item, diagnostics):
@@ -136,14 +173,14 @@ def validate_heading(item, previous_heading, diagnostics):
     previous_heading["level"] = level
 
 
-def validate_image(item, diagnostics):
+def validate_image(item, diagnostics, allow_remote_assets):
     if item["attrs"].get("decorative") != "true" and not item["attrs"].get("alt", "").strip():
         diagnostics.append(validation_diag("NODX-E009", "error", "Informative image requires non-empty alt text.", item["id"] or "image"))
-    validate_asset_node(item, diagnostics)
+    validate_asset_node(item, diagnostics, allow_remote_assets, ReferenceKind.Asset)
 
 
-def validate_asset_node(item, diagnostics):
-    if isinstance(item["attrs"].get("src"), str) and not classify_uri(ReferenceKind.Asset, item["attrs"]["src"])["ok"]:
+def validate_asset_node(item, diagnostics, allow_remote_assets, kind):
+    if isinstance(item["attrs"].get("src"), str) and not classify_uri(kind, item["attrs"]["src"], options={"remoteAssets": allow_remote_assets})["ok"]:
         diagnostics.append(validation_diag("NODX-E008", "error", "Unresolvable asset.", item["attrs"]["src"]))
 
 

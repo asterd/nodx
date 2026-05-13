@@ -78,6 +78,13 @@ export const examples = [
   },
   {
     group: "Integration",
+    id: "remote-assets",
+    label: "Remote assets",
+    kind: "file",
+    path: "../../examples/playground/15-remote-assets.nodx",
+  },
+  {
+    group: "Integration",
     id: "remote-styles",
     label: "Remote styles",
     kind: "file",

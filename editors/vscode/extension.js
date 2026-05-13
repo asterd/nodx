@@ -38,6 +38,7 @@ function activate(context) {
     vscode.commands.registerCommand("nodx.openPreviewToSide", openPreviewToSide),
     vscode.commands.registerCommand("nodx.openSemanticPreview", openSemanticPreview),
     vscode.commands.registerCommand("nodx.showInfo", showInfoForActiveDocument),
+    vscode.commands.registerCommand("nodx.enableRemoteAssets", enableRemoteAssetsForActiveDocument),
     vscode.commands.registerCommand("nodx.createPlain", createPlainDocument),
     vscode.commands.registerCommand("nodx.createPackage", createPackageDocument),
   );
@@ -100,6 +101,11 @@ class NodxEditorProvider {
           if (result) document.mode = "source";
           await refresh();
           if (result) webviewPanel.webview.postMessage({ type: "assetAdded", asset: result });
+        }
+        if (message.type === "enableRemoteAssets") {
+          await document.enableRemoteAssets();
+          document.mode = "source";
+          await refresh();
         }
         if (message.type === "save") await vscode.commands.executeCommand("workbench.action.files.save");
       } catch (error) {
@@ -289,6 +295,12 @@ class NodxDocument {
     const name = basenameFromUrl(url, response.headers.get("content-type"));
     const assetPath = this.addHiddenAsset(name, bytes);
     return this.assetInsertResult(assetPath);
+  }
+
+  async enableRemoteAssets() {
+    const next = ensureRemoteAssetsFeature(this.entryText());
+    if (next === this.entryText()) return;
+    await this.updateFile(this.entryPath, next);
   }
 
   addHiddenAsset(name, bytes) {
@@ -621,11 +633,52 @@ async function showInfoForActiveDocument(uri) {
   vscode.window.showInformationMessage(formatInfoSummary(info), { modal: true });
 }
 
+async function enableRemoteAssetsForActiveDocument(uri) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== "nodx") {
+    const target = uri ?? editor?.document.uri;
+    if (!target) {
+      vscode.window.showWarningMessage("Open a NODX source document to enable remote asset sources.");
+      return;
+    }
+    const bytes = await vscode.workspace.fs.readFile(target);
+    await vscode.workspace.fs.writeFile(target, textEncoder.encode(ensureRemoteAssetsFeature(textDecoder.decode(bytes))));
+    return;
+  }
+  const fullRange = new vscode.Range(
+    editor.document.positionAt(0),
+    editor.document.positionAt(editor.document.getText().length),
+  );
+  await editor.edit((edit) => edit.replace(fullRange, ensureRemoteAssetsFeature(editor.document.getText())));
+}
+
 async function createPlainDocument() {
   const uri = await vscode.window.showSaveDialog({ filters: { NODX: ["nodx"] }, saveLabel: "Create plain NODX" });
   if (!uri) return;
   await vscode.workspace.fs.writeFile(uri, textEncoder.encode(plainTemplate()));
   await vscode.commands.executeCommand("vscode.openWith", uri, "default");
+}
+
+function ensureRemoteAssetsFeature(text) {
+  if (/^\s*remote-assets:\s*true\s*$/m.test(text)) return text;
+  if (/^(\s*)remote-assets:\s*false\s*$/m.test(text)) {
+    return text.replace(/^(\s*)remote-assets:\s*false\s*$/m, "$1remote-assets: true");
+  }
+  if (!(text.startsWith("---\n") || text.startsWith("---\r\n"))) {
+    return "---\nschema: nodx/1.0\nfeatures:\n  remote-assets: true\n---\n\n" + text;
+  }
+  const end = text.indexOf("\n---", 4);
+  if (end < 0) return text;
+  const head = text.slice(0, end);
+  const tail = text.slice(end);
+  const lines = head.split("\n");
+  const featuresIndex = lines.findIndex((line) => line === "features:");
+  if (featuresIndex >= 0) {
+    lines.splice(featuresIndex + 1, 0, "  remote-assets: true");
+  } else {
+    lines.push("features:", "  remote-assets: true");
+  }
+  return lines.join("\n") + tail;
 }
 
 async function createPackageDocument() {
@@ -752,6 +805,7 @@ function webviewHtml(webview) {
       <button id="toggleTree" title="Toggle package tree" aria-label="Toggle package tree">&#9776;</button>
       <button id="addAssetFile" title="Add local asset" aria-label="Add local asset">+</button>
       <button id="addAssetUrl" title="Add URL asset" aria-label="Add URL asset">&#8681;</button>
+      <button id="remoteAssets" title="Enable remote asset sources" aria-label="Enable remote asset sources">&#128246;</button>
     </div>
     <button id="info" title="Info" aria-label="Info">i</button>
     <button id="save" title="Save" aria-label="Save">&#128190;</button>
@@ -773,6 +827,7 @@ function webviewHtml(webview) {
     document.getElementById('toggleTree').onclick = () => { treeCollapsed = !treeCollapsed; render(); };
     document.getElementById('addAssetFile').onclick = () => vscode.postMessage({type:'addAssetFile'});
     document.getElementById('addAssetUrl').onclick = () => vscode.postMessage({type:'addAssetUrl'});
+    document.getElementById('remoteAssets').onclick = () => vscode.postMessage({type:'enableRemoteAssets'});
     document.getElementById('save').onclick = () => vscode.postMessage({type:'save'});
     window.addEventListener('message', (event) => {
       if (event.data.type === 'state') { state = event.data.state; render(); }

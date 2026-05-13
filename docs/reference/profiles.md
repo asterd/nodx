@@ -15,7 +15,7 @@ readers a way to say "I handle `plain` and `core` only" without bluffing.
 For authors, profiles answer: *will this document render usefully somewhere
 besides my laptop?*
 
-## The six built-in profiles
+## The built-in profiles
 
 | Profile | Adds | When you need it |
 |---|---|---|
@@ -25,6 +25,7 @@ besides my laptop?*
 | `style` | Document-level `::style` blocks and the safe NODS subset, `theme:` front matter. | Branded documents, print layouts. |
 | `package` | The document expects a `.nodx` ZIP container with assets, components, or themes. | Anything that ships its own resources. |
 | `agent-read` | The document is intended to be consumed via the NCP projection. | Knowledge bases, agent ingestion pipelines. |
+| `remote-assets` | Allows renderers to emit `http`/`https` URLs for image and media assets when host policy permits. | Draft previews, trusted intranet/CDN documents, or authoring before packaging. |
 
 ## How a document declares profiles
 
@@ -51,7 +52,7 @@ needs".
 
 ## How a reader advertises support
 
-The reference implementation supports all six built-in profiles. A
+The reference implementation supports the built-in profiles above. A
 third-party reader should:
 
 1. Declare its profile set publicly (README, integration manifest, etc.).

@@ -7,10 +7,11 @@ export const THEME_NAMES = ["none", "plain", "base", "web", "print", "presentati
 
 export function renderFragment(doc, options = {}) {
   const navigation = resolveNavigation(doc);
+  const renderOptions = { ...options, remoteAssets: documentAllowsRemoteAssets(doc) };
   const stylesheets = [...(Array.isArray(doc.meta.stylesheets) ? doc.meta.stylesheets : []), ...(options.stylesheets ?? [])];
   const extraStyles = stylesheets.map((css) => `<style>${sanitizeStylesheet(css)}</style>`).join("");
   const componentStyles = componentDefinitions(doc).map((def) => def.style ? `<style>${sanitizeStylesheet(def.style)}</style>` : "").join("");
-  return extraStyles + componentStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, { ...options, doc })).join("");
+  return extraStyles + componentStyles + doc.body.map((node, index) => renderNode(node, String(index), navigation, { ...renderOptions, doc })).join("");
 }
 
 export function renderHtml(doc, options = {}) {
@@ -18,28 +19,29 @@ export function renderHtml(doc, options = {}) {
   const lang = typeof doc.meta.language === "string" && doc.meta.language !== "und" ? ` lang="${escapeAttr(doc.meta.language)}"` : "";
   const dir = typeof doc.meta.dir === "string" && doc.meta.dir !== "auto" ? ` dir="${escapeAttr(doc.meta.dir)}"` : "";
   const body = isDocsLayout(doc) ? renderDocsBody(doc, options) : `<body>${renderFragment(doc, options)}</body>`;
-  return `<!doctype html><html${lang}${dir}><meta charset="utf-8"><style>${themeStylesheet(doc.meta.theme)}</style>${title ? `<title>${escapeHtml(title)}</title>` : ""}${body}</html>`;
+  const pageCss = pageStylesheet(doc);
+  return `<!doctype html><html${lang}${dir}><meta charset="utf-8"><style>${themeStylesheet(doc.meta.theme)}</style>${pageCss ? `<style>${pageCss}</style>` : ""}${title ? `<title>${escapeHtml(title)}</title>` : ""}${body}</html>`;
 }
 
 export function themeStylesheet(theme = "base") {
   const name = THEME_NAMES.includes(theme) ? theme : "base";
   if (name === "none") return "html[dir=\"rtl\"]{direction:rtl}";
-  if (name === "plain") return "html[dir=\"rtl\"]{direction:rtl}body{font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:#1f2937}";
+  if (name === "plain") return "html[dir=\"rtl\"]{direction:rtl}body{font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:#1f2937;background:#ffffff}";
   const tokens = standardTokens();
   const common = commonStyles();
   if (name === "print") {
-    return tokens + "body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common;
+    return tokens + "body{font:11pt/1.55 var(--nodx-font-body);max-width:none;margin:0;color:var(--nodx-color-text);background:var(--nodx-color-bg)}@page{size:A4;margin:var(--nodx-page-margin)}h1,h2,h3{break-after:avoid}table,figure,aside{break-inside:avoid}.pagebreak{break-before:page;border:0;margin:0}" + common;
   }
   if (name === "presentation") {
-    return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text)}h1{font-size:2.4em}h2{font-size:1.8em}" + common;
+    return tokens + "body{font:28px/1.45 var(--nodx-font-body);max-width:1100px;margin:40px auto;padding:0 28px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}h1{font-size:2.4em}h2{font-size:1.8em}" + common;
   }
   if (name === "web") {
-    return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text)}" + common;
+    return tokens + "body{font:16px/1.65 var(--nodx-font-body);max-width:960px;margin:32px auto;padding:0 18px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
   }
   if (name === "docs") {
     return tokens + docsStyles() + common;
   }
-  return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text)}" + common;
+  return tokens + "body{font:16px/1.6 var(--nodx-font-body);max-width:920px;margin:32px auto;padding:0 16px;color:var(--nodx-color-text);background:var(--nodx-color-bg)}" + common;
 }
 
 function renderDocsBody(doc, options) {
@@ -268,7 +270,7 @@ function renderNode(node, path, navigation, options) {
     case "pre": return `<pre><code${node.attrs.lang ? ` data-lang="${escapeAttr(node.attrs.lang)}"` : ""}>${escapeHtml(node.text ?? "")}</code></pre>`;
     case "math": return `<pre class="math">${escapeHtml(node.text ?? "")}</pre>`;
     case "style": return `<style>${renderStyle(node)}</style>`;
-    case "table": return wrapChildren("table", node, path, navigation, options);
+    case "table": return renderTable(node, path, navigation, options);
     case "row": return wrapChildren("tr", node, path, navigation, options);
     case "cell": return wrapInlines(node.attrs.header === "true" ? "th" : "td", node, path, navigation, options);
     case "figure": return wrapChildren("figure", node, path, navigation, options);
@@ -284,12 +286,25 @@ function renderNode(node, path, navigation, options) {
     case "bibliography": return wrapChildren("ol", node, path, navigation, options);
     case "citation-entry": return wrapInlines("li", node, path, navigation, options);
     case "speaker-notes": return `<aside${htmlAttrsWithoutClass(node)} class="${classAttr(node, "speaker-notes")}" aria-label="Speaker notes">${renderInlines(node.inlines, options)}${renderChildren(node, path, navigation, options)}</aside>`;
+    case "grid": return wrapLayoutChildren("nodx-grid", node, path, navigation, options);
+    case "columns": return wrapLayoutChildren("nodx-columns", node, path, navigation, options);
+    case "frame": return wrapLayoutChildren("nodx-frame", node, path, navigation, options);
+    case "page": return wrapLayoutChildren("nodx-page", node, path, navigation, options);
     default:
       if (node.type.includes("-")) {
         return `<section${htmlAttrsWithoutClass(node)} class="${classAttr(node, "nodx-component nodx-component--fallback")}" data-component="${escapeAttr(node.type)}"><p class="nodx-component__title">${escapeHtml(node.type)} fallback</p>${renderInlines(node.inlines, options)}${renderChildren(node, path, navigation, options)}</section>`;
       }
       return wrapChildren("div", node, path, navigation, options);
   }
+}
+
+function renderTable(node, path, navigation, options) {
+  const caption = node.attrs.caption || node.attrs.title || "";
+  return `<table${htmlAttrs(node)}>${caption.trim() ? `<caption>${escapeHtml(caption)}</caption>` : ""}${renderChildren(node, path, navigation, options)}</table>`;
+}
+
+function wrapLayoutChildren(className, node, path, navigation, options) {
+  return `<div${htmlAttrsWithExtraClass(node, className)}>${renderChildren(node, path, navigation, options)}</div>`;
 }
 
 function renderChildren(node, path, navigation, options) {
@@ -336,7 +351,7 @@ function renderStyle(node) {
 function renderImage(node, options) {
   const alt = node.attrs.alt ?? "";
   const raw = node.attrs.src ?? "";
-  const src = options.assetResolver?.(raw, node) ?? safeImageUrl(raw);
+  const src = options.assetResolver?.(raw, node) ?? safeImageUrl(raw, options.remoteAssets);
   if (!src) return `<span class="nodx-blocked-image">${escapeHtml(alt || "blocked image")}</span>`;
   return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
 }
@@ -353,14 +368,18 @@ function renderToc(node, path, navigation) {
 
 function renderMediaFallback(node, path, navigation, options) {
   const raw = node.attrs.src ?? "";
-  const text = node.type === "include" && options.textAssetResolver?.(raw) ? options.textAssetResolver(raw) : `${node.attrs.alt ?? node.type}${raw ? " - " + raw : ""}`;
-  return `<figure${htmlAttrs(node)}><div class="media-fallback">${escapeHtml(text)}</div>${renderChildren(node, path, navigation, options)}</figure>`;
+  const src = safeMediaUrl(raw, options.remoteAssets);
+  const video = node.type === "media" && src ? `<video controls src="${escapeAttr(src)}"></video>` : "";
+  const text = node.type === "include" && options.textAssetResolver?.(raw) ? options.textAssetResolver(raw) : `${node.attrs.alt ?? node.type}${src ? " - " + src : ""}`;
+  return `<figure${htmlAttrs(node)}>${video}<div class="media-fallback">${escapeHtml(text)}</div>${renderChildren(node, path, navigation, options)}</figure>`;
 }
 
 function renderInlines(inlines, options) {
   return inlines.map((item) => {
     if (item.type === "text") return escapeHtml(item.text);
-    if (item.type === "strong" || item.type === "em" || item.type === "mark" || item.type === "sub" || item.type === "sup") return `<${item.type}>${renderInlines(item.children, options)}</${item.type}>`;
+    if (item.type === "strong" || item.type === "em" || item.type === "sub" || item.type === "sup") return `<${item.type}>${renderInlines(item.children, options)}</${item.type}>`;
+    if (item.type === "mark") return `<mark${inlineAttrs(item.attrs)}>${renderInlines(item.children, options)}</mark>`;
+    if (item.type === "strike") return `<s>${renderInlines(item.children, options)}</s>`;
     if (item.type === "code") return `<code>${escapeHtml(item.text)}</code>`;
     if (item.type === "math-inline") return `<code class="math-inline">${escapeHtml(item.source)}</code>`;
     if (item.type === "link") return renderLink(item, options);
@@ -389,6 +408,7 @@ function htmlAttrs(node) {
   if (node.attrs.lang) out += ` lang="${escapeAttr(node.attrs.lang)}"`;
   if (["ltr", "rtl", "auto"].includes(node.attrs.dir)) out += ` dir="${escapeAttr(node.attrs.dir)}"`;
   if (node.attrs.title) out += ` title="${escapeAttr(node.attrs.title)}"`;
+  out += structuralAttrs(node);
   return out;
 }
 
@@ -397,7 +417,60 @@ function htmlAttrsWithoutClass(node) {
   if (node.attrs.lang) out += ` lang="${escapeAttr(node.attrs.lang)}"`;
   if (["ltr", "rtl", "auto"].includes(node.attrs.dir)) out += ` dir="${escapeAttr(node.attrs.dir)}"`;
   if (node.attrs.title) out += ` title="${escapeAttr(node.attrs.title)}"`;
+  out += structuralAttrs(node);
   return out;
+}
+
+function htmlAttrsWithExtraClass(node, extra) {
+  let out = htmlId(node);
+  out += ` class="${escapeAttr([extra, ...(node.classes ?? [])].join(" "))}"`;
+  const backgroundImage = safeBackgroundImageCss(node.attrs.background);
+  if ((node.styles && Object.keys(node.styles).length) || backgroundImage) {
+    const style = [styleAttr(node.styles ?? {}), backgroundImage].filter(Boolean).join("; ");
+    out += ` style="${escapeAttr(style)}"`;
+  }
+  if (node.attrs.lang) out += ` lang="${escapeAttr(node.attrs.lang)}"`;
+  if (["ltr", "rtl", "auto"].includes(node.attrs.dir)) out += ` dir="${escapeAttr(node.attrs.dir)}"`;
+  if (node.attrs.title) out += ` title="${escapeAttr(node.attrs.title)}"`;
+  out += structuralAttrs(node);
+  return out;
+}
+
+function pageStylesheet(doc) {
+  const page = doc.meta?.page;
+  if (!page || typeof page !== "object") return "";
+  const rules = [];
+  const bg = page.bg ?? page["background-color"];
+  if (typeof bg === "string" && safeQuickStyleValue(bg)) rules.push(`background-color:${bg}`);
+  if (typeof page.color === "string" && safeQuickStyleValue(page.color)) rules.push(`color:${page.color}`);
+  const backgroundImage = safeBackgroundImageCss(page.background ?? page["background-image"]);
+  if (backgroundImage) rules.push(backgroundImage);
+  return rules.length ? `body{${rules.join(";")}}` : "";
+}
+
+function safeBackgroundImageCss(raw) {
+  if (typeof raw !== "string" || !safeImageUrl(raw, false) || /['"()\\]/.test(raw)) return "";
+  return `background-image:url('${raw}')`;
+}
+
+function safeQuickStyleValue(value) {
+  return value.length <= 240 && !/[<>{};]/.test(value);
+}
+
+function structuralAttrs(node) {
+  return Object.entries(node.attrs ?? {})
+    .filter(([key, value]) => safeStructuralAttr(key, String(value)))
+    .map(([key, value]) => ` ${key}="${escapeAttr(String(value))}"`)
+    .join("");
+}
+
+function safeStructuralAttr(key, value) {
+  if (key === "role") return /^[A-Za-z0-9-]+$/.test(value);
+  if (key === "scope") return ["col", "row", "colgroup", "rowgroup"].includes(value);
+  if (key === "align") return ["left", "center", "right", "start", "end"].includes(value);
+  if (key === "valign") return ["top", "middle", "bottom", "baseline"].includes(value);
+  if (key === "colspan" || key === "rowspan") return /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 1000;
+  return (key.startsWith("data-") || key.startsWith("aria-")) && value.length <= 240;
 }
 
 function inlineAttrs(attrs) {
@@ -431,8 +504,24 @@ function safeLinkUrl(raw) {
   return classifyUri(ReferenceKind.Link, raw).ok ? raw : null;
 }
 
-function safeImageUrl(raw) {
-  return classifyUri(ReferenceKind.Asset, raw).ok ? raw : null;
+function safeImageUrl(raw, remoteAssets = false) {
+  return classifyUri(ReferenceKind.Asset, raw, undefined, { remoteAssets }).ok ? raw : null;
+}
+
+function safeMediaUrl(raw, remoteAssets = false) {
+  return classifyUri(ReferenceKind.MediaFallback, raw, undefined, { remoteAssets }).ok ? raw : null;
+}
+
+function documentAllowsRemoteAssets(doc) {
+  const features = doc.meta?.features;
+  if (features && typeof features === "object" && !Array.isArray(features) && features["remote-assets"] === true) return true;
+  const profiles = doc.meta?.profiles;
+  if (profiles && typeof profiles === "object" && !Array.isArray(profiles)) {
+    for (const key of ["requires", "optional"]) {
+      if (Array.isArray(profiles[key]) && profiles[key].includes("remote-assets")) return true;
+    }
+  }
+  return false;
 }
 
 function childPath(prefix, index) {
@@ -466,6 +555,7 @@ function plainInlines(inlines) {
       case "strong":
       case "em":
       case "mark":
+      case "strike":
       case "sub":
       case "sup":
         out += plainInlines(item.children);
@@ -493,11 +583,11 @@ function plainInlines(inlines) {
 }
 
 function standardTokens() {
-  return "html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}";
+  return "html{font-family:system-ui}html[dir=\"rtl\"]{direction:rtl}:root{--nodx-color-text:#1f2937;--nodx-color-muted:#4b5563;--nodx-color-bg:#ffffff;--nodx-color-primary:#0f766e;--nodx-color-accent:#b91c1c;--nodx-color-rule:#e5e7eb;--nodx-color-surface:transparent;--nodx-font-body:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;--nodx-font-heading:var(--nodx-font-body);--nodx-font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--nodx-page-margin:22mm;--nodx-line-height:1.6;--nodx-block-gap:1rem}";
 }
 
 function commonStyles() {
-  return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}";
+  return "h1,h2,h3,h4,h5,h6{font-family:var(--nodx-font-heading);line-height:1.25;color:#0f172a;margin-top:1.4em}p{margin:0 0 1em}pre{padding:12px;background:#f5f5f5;overflow:auto;border-radius:6px}code{font-family:var(--nodx-font-mono)}aside{border-inline-start:4px solid #b57f00;padding:8px 12px;background:#fff8e6}table{border-collapse:collapse;margin:0 0 1em}caption{text-align:start;font-weight:600;margin-bottom:.35em}td,th{border:1px solid #d1d5db;padding:6px 10px}thead th{background:#f3f4f6;text-align:start}figure{margin:1.5em 0}figcaption{font-size:.9em;color:var(--nodx-color-muted)}nav ol{padding-inline-start:1.5rem}nav strong{display:block;margin-bottom:.4em}.nodx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:var(--nodx-block-gap);margin:0 0 1em}.nodx-columns{columns:2 18rem;column-gap:2rem;margin:0 0 1em}.nodx-frame{border:1px solid var(--nodx-color-rule,#e5e7eb);padding:1rem;margin:0 0 1em;border-radius:6px;background:var(--nodx-color-surface,transparent)}.nodx-blocked-link,.nodx-blocked-image{color:var(--nodx-color-accent);text-decoration:line-through}.nodx-blocked-link{cursor:not-allowed}.mention{font-variant:all-small-caps}.pagebreak{border:none;border-top:1px dashed #9ca3af;margin:2em 0}.math-inline{background:#f3f4f6;padding:1px 4px;border-radius:3px}.media-fallback{border:1px dashed #d1d5db;padding:12px;border-radius:6px;color:var(--nodx-color-muted)}";
 }
 
 function docsStyles() {

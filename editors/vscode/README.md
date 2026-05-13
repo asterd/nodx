@@ -15,6 +15,8 @@ a package-aware editor for NODX 1.0 documents.
 - Preserve hidden package entries such as assets, keys, history, and signatures.
 - Add local files or remote `http/https` URLs as package assets under
   `assets/`, then insert relative `image`, `media`, or `embed` references.
+- Enable remote asset sources for plain documents. The command updates front
+  matter with `features.remote-assets: true`.
 - Save packaged NODX as stored ZIP with regenerated `manifest.yaml` digests.
 - Show document headers, package integrity, and signature status from the Info
   action.
@@ -23,10 +25,10 @@ a package-aware editor for NODX 1.0 documents.
 - Create a plain NODX document or a packaged NODX document from the command
   palette.
 
-Remote URLs are allowed by the NODX runtime for text links only. Asset nodes
-such as `image`, `media`, and `embed` must use data image URIs or package-local
-paths, so the editor downloads remote assets into the package before inserting
-the reference.
+Remote asset URLs are opt-in. Use **Enable Remote Asset Sources** when a plain
+document should preserve `http`/`https` image or media URLs in preview. For
+portable distribution, prefer adding the remote asset to the package so the
+editor downloads it and inserts a relative path.
 
 Install from a local checkout:
 

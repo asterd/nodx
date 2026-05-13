@@ -70,15 +70,15 @@ copy the script, point it at your folder, and adjust the manifest entries.
 A minimal `manifest.yaml`:
 
 ```yaml
-schema: nodx-package/0.1
+schema: nodx-package/1.0
 entry: doc.nodx
 entries:
   - path: doc.nodx
     size: 4321
-    sha256: ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0=
+    sha256: sha256-ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0
   - path: assets/cover.png
     size: 218742
-    sha256: 4f4f...=
+    sha256: sha256-4f4f...
 components:
   - path: components/approval-card.nodx
 themes:
@@ -125,14 +125,11 @@ returned in-memory view.
 
 ## Signing a package
 
-The `nodx-sign` crate verifies ES256 (ECDSA P-256, SHA-256) detached JWS
-signatures over a document's canonical AST. The signing side is up to your
-release pipeline; the receiver runs:
+Package signing is reserved for the Signature profile. The current CLI
+`nodx package verify` validates the ZIP structure, manifest, entry sizes,
+SHA-256 digests, and document diagnostics; it does not verify a signature.
 
-```sh
-nodx package verify my-doc.nodx --signature my-doc.nodx.sig
-```
-
-The verifier resolves trust through a pluggable `TrustPolicy`. For most
-environments, a small set of pinned public keys is enough. See
-[`crates/nodx-sign`](../../crates/nodx-sign) for the full API.
+The experimental `nodx-sign` crate verifies ES256 (ECDSA P-256, SHA-256)
+detached JWS signatures over a document's canonical AST. Trust resolution is
+pluggable and belongs to the host or release pipeline, not to the document
+itself. See [`crates/nodx-sign`](../../crates/nodx-sign) for the current API.

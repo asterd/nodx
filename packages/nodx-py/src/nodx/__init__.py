@@ -1,7 +1,7 @@
 from .ast import empty_attrs, first_heading, node, plain_inlines, plain_node_text
 from .block_parser import parse
 from .canonical import canonical_json, canonical_stringify, sort_value
-from .diagnostics import diagnostics_json, exit_code_for, validate
+from .diagnostics import diagnostics_json, exit_code_for, integrity_digest, validate
 from .inline_parser import parse_inlines
 from .limits import DEFAULT_LIMITS
 from .navigation import resolve_navigation
@@ -30,6 +30,7 @@ SCHEMA_1_0 = "nodx/1.0"
 canonicalJson = canonical_json
 diagnosticsJson = diagnostics_json
 exitCodeFor = exit_code_for
+integrityDigest = integrity_digest
 ncpJson = ncp_json
 parseInlines = parse_inlines
 resolveNavigation = resolve_navigation
@@ -68,6 +69,8 @@ __all__ = [
     "exit_code_for",
     "exitCodeFor",
     "first_heading",
+    "integrity_digest",
+    "integrityDigest",
     "isPackagedNodx",
     "is_packaged_nodx",
     "ncp_json",
