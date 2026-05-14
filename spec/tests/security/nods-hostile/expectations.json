@@ -1,0 +1,180 @@
+{
+  "behavior.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "case-insensitive-script.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "charset.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "css-escape-breakout.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "data-html-url.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "data-svg-url.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "display-flex-injection.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "embed-tag.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "expression.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "focus-pseudo.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "fontface.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "forbidden-constructs.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "hover-pseudo.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "iframe-breakout.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "illegal-property.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "illegal-vbscript.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "import-rule.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "javascript-url.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "keyframes.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "multiline-comment-breakout.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "object-tag.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "parent-selector.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "position-absolute.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "position-fixed.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "pseudo-element.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "remote-import.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "safe-subset.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "script-breakout.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "svg-tag.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "universal-selector.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  }
+}

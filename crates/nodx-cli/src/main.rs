@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{env, fs, path::PathBuf, process};
 
 use nodx_core::{

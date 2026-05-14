@@ -208,6 +208,20 @@ def scalar(raw):
         return False
     if raw.startswith("[") and raw.endswith("]"):
         return [scalar(item.strip()) for item in raw[1:-1].split(",") if item.strip()]
-    if re.match(r"^[+-]?\d+(\.\d+)?$", raw):
-        return int(raw) if re.match(r"^[+-]?\d+$", raw) else float(raw)
+    number = _canonical_number(raw)
+    if number is not None:
+        return number
     return unquote(raw)
+
+
+def _canonical_number(raw):
+    """Collapse integer-valued floats to int so the canonical JSON matches
+    Rust's `f64::to_string()` (`1.0` -> `1`) and JS's `JSON.stringify(Number)`.
+
+    The regex restricts input to `[+-]?digits[.digits]?`, so `float(raw)`
+    cannot raise and cannot produce non-finite values.
+    """
+    if not re.match(r"^[+-]?\d+(\.\d+)?$", raw):
+        return None
+    value = float(raw)
+    return int(value) if value.is_integer() else value

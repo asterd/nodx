@@ -2,6 +2,7 @@ import { parse } from "./blockParser.mjs";
 import { sha256Base64Url } from "./bytes.mjs";
 import { DEFAULT_LIMITS } from "./limits.mjs";
 import { normalizePackagePath } from "./url.mjs";
+import { throwDiag } from "./packageDiagnostics.mjs";
 
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -11,39 +12,39 @@ export function isPackagedNodx(bytes) {
 
 export function openStoredPackage(bytes, limits = DEFAULT_LIMITS) {
   if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
-  if (!isPackagedNodx(bytes)) throw new Error("not a packaged NODX");
+  if (!isPackagedNodx(bytes)) throwDiag("NODX-E012", "Not a packaged NODX.");
   const entries = zipEntries(bytes, limits);
-  if (entries.length > limits.packageFileCount) throw new Error("package file count limit exceeded");
+  if (entries.length > limits.packageFileCount) throwDiag("NODX-E012", "Package file count limit exceeded.");
   const total = entries.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
-  if (total > limits.packageUncompressedBytes) throw new Error("package uncompressed size limit exceeded");
-  if (entries[0]?.name !== "mimetype" || entries[0].compression !== 0) throw new Error("first ZIP entry must be mimetype");
+  if (total > limits.packageUncompressedBytes) throwDiag("NODX-E012", "Package uncompressed size limit exceeded.");
+  if (entries[0]?.name !== "mimetype" || entries[0].compression !== 0) throwDiag("NODX-E012", "First ZIP entry must be mimetype.");
 
   const files = new Map();
   for (const entry of entries) files.set(entry.name, readStoredEntry(bytes, entry, limits));
 
   const mimetype = files.get("mimetype");
-  if (!mimetype || decode(mimetype) !== "application/nodx+zip") throw new Error("invalid NODX package mimetype");
+  if (!mimetype || decode(mimetype) !== "application/nodx+zip") throwDiag("NODX-E012", "Invalid NODX package mimetype.");
   const manifestBytes = files.get("manifest.yaml");
-  if (!manifestBytes) throw new Error("package is missing manifest.yaml");
+  if (!manifestBytes) throwDiag("NODX-E012", "Package is missing manifest.yaml.");
   const manifest = parseManifest(decode(manifestBytes), limits);
-  if (manifest.schema !== "nodx-package/1.0") throw new Error("package manifest schema must be nodx-package/1.0");
-  if (manifest.entries.length > limits.manifestEntries) throw new Error("package manifest entry limit exceeded");
+  if (manifest.schema !== "nodx-package/1.0") throwDiag("NODX-E012", "Package manifest schema must be `nodx-package/1.0`.");
+  if (manifest.entries.length > limits.manifestEntries) throwDiag("NODX-E012", "Package manifest entry limit exceeded.");
   for (const item of manifest.entries) {
     const data = files.get(item.path);
-    if (!data) throw new Error("manifest lists a missing package entry");
-    if (item.size !== null && item.size !== data.length) throw new Error("package manifest size does not match entry bytes");
-    if (item.sha256 && item.sha256 !== sha256Base64Url(data)) throw new Error("package digest mismatch");
+    if (!data) throwDiag("NODX-E021", "Manifest lists a missing package entry.");
+    if (item.size !== null && item.size !== data.length) throwDiag("NODX-E021", "Package manifest size does not match entry bytes.");
+    if (item.sha256 && item.sha256 !== sha256Base64Url(data)) throwDiag("NODX-E021", "Package digest mismatch.");
   }
   for (const path of [...manifestPaths(manifest.components), ...manifestPaths(manifest.themes)]) {
-    if (!files.has(path)) throw new Error("manifest lists a missing package extension");
-    if (!manifest.entries.some((entry) => entry.path === path)) throw new Error("package extension paths must also be listed in manifest entries");
+    if (!files.has(path)) throwDiag("NODX-E021", "Manifest lists a missing package extension.");
+    if (!manifest.entries.some((entry) => entry.path === path)) throwDiag("NODX-E021", "Package extension paths must also be listed in manifest entries.");
   }
-  if (!manifest.entry) throw new Error("package manifest is missing entry");
+  if (!manifest.entry) throwDiag("NODX-E012", "Package manifest is missing entry.");
   manifest.entry = safePackagePath(manifest.entry, limits);
-  if (!files.has(manifest.entry)) throw new Error("package entry document is missing");
+  if (!files.has(manifest.entry)) throwDiag("NODX-E012", "Package entry document is missing.");
   if (manifest.signature) {
     manifest.signature = safePackagePath(manifest.signature, limits);
-    if (!files.has(manifest.signature)) throw new Error("package manifest references a missing signature");
+    if (!files.has(manifest.signature)) throwDiag("NODX-E012", "Package manifest references a missing signature.");
   }
   return { entryPath: manifest.entry, entryBytes: files.get(manifest.entry), files, manifest };
 }
@@ -98,18 +99,18 @@ export function packageThemeStylesheets(pkg, options = {}) {
 
 function zipEntries(bytes, limits) {
   const eocd = findEocd(bytes);
-  if (eocd < 0) throw new Error("ZIP end of central directory not found");
-  if (u16(bytes, eocd + 4) !== 0 || u16(bytes, eocd + 6) !== 0) throw new Error("multi-disk ZIP is not supported");
+  if (eocd < 0) throwDiag("NODX-E012", "ZIP end of central directory not found.");
+  if (u16(bytes, eocd + 4) !== 0 || u16(bytes, eocd + 6) !== 0) throwDiag("NODX-E012", "Multi-disk ZIP is not supported.");
   const count = u16(bytes, eocd + 10);
   const cdSize = u32(bytes, eocd + 12);
   const cdOffset = u32(bytes, eocd + 16);
-  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw new Error("ZIP64 packages are not supported");
+  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throwDiag("NODX-E012", "ZIP64 packages are not supported.");
 
   let pos = cdOffset;
   const entries = [];
   const seen = new Set();
   for (let i = 0; i < count; i += 1) {
-    if (u32(bytes, pos) !== 0x02014b50) throw new Error("invalid ZIP central directory");
+    if (u32(bytes, pos) !== 0x02014b50) throwDiag("NODX-E012", "Invalid ZIP central directory.");
     const flags = u16(bytes, pos + 8);
     const compression = u16(bytes, pos + 10);
     const crc32 = u32(bytes, pos + 16);
@@ -120,21 +121,21 @@ function zipEntries(bytes, limits) {
     const commentLen = u16(bytes, pos + 32);
     const externalAttrs = u32(bytes, pos + 38);
     const localOffset = u32(bytes, pos + 42);
-    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localOffset === 0xffffffff) throw new Error("ZIP64 packages are not supported");
-    if (uncompressedSize > limits.packageEntryBytes) throw new Error("package entry size limit exceeded");
-    if (compressedSize === 0 && uncompressedSize > 0) throw new Error("package compression ratio limit exceeded");
-    if (compressedSize > 0 && uncompressedSize > compressedSize * limits.packageCompressionRatio) throw new Error("package compression ratio limit exceeded");
-    if (flags & 1) throw new Error("encrypted ZIP entries are not supported");
-    if (flags & 8) throw new Error("ZIP data descriptors are not supported");
-    if (compression !== 0) throw new Error("browser package reader supports stored ZIP entries only");
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localOffset === 0xffffffff) throwDiag("NODX-E012", "ZIP64 packages are not supported.");
+    if (uncompressedSize > limits.packageEntryBytes) throwDiag("NODX-E012", "Package entry size limit exceeded.");
+    if (compressedSize === 0 && uncompressedSize > 0) throwDiag("NODX-E012", "Package compression ratio limit exceeded.");
+    if (compressedSize > 0 && uncompressedSize > compressedSize * limits.packageCompressionRatio) throwDiag("NODX-E012", "Package compression ratio limit exceeded.");
+    if (flags & 1) throwDiag("NODX-E012", "Encrypted ZIP entries are not supported.");
+    if (flags & 8) throwDiag("NODX-E012", "ZIP data descriptors are not supported.");
+    if (compression !== 0) throwDiag("NODX-E012", "Browser package reader supports stored ZIP entries only.");
     rejectSpecialFile(externalAttrs);
     const nameStart = pos + 46;
     const nameEnd = nameStart + nameLen;
     const extraEnd = nameEnd + extraLen;
-    if (extraEnd > bytes.length) throw new Error("ZIP entry name is out of bounds");
+    if (extraEnd > bytes.length) throwDiag("NODX-E012", "ZIP entry name is out of bounds.");
     rejectZip64Extra(bytes.subarray(nameEnd, extraEnd));
     const name = safePackagePath(decode(bytes.subarray(nameStart, nameEnd)), limits);
-    if (seen.has(name)) throw new Error("duplicate package entry path");
+    if (seen.has(name)) throwDiag("NODX-E012", "Duplicate package entry path.");
     seen.add(name);
     entries.push({ name, compression, crc32, compressedSize, uncompressedSize, localOffset, externalAttrs });
     pos = extraEnd + commentLen;
@@ -144,33 +145,33 @@ function zipEntries(bytes, limits) {
 
 function readStoredEntry(bytes, entry, limits) {
   const offset = entry.localOffset;
-  if (u32(bytes, offset) !== 0x04034b50) throw new Error("invalid ZIP local header");
+  if (u32(bytes, offset) !== 0x04034b50) throwDiag("NODX-E012", "Invalid ZIP local header.");
   const flags = u16(bytes, offset + 6);
   const compression = u16(bytes, offset + 8);
   const crc = u32(bytes, offset + 14);
   const compressedSize = u32(bytes, offset + 18);
   const uncompressedSize = u32(bytes, offset + 22);
-  if (flags & 1) throw new Error("encrypted ZIP entries are not supported");
-  if (flags & 8) throw new Error("ZIP data descriptors are not supported");
+  if (flags & 1) throwDiag("NODX-E012", "Encrypted ZIP entries are not supported.");
+  if (flags & 8) throwDiag("NODX-E012", "ZIP data descriptors are not supported.");
   if (compression !== entry.compression || crc !== entry.crc32 || compressedSize !== entry.compressedSize || uncompressedSize !== entry.uncompressedSize) {
-    throw new Error("ZIP local header does not match central directory");
+    throwDiag("NODX-E012", "ZIP local header does not match central directory.");
   }
   const nameLen = u16(bytes, offset + 26);
   const extraLen = u16(bytes, offset + 28);
   const nameStart = offset + 30;
   const nameEnd = nameStart + nameLen;
   const extraEnd = nameEnd + extraLen;
-  if (extraEnd > bytes.length) throw new Error("ZIP entry data is out of bounds");
+  if (extraEnd > bytes.length) throwDiag("NODX-E012", "ZIP entry data is out of bounds.");
   rejectZip64Extra(bytes.subarray(nameEnd, extraEnd));
   const name = safePackagePath(decode(bytes.subarray(nameStart, nameEnd)), limits);
-  if (name !== entry.name) throw new Error("ZIP local header name mismatch");
+  if (name !== entry.name) throwDiag("NODX-E012", "ZIP local header name mismatch.");
   rejectSpecialFile(entry.externalAttrs);
   const end = extraEnd + entry.compressedSize;
-  if (end > bytes.length) throw new Error("ZIP entry data is out of bounds");
+  if (end > bytes.length) throwDiag("NODX-E012", "ZIP entry data is out of bounds.");
   const data = bytes.slice(extraEnd, end);
-  if (data.length !== entry.uncompressedSize) throw new Error("stored ZIP entry has inconsistent sizes");
-  if (crc32(data) !== entry.crc32) throw new Error("ZIP CRC mismatch");
-  if (looksLikeZip(data)) throw new Error("nested ZIP archives are not supported");
+  if (data.length !== entry.uncompressedSize) throwDiag("NODX-E012", "Stored ZIP entry has inconsistent sizes.");
+  if (crc32(data) !== entry.crc32) throwDiag("NODX-E012", "ZIP CRC mismatch.");
+  if (looksLikeZip(data)) throwDiag("NODX-E010", "Nested ZIP archives are not supported.");
   return data;
 }
 
@@ -187,7 +188,7 @@ function parseManifest(text, limits) {
       section = "";
       currentEntry = null;
       const key = trimmed.endsWith(":") ? trimmed.slice(0, -1) : trimmed.split(":", 1)[0];
-      if (seenTop.has(key)) throw new Error("duplicate manifest key");
+      if (seenTop.has(key)) throwDiag("NODX-E012", "Duplicate manifest key.");
       seenTop.add(key);
     }
     if (line.startsWith("schema:")) manifest.schema = unquote(line.slice(7).trim());
@@ -199,7 +200,7 @@ function parseManifest(text, limits) {
       manifest.entries.push(currentEntry);
     } else if (section === "entries" && currentEntry && trimmed.startsWith("size:")) {
       currentEntry.size = Number(trimmed.slice(5).trim());
-      if (!Number.isSafeInteger(currentEntry.size) || currentEntry.size < 0) throw new Error("invalid manifest entry size");
+      if (!Number.isSafeInteger(currentEntry.size) || currentEntry.size < 0) throwDiag("NODX-E012", "Invalid manifest entry size.");
     } else if (section === "entries" && currentEntry && trimmed.startsWith("sha256:")) {
       currentEntry.sha256 = unquote(trimmed.slice(7).trim());
     } else if ((section === "components" || section === "themes") && trimmed.startsWith("- path:")) {
@@ -234,7 +235,7 @@ function stripFrontMatter(text) {
 
 function safePackagePath(path, limits) {
   const normalized = normalizePackagePath(path, limits);
-  if (normalized === null) throw new Error("unsafe package path: " + path);
+  if (normalized === null) throwDiag("NODX-E010", `Unsafe package path: ${path}`);
   return normalized;
 }
 
@@ -245,17 +246,17 @@ function rejectZip64Extra(extra) {
     const len = u16(extra, pos + 2);
     pos += 4;
     const end = pos + len;
-    if (end > extra.length) throw new Error("invalid ZIP extra field");
-    if (header === 0x0001) throw new Error("ZIP64 packages are not supported");
+    if (end > extra.length) throwDiag("NODX-E012", "Invalid ZIP extra field.");
+    if (header === 0x0001) throwDiag("NODX-E012", "ZIP64 packages are not supported.");
     pos = end;
   }
-  if (pos !== extra.length) throw new Error("invalid ZIP extra field");
+  if (pos !== extra.length) throwDiag("NODX-E012", "Invalid ZIP extra field.");
 }
 
 function rejectSpecialFile(externalAttrs) {
   const mode = externalAttrs >>> 16;
   if (mode === 0) return;
-  if ((mode & 0o170000) !== 0o100000) throw new Error("ZIP special files are not supported");
+  if ((mode & 0o170000) !== 0o100000) throwDiag("NODX-E012", "ZIP special files are not supported.");
 }
 
 function looksLikeZip(data) {
@@ -264,7 +265,7 @@ function looksLikeZip(data) {
 
 function decodeRequired(files, path) {
   const bytes = files.get(path);
-  if (!bytes) throw new Error("package manifest references missing path: " + path);
+  if (!bytes) throwDiag("NODX-E021", `Package manifest references missing path: ${path}`);
   return decode(bytes);
 }
 
@@ -289,12 +290,12 @@ function decode(bytes) {
 }
 
 function u16(bytes, pos) {
-  if (pos + 2 > bytes.length) throw new Error("unexpected end of ZIP data");
+  if (pos + 2 > bytes.length) throwDiag("NODX-E012", "Unexpected end of ZIP data.");
   return bytes[pos] | (bytes[pos + 1] << 8);
 }
 
 function u32(bytes, pos) {
-  if (pos + 4 > bytes.length) throw new Error("unexpected end of ZIP data");
+  if (pos + 4 > bytes.length) throwDiag("NODX-E012", "Unexpected end of ZIP data.");
   return (bytes[pos] | (bytes[pos + 1] << 8) | (bytes[pos + 2] << 16) | (bytes[pos + 3] << 24)) >>> 0;
 }
 

@@ -94,6 +94,8 @@ def test_package_reader_matches_js_surface():
 
 
 def test_package_reader_rejects_digest_mismatch():
+    from nodx.package_diagnostics import NodxDiagnosticError
+
     data = b"# A\n"
     bytes_ = build_zip(
         [
@@ -104,13 +106,16 @@ def test_package_reader_rejects_digest_mismatch():
     )
     try:
         open_stored_package(bytes_)
-    except ValueError as exc:
-        assert "digest mismatch" in str(exc)
+    except NodxDiagnosticError as exc:
+        assert exc.code == "NODX-E021"
+        assert exc.severity == "error"
     else:
-        raise AssertionError("expected digest mismatch")
+        raise AssertionError("expected digest mismatch diagnostic")
 
 
 def test_package_reader_rejects_percent_encoded_traversal():
+    from nodx.package_diagnostics import NodxDiagnosticError
+
     bytes_ = build_zip(
         [
             ("mimetype", b"application/nodx+zip"),
@@ -120,13 +125,16 @@ def test_package_reader_rejects_percent_encoded_traversal():
     )
     try:
         open_stored_package(bytes_)
-    except ValueError as exc:
-        assert "unsafe package path" in str(exc)
+    except NodxDiagnosticError as exc:
+        assert exc.code == "NODX-E010"
+        assert exc.severity == "error"
     else:
-        raise AssertionError("expected unsafe path")
+        raise AssertionError("expected unsafe path diagnostic")
 
 
 def test_package_reader_rejects_duplicate_entries():
+    from nodx.package_diagnostics import NodxDiagnosticError
+
     data = b"# A\n"
     bytes_ = build_zip(
         [
@@ -138,10 +146,11 @@ def test_package_reader_rejects_duplicate_entries():
     )
     try:
         open_stored_package(bytes_)
-    except ValueError as exc:
-        assert "duplicate package entry path" in str(exc)
+    except NodxDiagnosticError as exc:
+        assert exc.code == "NODX-E012"
+        assert exc.severity == "fatal"
     else:
-        raise AssertionError("expected duplicate entry")
+        raise AssertionError("expected duplicate entry diagnostic")
 
 
 def test_renderer_theme_and_semantic_text():

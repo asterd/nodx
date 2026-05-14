@@ -3,11 +3,40 @@ import { parseAttrs } from "./attrs.mjs";
 import { diag } from "./diagnostics.mjs";
 import { parseMeta } from "./frontMatter.mjs";
 import { parseInlines } from "./inlineParser.mjs";
+import { DEFAULT_LIMITS } from "./limits.mjs";
 
-export function parse(input) {
+export function parse(input, limits = DEFAULT_LIMITS) {
   const diagnostics = [];
   if (input.startsWith("\ufeff")) diagnostics.push(diag("NODX-E018", "fatal", "Byte Order Mark is not allowed.", 1, 1));
   if (input.includes("\u0000")) diagnostics.push(diag("NODX-E002", "fatal", "U+0000 is not allowed.", 1, 1));
+  // Text-side resource limits — parity with `nodx_core::parse_str_with_limits`.
+  // A hit emits NODX-E012 fatal so callers can short-circuit before doing the
+  // line-by-line work. The packaging side already enforces its own limits in
+  // `package.mjs`; the checks below cover the plain-text path that previously
+  // was best-effort in JS.
+  const byteLen = utf8ByteLength(input);
+  if (byteLen > limits.sourceBytes) {
+    diagnostics.push(diag("NODX-E012", "fatal", "Input byte size limit exceeded.", 1, 1));
+  }
+  const oversize = firstOversizeLine(input, limits.lineLength);
+  if (oversize !== null) {
+    diagnostics.push(diag("NODX-E012", "fatal", "Line length limit exceeded.", oversize, 1));
+  }
+  const fmBytes = frontMatterByteSize(input);
+  if (fmBytes !== null && fmBytes > limits.frontMatterBytes) {
+    diagnostics.push(diag("NODX-E012", "fatal", "Front matter size limit exceeded.", 1, 1));
+  }
+  if (diagnostics.some((d) => d.severity === "fatal")) {
+    // Fatal short-circuit: return an empty Document with the baseline meta.
+    // Mirrors `nodx_core::parse_str_with_limits` early-return; the field set
+    // is the same the normal path produces below via `meta.schema ??= ...`.
+    return {
+      schema: "nodx/1.0",
+      meta: { schema: "nodx/1.0", type: "document", dir: "auto", language: "und" },
+      body: [],
+      diagnostics,
+    };
+  }
   const lines = input.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
   const meta = {};
   let start = 0;
@@ -264,4 +293,49 @@ function parsePipeCellAttrs(cell) {
 
 function attrsAreEmpty(attrs) {
   return !attrs.id && !attrs.classes.length && !Object.keys(attrs.attrs).length && !Object.keys(attrs.styles ?? {}).length;
+}
+
+// --- Resource limit helpers (parity with `nodx_core::parse_str_with_limits`) ---
+
+const TEXT_ENCODER = new TextEncoder();
+
+function utf8ByteLength(input) {
+  return TEXT_ENCODER.encode(input).length;
+}
+
+function firstOversizeLine(input, max) {
+  // O(n) scan: count UTF-8 bytes per line directly from code units, no
+  // re-encoding of growing prefixes.
+  let lineNo = 1;
+  let lineBytes = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    const code = input.charCodeAt(i);
+    if (code === 0x0a) {
+      if (lineBytes > max) return lineNo;
+      lineBytes = 0;
+      lineNo += 1;
+      continue;
+    }
+    if (code < 0x80) {
+      lineBytes += 1;
+    } else if (code < 0x800) {
+      lineBytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      // High surrogate: pair with the low surrogate to form a 4-byte char.
+      lineBytes += 4;
+      i += 1;
+    } else {
+      lineBytes += 3;
+    }
+  }
+  return lineBytes > max ? lineNo : null;
+}
+
+function frontMatterByteSize(input) {
+  if (!input.startsWith("---")) return null;
+  const after = input.charCodeAt(3);
+  if (input.length > 3 && after !== 0x0a && after !== 0x0d) return null;
+  const closeIdx = input.indexOf("\n---", 3);
+  if (closeIdx < 0) return null;
+  return utf8ByteLength(input.slice(0, closeIdx + 4));
 }

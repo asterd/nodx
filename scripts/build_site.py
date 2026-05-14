@@ -36,7 +36,7 @@ SITE       = ROOT / "site"
 PAGES_DIR  = SITE / "pages"
 DATA_DIR   = SITE / "data"
 
-REPO_BASE_DEFAULT = "https://github.com/your-org/nodx"
+REPO_BASE_DEFAULT = "https://github.com/asterd/nodx"
 
 # Map source files into site routes.
 ROUTES: dict[str, Path] = {
@@ -72,6 +72,13 @@ ROUTES: dict[str, Path] = {
     # spec & root artifacts
     "spec/NODX-RFC-0001": ROOT / "NODX-RFC-0001.md",
     "spec/SECURITY":      ROOT / "SECURITY.md",
+    # contributor & ecosystem docs
+    "docs/IMPLEMENTER_GUIDE": DOCS / "IMPLEMENTER_GUIDE.md",
+    "docs/ECOSYSTEM_PLAN":    DOCS / "ECOSYSTEM_PLAN.md",
+    "docs/THEMING":           DOCS / "THEMING.md",
+    "spec/RFC-0003-paged-output-contract":  DOCS / "RFC-0003-paged-output-contract.md",
+    "spec/RFC-0004-editor-contract":        DOCS / "RFC-0004-editor-contract.md",
+    "spec/RFC-0005-parquet-arrow-portability": DOCS / "RFC-0005-parquet-arrow-portability.md",
 }
 
 

@@ -1355,11 +1355,11 @@ JSON diagnostics MUST be deterministic for deterministic input.
 | `NODX-E008` | error | url/validate | Unresolvable or unsafe asset. |
 | `NODX-E009` | error | validate | Informative image missing non-empty alt text. |
 | `NODX-E010` | error/fatal | url/package | Unsafe package path, path traversal, nested ZIP, or unsafe package structure. |
-| `NODX-E011` | error | include/package | Include cycle. |
+| `NODX-E011` | error | include/package | Include cycle. *Reserved in baseline 1.0:* the `::include` construct is itself a future profile (see Section 21), so the code is registered but no baseline processor emits it. |
 | `NODX-E012` | error/fatal | core/package | Resource limit exceeded or malformed ZIP envelope. |
 | `NODX-E013` | warning | validate | Variable referenced but not declared. |
 | `NODX-E014` | warning | validate | Undeclared custom component without explicit fallback. |
-| `NODX-E015` | warning | renderer | Renderer emitted lossy fallback. |
+| `NODX-E015` | warning | renderer | Renderer emitted lossy fallback. *Reserved in baseline 1.0:* the renderer-side lossy-fallback path overlaps with `NODX-E026` and is held back until a future profile separates the two semantics. |
 | `NODX-E016` | info/warning | validate | Recoverable default or unknown/preserved feature. |
 | `NODX-E017` | error | package | Media type mismatch. |
 | `NODX-E018` | fatal | core | Byte Order Mark is not allowed. |

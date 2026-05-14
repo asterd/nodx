@@ -5,14 +5,37 @@ from .attrs import parse_attrs
 from .diagnostics import diag
 from .front_matter import parse_meta
 from .inline_parser import parse_inlines
+from .limits import DEFAULT_LIMITS
 
 
-def parse(input_):
+def parse(input_, limits=None):
+    if limits is None:
+        limits = DEFAULT_LIMITS
     diagnostics = []
     if input_.startswith("\ufeff"):
         diagnostics.append(diag("NODX-E018", "fatal", "Byte Order Mark is not allowed.", 1, 1))
     if "\u0000" in input_:
         diagnostics.append(diag("NODX-E002", "fatal", "U+0000 is not allowed.", 1, 1))
+    # Text-side resource limits — parity with `nodx_core::parse_str_with_limits`.
+    # See packages/nodx-js/src/blockParser.mjs for the JS twin.
+    byte_len = len(input_.encode("utf-8"))
+    if byte_len > limits["sourceBytes"]:
+        diagnostics.append(diag("NODX-E012", "fatal", "Input byte size limit exceeded.", 1, 1))
+    oversize = _first_oversize_line(input_, limits["lineLength"])
+    if oversize is not None:
+        diagnostics.append(diag("NODX-E012", "fatal", "Line length limit exceeded.", oversize, 1))
+    fm_bytes = _front_matter_byte_size(input_)
+    if fm_bytes is not None and fm_bytes > limits["frontMatterBytes"]:
+        diagnostics.append(diag("NODX-E012", "fatal", "Front matter size limit exceeded.", 1, 1))
+    if any(d["severity"] == "fatal" for d in diagnostics):
+        # Fatal short-circuit: empty Document with baseline meta. Same field
+        # set the normal path below produces via setdefault().
+        return {
+            "schema": "nodx/1.0",
+            "meta": {"schema": "nodx/1.0", "type": "document", "dir": "auto", "language": "und"},
+            "body": [],
+            "diagnostics": diagnostics,
+        }
     lines = re.sub(r"\r\n", "\n", input_)
     if lines.endswith("\n"):
         lines = lines[:-1]
@@ -278,3 +301,36 @@ def parse_pipe_cell_attrs(cell):
 
 def attrs_are_empty(attrs):
     return not attrs.get("id") and not attrs.get("classes") and not attrs.get("attrs") and not attrs.get("styles")
+
+
+# --- Resource limit helpers (parity with nodx_core::parse_str_with_limits) ---
+
+
+def _first_oversize_line(input_, max_):
+    """Return the 1-based line number whose UTF-8 byte length exceeds *max_*."""
+    line_no = 1
+    cursor = 0
+    text = input_
+    while True:
+        nl = text.find("\n", cursor)
+        if nl < 0:
+            tail = text[cursor:]
+            if len(tail.encode("utf-8")) > max_:
+                return line_no
+            return None
+        chunk = text[cursor:nl]
+        if len(chunk.encode("utf-8")) > max_:
+            return line_no
+        cursor = nl + 1
+        line_no += 1
+
+
+def _front_matter_byte_size(input_):
+    if not input_.startswith("---"):
+        return None
+    if len(input_) > 3 and input_[3] not in ("\n", "\r"):
+        return None
+    close_idx = input_.find("\n---", 3)
+    if close_idx < 0:
+        return None
+    return len(input_[: close_idx + 4].encode("utf-8"))

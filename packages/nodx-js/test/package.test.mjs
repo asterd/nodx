@@ -21,7 +21,11 @@ test("rejects package manifest digest mismatch", () => {
     ["manifest.yaml", enc(manifest("doc.nodx", enc("# A\n"), "sha256-bad"))],
     ["doc.nodx", enc("# A\n")],
   ]);
-  assert.throws(() => openStoredPackage(zip), /digest mismatch/);
+  assert.throws(() => openStoredPackage(zip), (err) => {
+    assert.equal(err.code, "NODX-E021");
+    assert.equal(err.severity, "error");
+    return true;
+  });
 });
 
 test("rejects percent-encoded package traversal", () => {
@@ -30,7 +34,11 @@ test("rejects percent-encoded package traversal", () => {
     ["manifest.yaml", enc("schema: nodx-package/1.0\nentry: a/%2e%2e/doc.nodx\n")],
     ["a/%2e%2e/doc.nodx", enc("# A\n")],
   ]);
-  assert.throws(() => openStoredPackage(zip), /unsafe package path/);
+  assert.throws(() => openStoredPackage(zip), (err) => {
+    assert.equal(err.code, "NODX-E010");
+    assert.equal(err.severity, "error");
+    return true;
+  });
 });
 
 test("rejects duplicate package entry paths", () => {
@@ -40,7 +48,11 @@ test("rejects duplicate package entry paths", () => {
     ["doc.nodx", enc("# A\n")],
     ["doc.nodx", enc("# B\n")],
   ]);
-  assert.throws(() => openStoredPackage(zip), /duplicate package entry path/);
+  assert.throws(() => openStoredPackage(zip), (err) => {
+    assert.equal(err.code, "NODX-E012");
+    assert.equal(err.severity, "fatal");
+    return true;
+  });
 });
 
 function manifest(path, data, digest = sha256Base64Url(data)) {

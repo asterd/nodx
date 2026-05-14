@@ -32,9 +32,11 @@ handle this document* from *the document is wrong*.
 | `NODX-E008` | error | validator | Referenced asset path does not exist in the package. |
 | `NODX-E009` | error | validator | `image` block is missing the required `alt` attribute. |
 | `NODX-E010` | error | package | Package contains an unsafe or invalid path. |
+| `NODX-E011` | error | *(reserved)* | Reserved for include-cycle detection. The `::include` construct is a future profile (see RFC §21); baseline 1.0 processors do not emit this code. |
 | `NODX-E012` | fatal/error | parser, package, url | A configured resource limit was exceeded. The message names the limit. |
 | `NODX-E013` | warning | validator | Variable is referenced but never declared in front matter. |
 | `NODX-E014` | error | validator | Block uses a component name with an invalid shape. |
+| `NODX-E015` | warning | *(reserved)* | Reserved for a future renderer lossy-fallback signal that overlaps with `NODX-E026`. Baseline 1.0 emits `NODX-E026` instead. |
 | `NODX-E016` | warning | validator | `::toc` will produce a default label because none was given. |
 | `NODX-E017` | error | signing | Detached JWS signature failed verification or trust policy. |
 | `NODX-E018` | fatal | parser | Source begins with a UTF-8 byte order mark. |
@@ -49,8 +51,10 @@ handle this document* from *the document is wrong*.
 | `NODX-E027` | error | style | NODS stylesheet contains a forbidden construct; the rule is dropped. |
 | `NODX-E028` | error | validator | Front matter `integrity` is malformed or does not match the canonical AST digest. |
 
-> Codes E011, E015 are reserved for future use and intentionally absent
-> from the emitter map. Do not assume a contiguous range.
+> `NODX-E011` and `NODX-E015` are reserved in baseline 1.0 and intentionally
+> absent from the emitter map. Future profiles (`include`, renderer
+> lossy-fallback split) will activate them. The codes themselves are part of
+> the stable registry — do not reuse them for unrelated purposes.
 
 ## Examples
 

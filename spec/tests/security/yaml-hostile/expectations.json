@@ -1,0 +1,186 @@
+{
+  "alias.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "anchor-on-list.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "anchors.nodx": {
+    "codes": [
+      "NODX-E004",
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "binary-tag.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "complex-key.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "double-document.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "duplicate-key.nodx": {
+    "codes": [
+      "NODX-E004",
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "duplicate-mixed.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "duplicate-nested.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "duplicate-with-comment.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "explicit-tag-nested.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "explicit-tag.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "flow-sequence.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "forbidden-anchor-quote.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "hex.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "inf-neg.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "inf-pos.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "merge-key.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "multiple-documents-ellipsis.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "multiple-documents.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "nan.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "non-printable.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "non-string-key-brace.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "non-string-key-bracket.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "numeric-bool.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "numeric-specials.nodx": {
+    "codes": [
+      "NODX-E004",
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "octal.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "tab-indent.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "timestamp-explicit.nodx": {
+    "codes": [
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  },
+  "timestamp.nodx": {
+    "codes": [
+      "NODX-E004",
+      "NODX-E019"
+    ],
+    "exit_code": 2
+  }
+}

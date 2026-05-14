@@ -1,0 +1,234 @@
+{
+  "attr-attack-1.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "attr-attack-2.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "attr-attack-3.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "attr-attack-4.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "attr-attack-5.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "data-attack-1.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "data-attack-2.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "data-attack-3.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "data-attack-4.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "encoded-attack-1.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "encoded-attack-2.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "encoded-attack-3.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "encoded-attack-4.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "encoded-attack-5.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "heading-attack-1.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "heading-attack-2.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "heading-attack-3.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "heading-attack-4.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "heading-attack-5.nodx": {
+    "codes": [],
+    "exit_code": 0
+  },
+  "html-contexts.nodx": {
+    "codes": [
+      "NODX-E008",
+      "NODX-E020",
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "image-attack-1.nodx": {
+    "codes": [
+      "NODX-E008"
+    ],
+    "exit_code": 2
+  },
+  "image-attack-2.nodx": {
+    "codes": [
+      "NODX-E008"
+    ],
+    "exit_code": 2
+  },
+  "image-attack-3.nodx": {
+    "codes": [
+      "NODX-E008"
+    ],
+    "exit_code": 2
+  },
+  "image-attack-4.nodx": {
+    "codes": [
+      "NODX-E008"
+    ],
+    "exit_code": 2
+  },
+  "image-attack-5.nodx": {
+    "codes": [
+      "NODX-E008"
+    ],
+    "exit_code": 2
+  },
+  "link-attack-1.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "link-attack-2.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "link-attack-3.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "link-attack-4.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "link-attack-5.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "link-schemes.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "payloads.nodx": {
+    "codes": [
+      "NODX-E004",
+      "NODX-E007",
+      "NODX-E008",
+      "NODX-E020",
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "scheme-attack-1.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "scheme-attack-2.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "scheme-attack-3.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "scheme-attack-4.nodx": {
+    "codes": [
+      "NODX-E020"
+    ],
+    "exit_code": 2
+  },
+  "style-attack-1.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "style-attack-2.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "style-attack-3.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "style-attack-4.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  },
+  "style-attack-5.nodx": {
+    "codes": [
+      "NODX-E027"
+    ],
+    "exit_code": 2
+  }
+}

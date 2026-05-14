@@ -4,6 +4,7 @@ from zlib import crc32
 from .block_parser import parse
 from .bytes import sha256_base64_url
 from .limits import DEFAULT_LIMITS
+from .package_diagnostics import raise_diag
 from .url import normalize_package_path
 
 
@@ -34,49 +35,49 @@ def open_stored_package(bytes_, limits=None):
     limits = limits or DEFAULT_LIMITS
     bytes_ = bytes(bytes_)
     if not is_packaged_nodx(bytes_):
-        raise ValueError("not a packaged NODX")
+        raise_diag("NODX-E012", "Not a packaged NODX.")
     entries = zip_entries(bytes_, limits)
     if len(entries) > limits["packageFileCount"]:
-        raise ValueError("package file count limit exceeded")
+        raise_diag("NODX-E012", "Package file count limit exceeded.")
     if sum(entry.uncompressed_size for entry in entries) > limits["packageUncompressedBytes"]:
-        raise ValueError("package uncompressed size limit exceeded")
+        raise_diag("NODX-E012", "Package uncompressed size limit exceeded.")
     if not entries or entries[0].name != "mimetype" or entries[0].compression != 0:
-        raise ValueError("first ZIP entry must be mimetype")
+        raise_diag("NODX-E012", "First ZIP entry must be mimetype.")
 
     files = {entry.name: read_stored_entry(bytes_, entry, limits) for entry in entries}
     mimetype = files.get("mimetype")
     if not mimetype or decode(mimetype) != "application/nodx+zip":
-        raise ValueError("invalid NODX package mimetype")
+        raise_diag("NODX-E012", "Invalid NODX package mimetype.")
     manifest_bytes = files.get("manifest.yaml")
     if not manifest_bytes:
-        raise ValueError("package is missing manifest.yaml")
+        raise_diag("NODX-E012", "Package is missing manifest.yaml.")
     manifest = parse_manifest(decode(manifest_bytes), limits)
     if manifest.get("schema") != "nodx-package/1.0":
-        raise ValueError("package manifest schema must be nodx-package/1.0")
+        raise_diag("NODX-E012", "Package manifest schema must be `nodx-package/1.0`.")
     if len(manifest["entries"]) > limits["manifestEntries"]:
-        raise ValueError("package manifest entry limit exceeded")
+        raise_diag("NODX-E012", "Package manifest entry limit exceeded.")
     for item in manifest["entries"]:
         data = files.get(item["path"])
         if data is None:
-            raise ValueError("manifest lists a missing package entry")
+            raise_diag("NODX-E021", "Manifest lists a missing package entry.")
         if item.get("size") is not None and item["size"] != len(data):
-            raise ValueError("package manifest size does not match entry bytes")
+            raise_diag("NODX-E021", "Package manifest size does not match entry bytes.")
         if item.get("sha256") and item["sha256"] != sha256_base64_url(data):
-            raise ValueError("package digest mismatch")
+            raise_diag("NODX-E021", "Package digest mismatch.")
     for path in manifest_paths(manifest.get("components")) + manifest_paths(manifest.get("themes")):
         if path not in files:
-            raise ValueError("manifest lists a missing package extension")
+            raise_diag("NODX-E021", "Manifest lists a missing package extension.")
         if not any(entry["path"] == path for entry in manifest["entries"]):
-            raise ValueError("package extension paths must also be listed in manifest entries")
+            raise_diag("NODX-E021", "Package extension paths must also be listed in manifest entries.")
     if not manifest.get("entry"):
-        raise ValueError("package manifest is missing entry")
+        raise_diag("NODX-E012", "Package manifest is missing entry.")
     manifest["entry"] = safe_package_path(manifest["entry"], limits)
     if manifest["entry"] not in files:
-        raise ValueError("package entry document is missing")
+        raise_diag("NODX-E012", "Package entry document is missing.")
     if manifest.get("signature"):
         manifest["signature"] = safe_package_path(manifest["signature"], limits)
         if manifest["signature"] not in files:
-            raise ValueError("package manifest references a missing signature")
+            raise_diag("NODX-E012", "Package manifest references a missing signature.")
     return StoredPackage(manifest["entry"], files[manifest["entry"]], files, manifest)
 
 
@@ -127,21 +128,21 @@ def package_theme_stylesheets(pkg, options=None):
 def zip_entries(bytes_, limits):
     eocd = find_eocd(bytes_)
     if eocd < 0:
-        raise ValueError("ZIP end of central directory not found")
+        raise_diag("NODX-E012", "ZIP end of central directory not found.")
     if u16(bytes_, eocd + 4) != 0 or u16(bytes_, eocd + 6) != 0:
-        raise ValueError("multi-disk ZIP is not supported")
+        raise_diag("NODX-E012", "Multi-disk ZIP is not supported.")
     count = u16(bytes_, eocd + 10)
     cd_size = u32(bytes_, eocd + 12)
     cd_offset = u32(bytes_, eocd + 16)
     if count == 0xFFFF or cd_size == 0xFFFFFFFF or cd_offset == 0xFFFFFFFF:
-        raise ValueError("ZIP64 packages are not supported")
+        raise_diag("NODX-E012", "ZIP64 packages are not supported.")
 
     pos = cd_offset
     entries = []
     seen = set()
     for _ in range(count):
         if u32(bytes_, pos) != 0x02014B50:
-            raise ValueError("invalid ZIP central directory")
+            raise_diag("NODX-E012", "Invalid ZIP central directory.")
         flags = u16(bytes_, pos + 8)
         compression = u16(bytes_, pos + 10)
         entry_crc = u32(bytes_, pos + 16)
@@ -153,29 +154,29 @@ def zip_entries(bytes_, limits):
         external_attrs = u32(bytes_, pos + 38)
         local_offset = u32(bytes_, pos + 42)
         if compressed_size == 0xFFFFFFFF or uncompressed_size == 0xFFFFFFFF or local_offset == 0xFFFFFFFF:
-            raise ValueError("ZIP64 packages are not supported")
+            raise_diag("NODX-E012", "ZIP64 packages are not supported.")
         if uncompressed_size > limits["packageEntryBytes"]:
-            raise ValueError("package entry size limit exceeded")
+            raise_diag("NODX-E012", "Package entry size limit exceeded.")
         if compressed_size == 0 and uncompressed_size > 0:
-            raise ValueError("package compression ratio limit exceeded")
+            raise_diag("NODX-E012", "Package compression ratio limit exceeded.")
         if compressed_size > 0 and uncompressed_size > compressed_size * limits["packageCompressionRatio"]:
-            raise ValueError("package compression ratio limit exceeded")
+            raise_diag("NODX-E012", "Package compression ratio limit exceeded.")
         if flags & 1:
-            raise ValueError("encrypted ZIP entries are not supported")
+            raise_diag("NODX-E012", "Encrypted ZIP entries are not supported.")
         if flags & 8:
-            raise ValueError("ZIP data descriptors are not supported")
+            raise_diag("NODX-E012", "ZIP data descriptors are not supported.")
         if compression != 0:
-            raise ValueError("browser package reader supports stored ZIP entries only")
+            raise_diag("NODX-E012", "Browser package reader supports stored ZIP entries only.")
         reject_special_file(external_attrs)
         name_start = pos + 46
         name_end = name_start + name_len
         extra_end = name_end + extra_len
         if extra_end > len(bytes_):
-            raise ValueError("ZIP entry name is out of bounds")
+            raise_diag("NODX-E012", "ZIP entry name is out of bounds.")
         reject_zip64_extra(bytes_[name_end:extra_end])
         name = safe_package_path(decode(bytes_[name_start:name_end]), limits)
         if name in seen:
-            raise ValueError("duplicate package entry path")
+            raise_diag("NODX-E012", "Duplicate package entry path.")
         seen.add(name)
         entries.append(ZipEntry(name, compression, entry_crc, compressed_size, uncompressed_size, local_offset, external_attrs))
         pos = extra_end + comment_len
@@ -185,45 +186,45 @@ def zip_entries(bytes_, limits):
 def read_stored_entry(bytes_, entry, limits):
     pos = entry.local_offset
     if u32(bytes_, pos) != 0x04034B50:
-        raise ValueError("invalid ZIP local header")
+        raise_diag("NODX-E012", "Invalid ZIP local header.")
     flags = u16(bytes_, pos + 6)
     compression = u16(bytes_, pos + 8)
     entry_crc = u32(bytes_, pos + 14)
     compressed_size = u32(bytes_, pos + 18)
     uncompressed_size = u32(bytes_, pos + 22)
     if flags & 1:
-        raise ValueError("encrypted ZIP entries are not supported")
+        raise_diag("NODX-E012", "Encrypted ZIP entries are not supported.")
     if flags & 8:
-        raise ValueError("ZIP data descriptors are not supported")
+        raise_diag("NODX-E012", "ZIP data descriptors are not supported.")
     if (
         compression != entry.compression
         or entry_crc != entry.crc32
         or compressed_size != entry.compressed_size
         or uncompressed_size != entry.uncompressed_size
     ):
-        raise ValueError("ZIP local header does not match central directory")
+        raise_diag("NODX-E012", "ZIP local header does not match central directory.")
     name_len = u16(bytes_, pos + 26)
     extra_len = u16(bytes_, pos + 28)
     name_start = pos + 30
     name_end = name_start + name_len
     extra_end = name_end + extra_len
     if extra_end > len(bytes_):
-        raise ValueError("ZIP entry data is out of bounds")
+        raise_diag("NODX-E012", "ZIP entry data is out of bounds.")
     reject_zip64_extra(bytes_[name_end:extra_end])
     name = safe_package_path(decode(bytes_[name_start:name_end]), limits)
     if name != entry.name:
-        raise ValueError("ZIP local header name mismatch")
+        raise_diag("NODX-E012", "ZIP local header name mismatch.")
     reject_special_file(entry.external_attrs)
     end = extra_end + entry.compressed_size
     if end > len(bytes_):
-        raise ValueError("ZIP entry data is out of bounds")
+        raise_diag("NODX-E012", "ZIP entry data is out of bounds.")
     data = bytes_[extra_end:end]
     if len(data) != entry.uncompressed_size:
-        raise ValueError("stored ZIP entry has inconsistent sizes")
+        raise_diag("NODX-E012", "Stored ZIP entry has inconsistent sizes.")
     if crc32(data) & 0xFFFFFFFF != entry.crc32:
-        raise ValueError("ZIP CRC mismatch")
+        raise_diag("NODX-E012", "ZIP CRC mismatch.")
     if looks_like_zip(data):
-        raise ValueError("nested ZIP archives are not supported")
+        raise_diag("NODX-E010", "Nested ZIP archives are not supported.")
     return data
 
 
@@ -242,7 +243,7 @@ def parse_manifest(text, limits):
             current_entry = None
             key = trimmed[:-1] if trimmed.endswith(":") else trimmed.split(":", 1)[0]
             if key in seen_top:
-                raise ValueError("duplicate manifest key")
+                raise_diag("NODX-E012", "Duplicate manifest key.")
             seen_top.add(key)
         if line.startswith("schema:"):
             manifest["schema"] = unquote(line[7:].strip())
@@ -258,7 +259,7 @@ def parse_manifest(text, limits):
         elif section == "entries" and current_entry is not None and trimmed.startswith("size:"):
             current_entry["size"] = int(trimmed[5:].strip())
             if current_entry["size"] < 0:
-                raise ValueError("invalid manifest entry size")
+                raise_diag("NODX-E012", "Invalid manifest entry size.")
         elif section == "entries" and current_entry is not None and trimmed.startswith("sha256:"):
             current_entry["sha256"] = unquote(trimmed[7:].strip())
         elif section in ("components", "themes") and trimmed.startswith("- path:"):
@@ -297,7 +298,7 @@ def strip_front_matter(text):
 def safe_package_path(path, limits):
     normalized = normalize_package_path(path, limits)
     if normalized is None:
-        raise ValueError("unsafe package path: " + path)
+        raise_diag("NODX-E010", f"Unsafe package path: {path}")
     return normalized
 
 
@@ -309,12 +310,12 @@ def reject_zip64_extra(extra):
         pos += 4
         end = pos + size
         if end > len(extra):
-            raise ValueError("invalid ZIP extra field")
+            raise_diag("NODX-E012", "Invalid ZIP extra field.")
         if header == 0x0001:
-            raise ValueError("ZIP64 packages are not supported")
+            raise_diag("NODX-E012", "ZIP64 packages are not supported.")
         pos = end
     if pos != len(extra):
-        raise ValueError("invalid ZIP extra field")
+        raise_diag("NODX-E012", "Invalid ZIP extra field.")
 
 
 def reject_special_file(external_attrs):
@@ -322,7 +323,7 @@ def reject_special_file(external_attrs):
     if mode == 0:
         return
     if mode & 0o170000 != 0o100000:
-        raise ValueError("ZIP special files are not supported")
+        raise_diag("NODX-E012", "ZIP special files are not supported.")
 
 
 def looks_like_zip(data):
@@ -339,7 +340,7 @@ def find_eocd(bytes_):
 
 def decode_required(files, path):
     if path not in files:
-        raise ValueError("package manifest references missing path: " + path)
+        raise_diag("NODX-E021", f"Package manifest references missing path: {path}")
     return decode(files[path])
 
 
@@ -351,13 +352,13 @@ def unquote(value):
 
 def u16(bytes_, pos):
     if pos + 2 > len(bytes_):
-        raise ValueError("unexpected end of ZIP data")
+        raise_diag("NODX-E012", "Unexpected end of ZIP data.")
     return int.from_bytes(bytes_[pos:pos + 2], "little")
 
 
 def u32(bytes_, pos):
     if pos + 4 > len(bytes_):
-        raise ValueError("unexpected end of ZIP data")
+        raise_diag("NODX-E012", "Unexpected end of ZIP data.")
     return int.from_bytes(bytes_[pos:pos + 4], "little")
 
 
