@@ -31,6 +31,11 @@ check_output lite-syntax.ncp "target/debug/nodx ncp $root/fixtures/lite-syntax.n
 check_output lite-syntax.diagnostics "target/debug/nodx diagnostics $root/fixtures/lite-syntax.nodx --format json" expected/lite-syntax.diagnostics.json
 check_output lite-syntax.html "target/debug/nodx html $root/fixtures/lite-syntax.nodx" expected/lite-syntax.html
 
+check_output thematic-break.ast "target/debug/nodx ast $root/fixtures/thematic-break.nodx" expected/thematic-break.ast.json
+check_output thematic-break.ncp "target/debug/nodx ncp $root/fixtures/thematic-break.nodx" expected/thematic-break.ncp.json
+check_output thematic-break.diagnostics "target/debug/nodx diagnostics $root/fixtures/thematic-break.nodx --format json" expected/thematic-break.diagnostics.json
+check_output thematic-break.html "target/debug/nodx html $root/fixtures/thematic-break.nodx" expected/thematic-break.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

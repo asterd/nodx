@@ -83,6 +83,13 @@ def parse_until(state, close_frame):
         if line.strip() == "":
             state["pos"] += 1
             continue
+        if is_thematic_break(line):
+            # Thematic break: leaf node with no children/inlines/text. The
+            # opening front matter `---` is consumed above, so by here `---`
+            # is unambiguous.
+            state["pos"] += 1
+            out.append(node("hr", empty_attrs(), [], [], None))
+            continue
         opener = parse_opener(line)
         if opener:
             out.append(parse_delimited(state, opener))
@@ -161,6 +168,7 @@ def parse_paragraph(state):
         and not parse_opener(state["lines"][state["pos"]])
         and not parse_heading(state["lines"][state["pos"]])
         and not list_kind(state["lines"][state["pos"]])
+        and not is_thematic_break(state["lines"][state["pos"]])
         and not is_any_close(state["lines"][state["pos"]])
     ):
         if state["pos"] + 1 < len(state["lines"]) and is_pipe_header(state["lines"][state["pos"]], state["lines"][state["pos"] + 1]):
@@ -213,6 +221,22 @@ def parse_matching_close(line, n, expected_name):
     if close:
         return close
     return {"name": expected_name} if line == ":" * n + expected_name else None
+
+
+def is_thematic_break(line):
+    """Mirrors ``nodx_core::block_parser::is_thematic_break``.
+
+    A thematic break is a line whose trimmed content is three or more
+    repetitions of a single marker char ``-``, ``*``, or ``_`` with no
+    internal whitespace.
+    """
+    t = line.strip()
+    if len(t) < 3:
+        return False
+    c = t[0]
+    if c not in ("-", "*", "_"):
+        return False
+    return all(ch == c for ch in t)
 
 
 def is_any_close(line):

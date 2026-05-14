@@ -76,6 +76,73 @@ fn unclosed_delimited_block_emits_diagnostic() {
 }
 
 #[test]
+fn thematic_break_recognises_three_markers() {
+    // Three patterns, each on an isolated line. The opening `---` is not the
+    // first line of the document so it cannot be confused with front matter.
+    let doc = parse_str("Above paragraph.\n\n---\n\nMiddle.\n\n***\n\nMore.\n\n___\n\nTail.\n");
+    let types: Vec<&str> = doc.body.iter().map(|n| n.node_type.as_str()).collect();
+    assert_eq!(
+        types,
+        vec![
+            "paragraph",
+            "hr",
+            "paragraph",
+            "hr",
+            "paragraph",
+            "hr",
+            "paragraph",
+        ]
+    );
+    // The `hr` node is a leaf: empty children/inlines/text. The byte-stable
+    // canonical JSON must serialise it as such.
+    for node in &doc.body {
+        if node.node_type == "hr" {
+            assert!(node.children.is_empty());
+            assert!(node.inlines.is_empty());
+            assert!(node.text.is_none());
+            assert!(node.classes.is_empty());
+            assert!(node.attrs.is_empty());
+            assert!(node.id.is_none());
+        }
+    }
+    assert!(canonical_json(&doc).contains("\"type\":\"hr\""));
+}
+
+#[test]
+fn thematic_break_with_internal_whitespace_is_paragraph() {
+    // CommonMark accepts `- - -`; NODX intentionally does not. The line stays
+    // a paragraph so the byte-stable AST is unambiguous.
+    let doc = parse_str("Before.\n\n- - -\n\nAfter.\n");
+    assert!(doc.body.iter().all(|n| n.node_type != "hr"));
+}
+
+#[test]
+fn thematic_break_too_few_markers_is_paragraph() {
+    let doc = parse_str("Before.\n\n--\n\nAfter.\n");
+    assert!(doc.body.iter().all(|n| n.node_type != "hr"));
+}
+
+#[test]
+fn thematic_break_inside_front_matter_does_not_apply() {
+    // First `---` opens front matter, second closes it. Neither is an `hr`.
+    let doc = parse_str("---\ntitle: Demo\n---\n\nBody.\n\n---\n\nTail.\n");
+    // After front matter, the standalone `---` between paragraphs is an `hr`.
+    assert_eq!(doc.body.len(), 3);
+    assert_eq!(doc.body[0].node_type, "paragraph");
+    assert_eq!(doc.body[1].node_type, "hr");
+    assert_eq!(doc.body[2].node_type, "paragraph");
+}
+
+#[test]
+fn thematic_break_first_line_when_no_front_matter() {
+    // A document that begins with `---` followed by a non-`---` line on line 2
+    // opens a front matter and fails to close it. To get an HR at the start
+    // we'd need a blank line first, mimicking the structural rule.
+    let doc = parse_str("\n---\n\nBody.\n");
+    assert_eq!(doc.body[0].node_type, "hr");
+}
+
+#[test]
 fn front_matter_block_sequence_of_mappings() {
     let doc =
         parse_str("---\nschema: nodx/0.1\nauthors:\n  - name: Alice\n  - name: Bob\n---\n\nBody\n");

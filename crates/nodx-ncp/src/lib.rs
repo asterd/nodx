@@ -304,7 +304,9 @@ fn semantic_node_text(node: &Node) -> String {
 }
 
 fn is_semantic_text_excluded(node_type: &str) -> bool {
-    matches!(node_type, "style" | "pagebreak" | "toc")
+    // `hr` is a leaf with no semantic content; excluding it keeps the
+    // markdown-shaped semantic projection clean (no spurious "Hr:" lines).
+    matches!(node_type, "style" | "pagebreak" | "toc" | "hr")
 }
 
 fn semantic_id(node: &Node) -> String {

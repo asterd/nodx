@@ -83,7 +83,7 @@ export function renderSemanticText(doc) {
 function writeSemanticNodes(nodes, lines, path) {
   let index = 0;
   for (const node of nodes) {
-    if (["style", "pagebreak", "toc"].includes(node.type)) continue;
+    if (["style", "pagebreak", "toc", "hr"].includes(node.type)) continue;
     const nextPath = [...path, index];
     index += 1;
     writeSemanticNode(node, lines, nextPath);
@@ -198,7 +198,7 @@ function semanticNodeText(node) {
   if (inline) parts.push(inline);
   if (node.text !== null && node.text !== undefined && node.text.trim()) parts.push(node.text.trim());
   for (const child of node.children ?? []) {
-    if (["style", "pagebreak", "toc"].includes(child.type)) continue;
+    if (["style", "pagebreak", "toc", "hr"].includes(child.type)) continue;
     if (child.type === "row" || child.type === "cell") {
       const text = semanticNodeText(child);
       if (text) parts.push(text);
@@ -288,6 +288,9 @@ function renderNode(node, path, navigation, options) {
     case "field": return `<div${htmlId(node)}><dt>${escapeHtml(node.attrs.label ?? node.attrs.name ?? "Field")}</dt><dd>${escapeHtml(node.attrs.value ?? "")}</dd></div>`;
     case "toc": return renderToc(node, path, navigation);
     case "pagebreak": return `<hr${htmlId(node)} class="pagebreak">`;
+    // Thematic break: void element rendered with whatever attrs (none today)
+    // the AST carries. Mirrors `nodx-render-html::render_node` "hr" arm.
+    case "hr": return `<hr${htmlAttrs(node)}>`;
     case "media":
     case "embed":
     case "include": return renderMediaFallback(node, path, navigation, options);

@@ -269,6 +269,15 @@ impl Parser<'_> {
                 self.pos += 1;
                 continue;
             }
+            if is_thematic_break(line) {
+                let hr_line = self.pos + 1;
+                self.pos += 1;
+                if !self.count_node(hr_line) {
+                    break;
+                }
+                out.push(Node::container("hr", Attrs::default(), Vec::new()));
+                continue;
+            }
             if let Some((colons, name, attrs)) =
                 parse_opener_with_cap(line, self.limits.attribute_value_bytes)
             {
@@ -455,6 +464,7 @@ impl Parser<'_> {
             && parse_opener(self.lines[self.pos]).is_none()
             && parse_heading(self.lines[self.pos]).is_none()
             && !is_list_start(self.lines[self.pos])
+            && !is_thematic_break(self.lines[self.pos])
             && !is_any_close(self.lines[self.pos])
         {
             if self.pos + 1 < self.lines.len()
@@ -471,6 +481,23 @@ impl Parser<'_> {
         )
     }
 }
+/// A thematic break (NODX-RFC-0001 §6) is a line whose trimmed content is
+/// three or more repetitions of a single marker char `-`, `*`, or `_` with no
+/// internal whitespace. The opening front matter `---` is consumed before
+/// `parse_until` runs, so by the time this helper sees a line the document is
+/// past the front-matter region and `---` is unambiguously a thematic break.
+pub(crate) fn is_thematic_break(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.len() < 3 {
+        return false;
+    }
+    let first = trimmed.as_bytes()[0];
+    if !matches!(first, b'-' | b'*' | b'_') {
+        return false;
+    }
+    trimmed.bytes().all(|b| b == first)
+}
+
 fn is_any_close(line: &str) -> bool {
     let n = line.chars().take_while(|c| *c == ':').count();
     if n < 2 {

@@ -42,6 +42,17 @@
         "diagnostics": "expected/invalid-required-profile.diagnostics.json"
       },
       "exitCode": 3
+    },
+    {
+      "name": "thematic-break",
+      "source": "fixtures/thematic-break.nodx",
+      "expected": {
+        "ast": "expected/thematic-break.ast.json",
+        "ncp": "expected/thematic-break.ncp.json",
+        "diagnostics": "expected/thematic-break.diagnostics.json",
+        "html": "expected/thematic-break.html"
+      },
+      "exitCode": 0
     }
   ]
 }

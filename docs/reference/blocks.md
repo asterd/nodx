@@ -63,6 +63,7 @@ if the names disagree.
 | `field` | inside `<dl>` as `<dt>`/`<dd>` | Has `label`, `name`, optional `value`. |
 | `toc` | `<nav>` | Generated from heading graph. Honors `depth`, `title`, `role`. |
 | `pagebreak` | `<hr class="pagebreak">` | Hints to paged output. No content. |
+| `hr` | `<hr>` | Thematic break (RFC §6.4). Recognized when an isolated line is three or more `-`, `*`, or `_` with no internal whitespace. Leaf node. |
 | `bibliography` | `<ol>` | Wraps citation entries. |
 | `citation-entry` | `<li>` | Has `id`, optional `label`. |
 | `speaker-notes` | `<aside class="speaker-notes">` | Hidden in display renderers, exposed in presentation/agent modes. |

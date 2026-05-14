@@ -87,6 +87,13 @@ function parseUntil(state, closeFrame) {
       state.pos++;
       continue;
     }
+    if (isThematicBreak(line)) {
+      // Thematic break: leaf node with no children/inlines/text. The opening
+      // front matter `---` is consumed above, so by here `---` is unambiguous.
+      state.pos++;
+      out.push(node("hr", emptyAttrs(), [], [], null));
+      continue;
+    }
     const opener = parseOpener(line);
     if (opener) {
       out.push(parseDelimited(state, opener));
@@ -172,6 +179,7 @@ function parseParagraph(state) {
     !parseOpener(state.lines[state.pos]) &&
     !parseHeading(state.lines[state.pos]) &&
     !listKind(state.lines[state.pos]) &&
+    !isThematicBreak(state.lines[state.pos]) &&
     !isAnyClose(state.lines[state.pos])
   ) {
     if (state.pos + 1 < state.lines.length && isPipeHeader(state.lines[state.pos], state.lines[state.pos + 1])) break;
@@ -221,6 +229,18 @@ function parseMatchingClose(line, n, expectedName) {
   const close = parseClose(line, n);
   if (close) return close;
   return line === ":".repeat(n) + expectedName ? { name: expectedName } : null;
+}
+
+// A thematic break (NODX-RFC-0001 §6) is a line whose trimmed content is
+// three or more repetitions of a single marker char `-`, `*`, or `_` with no
+// internal whitespace. Mirrors `nodx_core::block_parser::is_thematic_break`.
+function isThematicBreak(line) {
+  const t = line.trim();
+  if (t.length < 3) return false;
+  const c = t[0];
+  if (c !== "-" && c !== "*" && c !== "_") return false;
+  for (let i = 0; i < t.length; i += 1) if (t[i] !== c) return false;
+  return true;
 }
 
 function isAnyClose(line) {

@@ -493,6 +493,14 @@ fn render_node(
             out.push_str(&html_id(node));
             out.push_str(" class=\"pagebreak\">");
         }
+        "hr" => {
+            // Thematic break: void element, no children/inlines/text. The
+            // renderer keeps any `id`/`classes`/`attrs` that may have been
+            // attached upstream (none today; reserved for future grammar).
+            out.push_str("<hr");
+            out.push_str(&html_attrs(node));
+            out.push('>');
+        }
         "media" | "embed" => {
             out.push_str("<figure");
             out.push_str(&html_attrs(node));

@@ -236,6 +236,14 @@ stop and discuss before proceeding.
   `diagnostics --format json`.
 - `nodx-cli/src/main.rs` declares `#![forbid(unsafe_code)]` like every
   other crate entry point.
+- **Thematic break (`hr`)** is recognized at the block level in Rust, JS,
+  and Python parsers and renders as `<hr>` in HTML. The grammar is
+  isolated-line `3*-` / `3*\*` / `3*_` with no internal whitespace (RFC
+  §6.4). Front-matter disambiguation is structural (the opening `---` and
+  its closer are consumed before block parsing). Fixture:
+  [`spec/conformance/v1.0/fixtures/thematic-break.nodx`](./spec/conformance/v1.0/fixtures/thematic-break.nodx)
+  plus the conformance triplet in
+  [`spec/tests/conformance/thematic-break.nodx`](./spec/tests/conformance/thematic-break.nodx).
 
 ### Still open
 

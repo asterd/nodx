@@ -88,7 +88,7 @@ def render_semantic_text(doc):
 def write_semantic_nodes(nodes, lines, path):
     index = 0
     for node in nodes:
-        if node["type"] in ("style", "pagebreak", "toc"):
+        if node["type"] in ("style", "pagebreak", "toc", "hr"):
             continue
         next_path = path + [index]
         index += 1
@@ -174,7 +174,7 @@ def semantic_node_text(node):
     if node.get("text") is not None and node["text"].strip():
         parts.append(node["text"].strip())
     for child in node.get("children", []):
-        if child["type"] in ("style", "pagebreak", "toc"):
+        if child["type"] in ("style", "pagebreak", "toc", "hr"):
             continue
         if child["type"] in ("row", "cell", "paragraph", "caption", "item"):
             text = semantic_node_text(child)
@@ -234,6 +234,10 @@ def render_node(node, path, navigation, options):
         return render_toc(node, path, navigation)
     if type_ == "pagebreak":
         return '<hr' + html_id(node) + ' class="pagebreak">'
+    if type_ == "hr":
+        # Thematic break: void element rendered with whatever attrs (none today)
+        # the AST carries. Mirrors nodx-render-html `render_node` "hr" arm.
+        return "<hr" + html_attrs(node) + ">"
     if type_ in ("media", "embed", "include"):
         return render_media_fallback(node, path, navigation, options)
     if type_ == "bibliography":

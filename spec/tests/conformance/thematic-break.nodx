@@ -1,0 +1,31 @@
+---
+schema: nodx/1.0
+type: document
+title: Thematic break
+---
+
+# Thematic break {#hr}
+
+Above first break.
+
+---
+
+Between dash and star.
+
+***
+
+Between star and underscore.
+
+___
+
+After third break.
+
+Not a break: only two dashes.
+
+--
+
+Not a break: internal whitespace.
+
+- - -
+
+Tail paragraph.

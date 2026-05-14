@@ -279,6 +279,28 @@ Block constructs are recognized at the beginning of a source line. Indented
 content inside list items is treated as continued item text by the baseline
 parser. Literal block content is opaque text until its matching close fence.
 
+### 6.4 Thematic Break
+
+A *thematic break* is an isolated line whose trimmed content is three or more
+repetitions of a single marker character `-`, `*`, or `_` with no internal
+whitespace. It produces an AST node of type `hr` with empty `children`,
+`inlines`, and `text`.
+
+```abnf
+thematic-break = *WSP ( 3*"-" / 3*"*" / 3*"_" ) *WSP LF
+```
+
+NODX intentionally rejects CommonMark's whitespace-separated form
+(`- - -`); only the contiguous-marker form is recognized so the byte-stable
+AST is unambiguous and fail-closed.
+
+Disambiguation from front matter is structural, not textual: the front matter
+opener (`---` as the first line of the document) is consumed before block
+parsing begins, and the matching `---` that closes it is consumed at the same
+time. Every subsequent `---` on an isolated line is therefore a thematic break.
+A document that does not begin with `---` has no front matter, and every `---`
+on an isolated line is a thematic break.
+
 ---
 
 ## 7. Front Matter Safe Subset
