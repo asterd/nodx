@@ -1,0 +1,44 @@
+name: NODX Validate And Render
+description: Validate NODX documents and optionally render HTML artifacts.
+inputs:
+  documents:
+    description: Directory to scan for .nodx files.
+    required: false
+    default: .
+  output-dir:
+    description: Directory for rendered HTML artifacts.
+    required: false
+    default: nodx-rendered
+  render:
+    description: Render validated documents to standalone HTML.
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Build NODX
+      shell: bash
+      run: cargo build --release -p nodx
+    - name: Validate and render
+      shell: bash
+      run: |
+        set -euo pipefail
+        root="${{ inputs.documents }}"
+        out="${{ inputs.output-dir }}"
+        mkdir -p "$out"
+        found=0
+        while IFS= read -r -d '' doc; do
+          found=1
+          target/release/nodx validate "$doc" --format json > "$out/$(basename "$doc").diagnostics.json"
+          if [ "${{ inputs.render }}" = "true" ]; then
+            html="$out/${doc#./}.html"
+            mkdir -p "$(dirname "$html")"
+            target/release/nodx html "$doc" > "$html"
+          fi
+        done < <(find "$root" -type f -name '*.nodx' -print0)
+        if [ "$found" -eq 0 ]; then
+          echo "No .nodx files found under $root" >&2
+          exit 1
+        fi

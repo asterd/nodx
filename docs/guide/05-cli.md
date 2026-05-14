@@ -37,6 +37,8 @@ to stderr. Exit codes are predictable:
 | `export pdf` | Render a paged HTML pipeline preview suitable for headless print. |
 | `export docx` | Emit a `.docx` preview with a loss report. |
 | `export pptx` | Emit a `.pptx` preview with a loss report. |
+| `convert nodx-to-markdown` | Export Markdown plus an optional loss report. |
+| `convert markdown-to-nodx` | Normalize supported Markdown into NODX source. |
 
 ## Common patterns
 
@@ -86,6 +88,26 @@ nodx ncp doc.nodx | jq .
 The NCP projection is a node-level extraction designed for retrieval and
 batch agent workflows. It preserves node paths, IDs, hashes, attributes,
 children, and resolved navigation entries.
+
+### Bridge Markdown and NODX
+
+NODX accepts the Markdown-like subset that is part of the 1.0 grammar directly:
+headings, paragraphs, emphasis, code spans, links, simple lists, task lists,
+and pipe tables. The bridge adds practical conversion around that subset:
+
+```sh
+nodx convert nodx-to-markdown doc.nodx -o doc.md --loss-report doc.md.loss.json
+nodx convert markdown-to-nodx doc.md -o doc.nodx --loss-report doc.nodx.loss.json
+```
+
+`markdown-to-nodx` preserves ordinary Markdown source, adds NODX front matter
+when missing, converts fenced code blocks to `::code`, and converts standalone
+Markdown image lines to `::image`. Raw HTML is kept as text and reported as a
+loss because NODX renderers escape it by design.
+
+`nodx-to-markdown` preserves the portable Markdown surface and reports losses
+for NODX-only semantics such as style blocks, generated TOCs, media/embed
+fallback behavior, and custom container semantics.
 
 ### Add light integrity metadata
 

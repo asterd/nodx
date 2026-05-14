@@ -73,15 +73,22 @@ budgets remain release-readiness work, not changes to the RFC contract.
 Fuzz target entry points are published under `fuzz/`. Local and release-branch
 commands are documented in `fuzz/README.md`.
 
-The full release-candidate budget of at least 24 CPU-hours per target has not
-been completed in this local wave. Accepted fuzz findings must be recorded in
-this file or in a linked advisory before a stable release is tagged.
+The stable release gate is a reproducible smoke budget, not an open-ended
+24 CPU-hour target: every fuzz target must pass `scripts/fuzz_smoke.sh` with
+at least 5 000 libFuzzer runs per target on the release commit, and the weekly
+`Fuzz smoke` workflow must be green or have a documented infrastructure-only
+failure. Maintainers can raise `NODX_FUZZ_RUNS` for release candidates without
+changing the contract. Accepted fuzz findings must be recorded in this file or
+in a linked advisory before a stable release is tagged.
 
 ## Reporting Vulnerabilities
 
-This repository does not yet publish a stable vulnerability disclosure process.
-Until one is added, report suspected vulnerabilities through the repository
-maintainer channel and include:
+Report suspected vulnerabilities privately through GitHub Security Advisories
+when available for the repository. If private advisories are unavailable, email
+the maintainer security contact listed on the repository profile or request a
+private channel from the maintainer before sharing exploit details.
+
+Include:
 
 1. affected command or API;
 2. minimal input file or package;
@@ -90,6 +97,10 @@ maintainer channel and include:
 5. host OS and build information.
 
 Do not include secrets, private documents, or production data in reports.
+
+Maintainers should acknowledge reports within 7 calendar days, provide an
+initial triage decision within 14 calendar days, and publish a fix, mitigation,
+or advisory once affected supported versions are understood.
 
 ## Current Accepted Findings
 

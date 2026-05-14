@@ -3,7 +3,7 @@ use std::{env, fs, path::PathBuf, process};
 use nodx_core::{
     ResourceLimits, canonical_json, is_packaged_nodx, parse_bytes_with_limits, render_tui,
 };
-use nodx_export::{ExportFormat, export_document, loss_report_json};
+use nodx_export::{ExportFormat, export_document, loss_report_json, markdown_to_nodx};
 use nodx_ncp::{ncp_json, semantic_text};
 use nodx_package::{Package, apply_package_extensions};
 use nodx_render_html::{RenderOptions, render_html_with_options};
@@ -25,6 +25,7 @@ const USAGE: &str = concat!(
     "  nodx package inspect <file>\n",
     "  nodx package verify <file>\n",
     "  nodx export pdf|docx|pptx <file> -o <out>   (unstable preview)\n",
+    "  nodx convert nodx-to-markdown|markdown-to-nodx <file> [-o <out>] [--loss-report <out>]\n",
 );
 
 fn main() {
@@ -41,6 +42,7 @@ fn main() {
         }
         "package" => package_command(&args[2..]),
         "export" => export_command(&args[2..]),
+        "convert" => convert_command(&args[2..]),
         _ => document_command(command, &args[2..]),
     };
     if exit != 0 {
@@ -325,6 +327,95 @@ fn export_command(args: &[String]) -> i32 {
         return 1;
     }
     diagnostic_exit_code(&doc)
+}
+
+fn convert_command(args: &[String]) -> i32 {
+    if args.len() < 2 {
+        eprintln!(
+            "usage: nodx convert <nodx-to-markdown|markdown-to-nodx> <file> [-o <out>] [--loss-report <out>]"
+        );
+        return 1;
+    }
+    let direction = args[0].as_str();
+    let file = args[1].as_str();
+    let mut output: Option<&str> = None;
+    let mut loss_report: Option<&str> = None;
+    let mut i = 2;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-o" => {
+                let Some(path) = args.get(i + 1) else {
+                    eprintln!("-o requires a path");
+                    return 1;
+                };
+                output = Some(path);
+                i += 2;
+            }
+            "--loss-report" => {
+                let Some(path) = args.get(i + 1) else {
+                    eprintln!("--loss-report requires a path");
+                    return 1;
+                };
+                loss_report = Some(path);
+                i += 2;
+            }
+            other => {
+                eprintln!("unknown argument: {other}");
+                return 1;
+            }
+        }
+    }
+    let bytes = match fs::read(file) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("read error: {err}");
+            return 1;
+        }
+    };
+    let exported = match direction {
+        "nodx-to-markdown" | "nodx-md" => {
+            let doc = match load_document(&bytes) {
+                Ok(doc) => doc,
+                Err(code) => return code,
+            };
+            let exported = export_document(&doc, ExportFormat::Markdown);
+            if diagnostic_exit_code(&doc) != 0 {
+                eprintln!("warning: source document has diagnostics; conversion continued.");
+            }
+            exported
+        }
+        "markdown-to-nodx" | "md-nodx" => {
+            let source = match String::from_utf8(bytes) {
+                Ok(source) => source,
+                Err(err) => {
+                    eprintln!("utf-8 error: {err}");
+                    return 1;
+                }
+            };
+            markdown_to_nodx(&source)
+        }
+        other => {
+            eprintln!("unknown convert direction: {other}");
+            return 1;
+        }
+    };
+    if let Some(path) = output {
+        if let Err(err) = fs::write(path, &exported.bytes) {
+            eprintln!("write error: {err}");
+            return 1;
+        }
+    } else {
+        print!("{}", String::from_utf8_lossy(&exported.bytes));
+    }
+    if let Some(path) = loss_report {
+        let mut report_json = loss_report_json(&exported.loss_report);
+        report_json.push('\n');
+        if let Err(err) = fs::write(path, report_json) {
+            eprintln!("loss report write error: {err}");
+            return 1;
+        }
+    }
+    0
 }
 
 fn loss_report_path(output: &str) -> PathBuf {

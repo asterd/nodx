@@ -119,8 +119,17 @@ committing to an implementation.
 
 ## Re-running the benchmarks
 
-The repository does not commit a benchmark harness — the numbers above
-were measured ad-hoc. To reproduce:
+The repository commits a standard-library benchmark harness:
+
+```sh
+python3 scripts/benchmark_scalability.py --pages 2000 5000 10000 --ops html
+```
+
+The script writes `target/scalability-report.json` and prints the same JSON to
+stdout. CI runs a smaller smoke variant with `--assert-baseline` to catch large
+regressions without making every PR pay for the full 10 000-page run.
+
+To reproduce the generator manually:
 
 ```sh
 cat > /tmp/gen_book.py <<'PY'

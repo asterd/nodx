@@ -9,6 +9,7 @@ Cargo workspace so normal `rtk cargo test` does not require `cargo-fuzz`.
 Install `cargo-fuzz` in the local Rust toolchain:
 
 ```sh
+rtk rustup toolchain install nightly
 rtk cargo install cargo-fuzz
 ```
 
@@ -29,43 +30,36 @@ rtk cargo install cargo-fuzz
 
 ## Smoke Run
 
-Use short local runs before committing harness changes:
+Use the committed smoke script before release hardening changes:
 
 ```sh
-rtk cargo fuzz run parse_bytes -- -runs=1000
-rtk cargo fuzz run front_matter -- -runs=1000
-rtk cargo fuzz run block_parser -- -runs=1000
-rtk cargo fuzz run inline_parser -- -runs=1000
-rtk cargo fuzz run attrs -- -runs=1000
-rtk cargo fuzz run url -- -runs=1000
-rtk cargo fuzz run package -- -runs=1000
-rtk cargo fuzz run nods -- -runs=1000
-rtk cargo fuzz run ncp -- -runs=1000
-rtk cargo fuzz run navigation -- -runs=1000
+rtk sh scripts/fuzz_smoke.sh
+```
+
+By default this runs every target for 5 000 libFuzzer executions. Override it
+when you need a longer local sweep:
+
+```sh
+NODX_FUZZ_RUNS=25000 rtk sh scripts/fuzz_smoke.sh
+NODX_FUZZ_TARGETS="parse_bytes package" rtk sh scripts/fuzz_smoke.sh
 ```
 
 ## Release Budget
 
-The NODX 1.0 release-candidate budget is at least 24 CPU-hours per target on
-the release branch:
+The NODX 1.0 release-candidate budget is the committed smoke script on the
+release commit, plus the weekly `Fuzz smoke` GitHub Actions workflow. This is
+intentionally bounded so it can run reliably on ordinary project infrastructure.
+For high-risk parser changes, maintainers should raise `NODX_FUZZ_RUNS` and
+record the target name, git commit, host, duration, run count, and result in
+release notes.
 
 ```sh
-rtk cargo fuzz run parse_bytes
-rtk cargo fuzz run front_matter
-rtk cargo fuzz run block_parser
-rtk cargo fuzz run inline_parser
-rtk cargo fuzz run attrs
-rtk cargo fuzz run url
-rtk cargo fuzz run package
-rtk cargo fuzz run nods
-rtk cargo fuzz run ncp
-rtk cargo fuzz run navigation
+NODX_FUZZ_RUNS=5000 rtk sh scripts/fuzz_smoke.sh
 ```
 
-Record target name, git commit, host, duration, and result in release notes.
 Accepted findings must be documented in `SECURITY.md`.
 
 ## Current Status
 
-The target entry points exist. The full 24 CPU-hour per-target release budget
-has not been completed in this local wave.
+The target entry points exist. Release readiness requires a green local or CI
+smoke run on the release commit.

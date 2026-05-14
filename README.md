@@ -145,6 +145,8 @@ node --test packages/nodx-js/test/*.mjs
 python3 -m pytest packages/nodx-py/tests -q
 sh scripts/run_conformance.sh        # Rust ↔ JavaScript parity over every fixture
 sh scripts/verify_conformance_package.sh
+python3 scripts/benchmark_scalability.py --pages 200 --ops html validate --assert-baseline
+sh scripts/fuzz_smoke.sh             # requires cargo-fuzz
 ```
 
 The conformance script writes `target/conformance-report.json` for CI
@@ -166,6 +168,8 @@ target/release/nodx package verify  bundle.nodx
 target/release/nodx export pdf  doc.nodx -o doc.pdf
 target/release/nodx export docx doc.nodx -o doc.docx
 target/release/nodx export pptx slides.nodx -o slides.pptx
+target/release/nodx convert nodx-to-markdown doc.nodx -o doc.md --loss-report doc.md.loss.json
+target/release/nodx convert markdown-to-nodx doc.md -o doc.nodx --loss-report doc.nodx.loss.json
 ```
 
 Exit codes follow the RFC:
@@ -192,7 +196,7 @@ Synthetic book benchmarks on the reference release build:
 Linear in input size, ~20× source-bytes RAM. Documents past 2 000 pages
 of *rich* content will graze the default `nodes_per_document` cap; raise
 it via the library API. The [scalability notes](./docs/internals/scalability.md)
-have the full picture and instructions for reproducing the numbers; the
+have the full picture and the committed benchmark harness for reproducing the numbers; the
 [streaming evolution proposal](./docs/internals/streaming-evolution.md)
 sketches what would change for documents that do not fit in memory.
 

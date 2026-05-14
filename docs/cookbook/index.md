@@ -31,6 +31,28 @@ jobs:
           path: site
 ```
 
+## Use the composite GitHub Action
+
+```yaml
+# .github/workflows/nodx.yml
+name: NODX
+on: [push, pull_request]
+jobs:
+  nodx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: asterd/nodx@v1
+        with:
+          documents: docs
+          output-dir: nodx-rendered
+          render: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nodx-rendered
+          path: nodx-rendered
+```
+
 ## Validate in CI without rendering
 
 ```sh

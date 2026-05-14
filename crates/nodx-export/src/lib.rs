@@ -8,6 +8,7 @@ pub enum ExportFormat {
     Pdf,
     Docx,
     Pptx,
+    Markdown,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,6 +54,36 @@ pub fn export_document_with_limits(
         ExportFormat::Pdf => export_pdf_bridge(doc),
         ExportFormat::Docx => export_docx_with_limits(doc, limits),
         ExportFormat::Pptx => export_pptx_with_limits(doc, limits),
+        ExportFormat::Markdown => export_markdown(doc),
+    }
+}
+
+pub fn export_markdown(doc: &Document) -> Exported {
+    let mut report = base_report(doc, "markdown");
+    let mut out = String::new();
+    push_markdown_nodes(&mut out, &doc.body, "$.body", &mut report, 0);
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Exported {
+        bytes: out.into_bytes(),
+        loss_report: finish_report(report),
+    }
+}
+
+pub fn markdown_to_nodx(source: &str) -> Exported {
+    let mut report = LossReport {
+        schema: "nodx/export-loss/1.2".to_string(),
+        source_schema: "markdown".to_string(),
+        profile: "NODX-Markdown-Bridge-1.0".to_string(),
+        format: "nodx".to_string(),
+        lossy: false,
+        losses: Vec::new(),
+    };
+    let converted = convert_markdown_body(source, &mut report);
+    Exported {
+        bytes: converted.into_bytes(),
+        loss_report: finish_report(report),
     }
 }
 
@@ -223,6 +254,581 @@ fn paged_html_bridge(doc: &Document) -> String {
     } else {
         rendered
     }
+}
+
+fn push_markdown_nodes(
+    out: &mut String,
+    nodes: &[Node],
+    path: &str,
+    report: &mut LossReport,
+    quote_depth: usize,
+) {
+    for (i, node) in nodes.iter().enumerate() {
+        let node_path = format!("{path}[{i}]");
+        match node.node_type.as_str() {
+            "heading" => {
+                let level = node
+                    .attrs
+                    .get("level")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 6);
+                push_quote_prefix(out, quote_depth);
+                out.push_str(&"#".repeat(level));
+                out.push(' ');
+                out.push_str(&markdown_inlines(&node.inlines));
+                push_markdown_attrs(out, node);
+                out.push_str("\n\n");
+            }
+            "paragraph" | "caption" | "citation-entry" => {
+                push_wrapped_markdown_text(out, &markdown_inlines(&node.inlines), quote_depth);
+                out.push('\n');
+            }
+            "list" => {
+                let ordered = node.attrs.get("kind").map(String::as_str) == Some("ordered");
+                for (idx, item) in node.children.iter().enumerate() {
+                    push_quote_prefix(out, quote_depth);
+                    let marker = if ordered {
+                        format!("{}. ", idx + 1)
+                    } else if item.attrs.get("checked").map(String::as_str) == Some("true") {
+                        "- [x] ".to_string()
+                    } else if item.attrs.get("checked").map(String::as_str) == Some("false") {
+                        "- [ ] ".to_string()
+                    } else {
+                        "- ".to_string()
+                    };
+                    out.push_str(&marker);
+                    out.push_str(&markdown_inlines(&item.inlines));
+                    out.push('\n');
+                }
+                out.push('\n');
+            }
+            "table" => push_markdown_table(out, node, quote_depth),
+            "code" | "pre" => {
+                let text = node.text.as_deref().unwrap_or("");
+                let fence = markdown_code_fence(text);
+                push_quote_prefix(out, quote_depth);
+                out.push_str(&fence);
+                if let Some(lang) = node
+                    .attrs
+                    .get("lang")
+                    .or_else(|| node.attrs.get("language"))
+                {
+                    out.push_str(lang);
+                }
+                out.push('\n');
+                for line in text.lines() {
+                    push_quote_prefix(out, quote_depth);
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                push_quote_prefix(out, quote_depth);
+                out.push_str(&fence);
+                out.push_str("\n\n");
+            }
+            "math" => {
+                report.losses.push(loss(
+                    "NODX-E026",
+                    "warning",
+                    &node_path,
+                    "Block math is exported as a fenced code block.",
+                ));
+                push_quote_prefix(out, quote_depth);
+                out.push_str("```math\n");
+                for line in node.text.as_deref().unwrap_or("").lines() {
+                    push_quote_prefix(out, quote_depth);
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                push_quote_prefix(out, quote_depth);
+                out.push_str("```\n\n");
+            }
+            "image" => {
+                let alt = node.attrs.get("alt").map(String::as_str).unwrap_or("");
+                let src = node.attrs.get("src").map(String::as_str).unwrap_or("");
+                push_quote_prefix(out, quote_depth);
+                out.push_str("![");
+                out.push_str(&escape_markdown_text(alt));
+                out.push_str("](");
+                out.push_str(src);
+                out.push_str(")\n\n");
+            }
+            "pagebreak" => {
+                push_quote_prefix(out, quote_depth);
+                out.push_str("---\n\n");
+            }
+            "note" | "info" | "tip" | "important" | "caution" | "warning" | "danger"
+            | "example" | "summary" | "quote" => {
+                if node.node_type != "quote" {
+                    push_quote_prefix(out, quote_depth);
+                    out.push_str("> **");
+                    out.push_str(markdown_callout_label(node));
+                    out.push_str("**\n");
+                }
+                push_markdown_nodes(
+                    out,
+                    &node.children,
+                    &format!("{node_path}.children"),
+                    report,
+                    quote_depth + 1,
+                );
+                out.push('\n');
+            }
+            "style" | "toc" | "media" | "embed" | "include" => {
+                report.losses.push(loss(
+                    "NODX-E026",
+                    "warning",
+                    &node_path,
+                    &format!(
+                        "`{}` is not represented in Markdown and was flattened or omitted.",
+                        node.node_type
+                    ),
+                ));
+                if !node.children.is_empty() {
+                    push_markdown_nodes(
+                        out,
+                        &node.children,
+                        &format!("{node_path}.children"),
+                        report,
+                        quote_depth,
+                    );
+                }
+            }
+            _ => {
+                if !node.inlines.is_empty() {
+                    report.losses.push(loss(
+                        "NODX-E026",
+                        "warning",
+                        &node_path,
+                        &format!("`{}` was flattened to paragraph Markdown.", node.node_type),
+                    ));
+                    push_wrapped_markdown_text(out, &markdown_inlines(&node.inlines), quote_depth);
+                    out.push('\n');
+                }
+                if !node.children.is_empty() {
+                    report.losses.push(loss(
+                        "NODX-E026",
+                        "warning",
+                        &node_path,
+                        &format!("`{}` container semantics were flattened.", node.node_type),
+                    ));
+                    push_markdown_nodes(
+                        out,
+                        &node.children,
+                        &format!("{node_path}.children"),
+                        report,
+                        quote_depth,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn push_markdown_table(out: &mut String, node: &Node, quote_depth: usize) {
+    let mut rows: Vec<Vec<String>> = node
+        .children
+        .iter()
+        .filter(|row| row.node_type == "row")
+        .map(|row| {
+            row.children
+                .iter()
+                .map(|cell| escape_markdown_cell(&markdown_inlines(&cell.inlines)))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    if rows.is_empty() {
+        return;
+    }
+    let width = rows.iter().map(Vec::len).max().unwrap_or(0);
+    for row in &mut rows {
+        row.resize(width, String::new());
+    }
+    push_quote_prefix(out, quote_depth);
+    out.push('|');
+    for cell in &rows[0] {
+        out.push(' ');
+        out.push_str(cell);
+        out.push_str(" |");
+    }
+    out.push('\n');
+    push_quote_prefix(out, quote_depth);
+    out.push('|');
+    for _ in 0..width {
+        out.push_str(" --- |");
+    }
+    out.push('\n');
+    for row in rows.iter().skip(1) {
+        push_quote_prefix(out, quote_depth);
+        out.push('|');
+        for cell in row {
+            out.push(' ');
+            out.push_str(cell);
+            out.push_str(" |");
+        }
+        out.push('\n');
+    }
+    out.push('\n');
+}
+
+fn markdown_inlines(inlines: &[Inline]) -> String {
+    let mut out = String::new();
+    for inline in inlines {
+        match inline {
+            Inline::Text(text) => out.push_str(&escape_markdown_text(text)),
+            Inline::Code(text) => {
+                out.push('`');
+                out.push_str(&text.replace('`', "\\`"));
+                out.push('`');
+            }
+            Inline::Strong(children) => {
+                out.push_str("**");
+                out.push_str(&markdown_inlines(children));
+                out.push_str("**");
+            }
+            Inline::Em(children) => {
+                out.push('*');
+                out.push_str(&markdown_inlines(children));
+                out.push('*');
+            }
+            Inline::Strike(children) => {
+                out.push_str("~~");
+                out.push_str(&markdown_inlines(children));
+                out.push_str("~~");
+            }
+            Inline::Sub(children) => {
+                out.push('~');
+                out.push_str(&markdown_inlines(children));
+                out.push('~');
+            }
+            Inline::Sup(children) => {
+                out.push('^');
+                out.push_str(&markdown_inlines(children));
+                out.push('^');
+            }
+            Inline::Mark { children, .. } | Inline::Span { children, .. } => {
+                out.push_str(&markdown_inlines(children));
+            }
+            Inline::Link { label, target, .. } => {
+                out.push('[');
+                out.push_str(&markdown_inlines(label));
+                out.push_str("](");
+                out.push_str(target);
+                out.push(')');
+            }
+            Inline::Var { namespace, name } => {
+                if namespace == "vars" {
+                    out.push_str("{{");
+                    out.push_str(name);
+                    out.push_str("}}");
+                } else {
+                    out.push_str("{{");
+                    out.push_str(namespace);
+                    out.push('.');
+                    out.push_str(name);
+                    out.push_str("}}");
+                }
+            }
+            Inline::Ref { target } => {
+                out.push_str("@[");
+                out.push_str(target);
+                out.push(']');
+            }
+            Inline::Mention { kind, target } => {
+                out.push_str("@{");
+                out.push_str(kind);
+                out.push(':');
+                out.push_str(target);
+                out.push('}');
+            }
+            Inline::FootnoteRef { target } => {
+                out.push_str("[^");
+                out.push_str(target);
+                out.push(']');
+            }
+            Inline::CitationRef { target } => {
+                out.push_str("[@");
+                out.push_str(target);
+                out.push(']');
+            }
+            Inline::MathInline { source } => {
+                out.push_str("$$");
+                out.push_str(source);
+                out.push_str("$$");
+            }
+        }
+    }
+    out
+}
+
+fn push_markdown_attrs(out: &mut String, node: &Node) {
+    if node.id.is_none() && node.classes.is_empty() {
+        return;
+    }
+    out.push_str(" {");
+    if let Some(id) = &node.id {
+        out.push('#');
+        out.push_str(id);
+    }
+    for class in &node.classes {
+        if node.id.is_some() || !out.ends_with('{') {
+            out.push(' ');
+        }
+        out.push('.');
+        out.push_str(class);
+    }
+    out.push('}');
+}
+
+fn push_wrapped_markdown_text(out: &mut String, text: &str, quote_depth: usize) {
+    for line in text.lines() {
+        push_quote_prefix(out, quote_depth);
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
+fn push_quote_prefix(out: &mut String, quote_depth: usize) {
+    for _ in 0..quote_depth {
+        out.push_str("> ");
+    }
+}
+
+fn markdown_callout_label(node: &Node) -> &str {
+    match node.node_type.as_str() {
+        "note" => node.attrs.get("type").map(String::as_str).unwrap_or("Note"),
+        "info" => "Info",
+        "tip" => "Tip",
+        "important" => "Important",
+        "caution" => "Caution",
+        "warning" => "Warning",
+        "danger" => "Danger",
+        "example" => "Example",
+        "summary" => "Summary",
+        _ => "Note",
+    }
+}
+
+fn escape_markdown_text(text: &str) -> String {
+    let mut out = String::new();
+    for ch in text.chars() {
+        if matches!(ch, '\\' | '`' | '[' | ']' | '<' | '>') {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+fn escape_markdown_cell(text: &str) -> String {
+    text.replace('|', "\\|").replace('\n', "<br>")
+}
+
+fn markdown_code_fence(text: &str) -> String {
+    let mut max_run = 0usize;
+    let mut current = 0usize;
+    for ch in text.chars() {
+        if ch == '`' {
+            current += 1;
+            max_run = max_run.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    "`".repeat(max_run.max(2) + 1)
+}
+
+fn convert_markdown_body(source: &str, report: &mut LossReport) -> String {
+    let normalized = source.replace("\r\n", "\n");
+    let mut out = String::new();
+    let body = if has_front_matter(&normalized) {
+        normalized.as_str()
+    } else {
+        out.push_str("---\nschema: nodx/1.0\nprofiles:\n  requires:\n    - core\n---\n\n");
+        normalized.as_str()
+    };
+    let lines: Vec<&str> = body.split('\n').collect();
+    let mut i = 0usize;
+    let mut in_front_matter = false;
+    while i < lines.len() {
+        let line = lines[i];
+        if i == 0 && line == "---" {
+            in_front_matter = true;
+            out.push_str(line);
+            out.push('\n');
+            i += 1;
+            continue;
+        }
+        if in_front_matter {
+            out.push_str(line);
+            out.push('\n');
+            if line == "---" {
+                in_front_matter = false;
+            }
+            i += 1;
+            continue;
+        }
+        if let Some((fence, info)) = markdown_fence(line) {
+            let lang = info.split_whitespace().next().unwrap_or("");
+            i += 1;
+            let start = i;
+            while i < lines.len() && !lines[i].starts_with(fence) {
+                i += 1;
+            }
+            let literal_lines = &lines[start..i];
+            if i < lines.len() {
+                i += 1;
+            }
+            let colons = nodx_literal_fence(literal_lines);
+            out.push_str(&colons);
+            out.push_str("code");
+            if !lang.is_empty() {
+                out.push_str(" {lang=\"");
+                out.push_str(&nodx_attr_value(lang));
+                out.push_str("\"}");
+            }
+            out.push('\n');
+            for literal in literal_lines {
+                out.push_str(literal);
+                out.push('\n');
+            }
+            out.push_str(&colons);
+            out.push('\n');
+            continue;
+        }
+        if let Some((alt, src)) = markdown_image_line(line) {
+            out.push_str(":::image {src=\"");
+            out.push_str(&nodx_attr_value(src));
+            out.push_str("\" alt=\"");
+            out.push_str(&nodx_attr_value(alt));
+            out.push_str("\"}\n:::\n");
+            i += 1;
+            continue;
+        }
+        if line.trim_start().starts_with('<') {
+            report.losses.push(loss(
+                "NODX-E026",
+                "warning",
+                &format!("$.lines[{i}]"),
+                "Raw HTML is preserved as text; NODX renderers will escape it.",
+            ));
+        }
+        let line = normalize_markdown_links(line, report, i);
+        out.push_str(&line);
+        if i + 1 < lines.len() {
+            out.push('\n');
+        }
+        i += 1;
+    }
+    out
+}
+
+fn has_front_matter(source: &str) -> bool {
+    if !source.starts_with("---\n") {
+        return false;
+    }
+    source.lines().skip(1).any(|line| line == "---")
+}
+
+fn markdown_fence(line: &str) -> Option<(&'static str, &str)> {
+    if let Some(rest) = line.strip_prefix("```") {
+        Some(("```", rest.trim()))
+    } else {
+        line.strip_prefix("~~~").map(|rest| ("~~~", rest.trim()))
+    }
+}
+
+fn nodx_literal_fence(lines: &[&str]) -> String {
+    let mut max_run = 0usize;
+    for line in lines {
+        let run = line.chars().take_while(|ch| *ch == ':').count();
+        if run > max_run {
+            max_run = run;
+        }
+    }
+    ":".repeat(max_run.max(2) + 1)
+}
+
+fn markdown_image_line(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix("![")?;
+    let close = rest.find("](")?;
+    if !rest.ends_with(')') {
+        return None;
+    }
+    let alt = &rest[..close];
+    let src = &rest[close + 2..rest.len() - 1];
+    if src.is_empty() {
+        return None;
+    }
+    Some((alt, src))
+}
+
+fn nodx_attr_value(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| if ch == '"' { '\'' } else { ch })
+        .collect()
+}
+
+fn normalize_markdown_links(line: &str, report: &mut LossReport, line_no: usize) -> String {
+    let mut out = String::new();
+    let mut rest = line;
+    while let Some(label_start) = rest.find('[') {
+        let (before, after_start) = rest.split_at(label_start);
+        out.push_str(before);
+        if after_start.starts_with("![") {
+            out.push('!');
+            rest = &after_start[1..];
+            continue;
+        }
+        let Some(label_end) = after_start.find("](") else {
+            out.push_str(after_start);
+            return out;
+        };
+        let target_start = label_end + 2;
+        let Some(target_end_rel) = after_start[target_start..].find(')') else {
+            out.push_str(after_start);
+            return out;
+        };
+        let target_end = target_start + target_end_rel;
+        let target = &after_start[target_start..target_end];
+        out.push_str(&after_start[..target_start]);
+        out.push_str(&normalize_markdown_target(target, report, line_no));
+        out.push(')');
+        rest = &after_start[target_end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn normalize_markdown_target(target: &str, report: &mut LossReport, line_no: usize) -> String {
+    if target.starts_with('#') || target.contains(':') {
+        return target.to_string();
+    }
+    let mut normalized = target;
+    let mut changed = false;
+    while let Some(rest) = normalized.strip_prefix("./") {
+        normalized = rest;
+        changed = true;
+    }
+    while let Some(rest) = normalized.strip_prefix("../") {
+        normalized = rest;
+        changed = true;
+    }
+    while let Some(rest) = normalized.strip_suffix('/') {
+        normalized = rest;
+        changed = true;
+    }
+    if changed {
+        report.losses.push(loss(
+            "NODX-E026",
+            "warning",
+            &format!("$.lines[{line_no}]"),
+            "Relative Markdown link was normalized to a NODX package-safe path.",
+        ));
+    }
+    normalized.to_string()
 }
 
 fn collect_common_losses(nodes: &[Node], path: &str, report: &mut LossReport) {
