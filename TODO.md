@@ -1,190 +1,166 @@
-**NODX** (Node-Oriented Document eXchange) è un formato di documento testuale-first, orientato a nodi semantici, progettato per essere leggibile da umani, tool e agenti AI. Mantiene la semplicità di Markdown ma aggiunge garanzie forti su struttura, sicurezza, portabilità e determinismo.
+# NODX — CommonMark interop alignment + new front-matter delimiter
 
-### Panoramica profonda del repo (stato attuale, ~maggio 2026)
+You are working on the NODX project (a text-first, node-oriented document
+format with byte-stable Canonical AST, fail-closed security, ZIP packaging,
+and conformance profiles). Repository root: this working directory.
 
-- **Obiettivo principale**: Rimpiazzare Markdown in contesti dove serve **determinismo** (Canonical AST JSON stabile), **sicurezza** (fail-closed per input non fidati), **packaging** di asset locali, **navigazione semantica** stabile (ID espliciti, TOC), e una proiezione compatta per agenti (NCP — NODX Compact Projection).
-- **Specifica normativa**: `NODX-RFC-0001.md` (versione 1.0 finalizzata di recente). Definisce sintassi, front-matter safe YAML subset, profili di conformance (`core`, `rich`, `style`, `package`, `agent-read`, ecc.), limiti di risorse, policy URL/sicurezza, package manifest, ecc.
-- **Implementazione di riferimento**: Rust (`crates/`), `#![forbid(unsafe_code)]`. Include parser, validator, renderer HTML/TUI, package handler, NCP projector, CLI (`nodx` binary), supporto signing (sperimentale), ecc.
-- **Portabilità**: Parser indipendenti in JS (`packages/nodx-js`) e Python. Suite di conformance molto robusta con fixture per AST, NCP, diagnostics, rendering, security, package.
-- **Packaging**: Supporto nativo per `.nodx` come ZIP (`application/nodx+zip`). Rileva dal magic bytes (PK\x03\x04). Include manifest, digest per integrità, safe path policy, limiti su size/compressione/nested ZIP. Esempi in `examples/extended-showcase-bundled.nodx`.
-- **Sicurezza**: Fail-closed forte — no script execution, no network di default, escaping contestuale, resource limits stretti (es. 64 MiB source, nesting depth 32, ecc.). Threat model e policy in `SECURITY.md` e docs.
-- **Altre feature**:
-  - Lite syntax (simile a Markdown) + full node syntax (`::component {attrs} ... ::`).
-  - Variabili, attributi, custom components con fallback.
-  - Safe style blocks (NODS?).
-  - Export preview (PDF, DOCX, PPTX).
-  - Editor support starters.
-- **Maturità**: 1.0 stabile su parsing, AST, package reader, NCP. Alcune parti (signing completo, agent-mutate, editor CST lossless) sono reserved/future profiles.
+Authoritative documents (read them first, in order):
 
-Il progetto è ben strutturato, con enfasi su conformance, testabilità e interop. Sembra pensato per ecosistemi document-oriented moderni (docs, report, knowledge base, AI agents).
+1. `AGENTS.md` — invariants, crate map, verification gates, things-to-NOT-do.
+2. `NODX-RFC-0001.md` — normative spec. §6–§12 (syntax), §23.1 (diagnostics),
+   §28 (interop), §30 (grammar summary).
+3. `docs/reference/diagnostics.md` — current code registry.
+4. `crates/nodx-core/src/block_parser.rs` / `inline_parser.rs` — current
+   grammar implementation in Rust.
+5. `packages/nodx-js/src/blockParser.mjs` / `inlineParser.mjs` — JS twin.
+6. `packages/nodx-py/src/nodx/block_parser.py` / `inline_parser.py` — Py twin.
+7. `scripts/run_conformance.sh` — Rust ↔ JS ↔ Py parity gate (must stay
+   green at every milestone — 193 fixtures × 4 outputs byte-stable).
 
-### 1. Gestione del formato "pacchetto" come ZIP senza compressione
+## Non-negotiable invariants (re-read AGENTS.md before touching code)
 
-**È sensato?** Sì, molto sensato per il tuo caso d'uso attuale, e allinea bene con NODX.
+- Byte-stable Canonical AST. `BTreeMap<String, _>` everywhere in Rust;
+  `Object.keys(...).sort()` in JS; `sorted(d)` in Py. No `HashMap` on the
+  AST path.
+- Fail-closed. All URL decisions go through `nodx-url`; all CSS through
+  `nodx-style`; all package safety through `nodx-package`.
+- `#![forbid(unsafe_code)]` on every Rust lib + the CLI main.
+- No raw HTML, no script execution, no new external dependencies. The
+  `Cargo.lock` external set today is `p256` + `serde_json` only.
+- Rust ↔ JS ↔ Py parity is a release gate. **Run
+  `sh scripts/run_conformance.sh` after every grammar change.**
 
-**Pro**:
-- **Semplicità e velocità**: ZIP senza compressione (store method) è essenzialmente un container concatenato di file con header. Lettura/scrittura ultra-veloce, nessun overhead di deflate.
-- **Debuggabilità**: Puoi aprire il `.nodx` con qualsiasi unzipper o tool ZIP e vedere tutto chiaramente (manifest + main document + assets).
-- **Determinismo**: Più facile garantire che lo stesso contenuto produca esattamente lo stesso byte stream (importante per hash, signing, conformance).
-- **NODX lo supporta nativamente**: Il package reader gestisce già ZIP, con manifest `nodx-package/1.0`, digest checks, safe extraction policy. Usare store mode non rompe nulla (la spec permette compression ratio limits proprio per prevenire zip bomb, ma store evita il problema).
-- **Uso come "pacchetto multi-file"**: Perfetto per unire più file in un singolo artefatto portabile senza perdere la natura testuale del documento principale.
+## Verification gates (run at every milestone, all must be green)
 
-**Contro / Quando aggiungere compressione**:
-- **Dimensione**: Se hai asset grandi (immagini, font, media) o documenti molto voluminosi, la dimensione esplode. Compress (deflate) riduce banda/storage.
-- **Trasferimento**: Su rete o download, senza compressione paghi di più.
-- **Performance in alcuni contesti**: Su storage lento o bandwidth limitata, la compressione aiuta.
+```sh
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --release
+node --test packages/nodx-js/test/*.mjs
+python3 -m pytest packages/nodx-py/tests -q
+sh scripts/run_conformance.sh
+sh scripts/verify_conformance_package.sh
 
-**Raccomandazione**:
-- **Mantieni store (no compressione) come default** per sviluppo, editing, CI, versioning, e casi dove velocità/debug contano di più (es. documenti interni, knowledge base, tool chain).
-- **Aggiungi opzione per compressione** (deflate level 6-9) per distribuzione finale/export ("build" o "publish" command). NODX package già gestisce compression ratio checks.
-- Puoi rilevare/negoziare: se il pacchetto supera X MiB uncompressed → offri versione compressed.
-- Per integrità + anti-tampering, combina con digest/manifest (già in NODX) o signing (vedi Q2).
+What this task is, in one paragraph
+NODX 1.0 deliberately is not CommonMark-conformant; that stance is
+correct and codified in §1 of the RFC. However, an audit identified
+19 silent gaps where a CommonMark author writes valid Markdown and
+NODX degrades it to paragraph text without emitting any diagnostic. The
+purpose of this task is to (1) close the silent-gap problem with
+warnings — never accept the construct, just tell the author it was
+ignored — and (2) re-evaluate the front-matter delimiter (---) which
+collides with the Markdown thematic break the warnings need to detect.
 
-In sintesi: **ottima scelta attuale**, non rompere ciò che funziona. Aggiungi compressione come feature opzionale.
+This is intentionally a two-phase task. Do not skip ahead. Each phase
+ends in a green parity gate.
 
-### 2. "Marchiare" il file in modo sicuro (immutabile, legato all'autore, sola lettura "umana/certificata")
+Phase A — Diagnose, do not transform
+Add warning-level diagnostic codes that fire when the parser sees a
+construct a CommonMark author would expect. The construct is still
+treated as plain text (the AST does not change), but the warning makes
+the silent degradation visible.
 
-Vuoi:
-- File **immutabile** (non modificabile senza rompere la certificazione).
-- Legato indissolubilmente a un utente/autore.
-- Rimanga leggibile come testo (o quasi).
-- Senza sistemi troppo complicati.
-- Resistente a modifiche (tranne fotocopie + OCR, che è il limite fisico inevitabile).
+A.1 — Reserve diagnostic codes
+In RFC §23.1 and docs/reference/diagnostics.md, reserve these new
+codes as warning severity, owner core / markdown-detect:
 
-**Approccio raccomandato che si integra bene con NODX (senza rompere l'esistente)**:
+Code	Trigger pattern	Hint
+NODX-E030	Line matches ^(={3,}|-{3,})$ and previous line is non-blank text	Looks like a setext heading; use # H1 / ## H2.
+NODX-E031	Line matches ^(\*\*\*|___)\s*$	Looks like a Markdown thematic break; not supported in NODX 1.0.
+NODX-E032	Inline _text_ or __text__ with word boundaries	Underscore emphasis is not part of NODX lite syntax; use * / **.
+NODX-E033	Line starts with >	Markdown blockquote; use ::quote { ... } ::.
+NODX-E034	Line starts with * or + (not nested)	Bullet markers other than - are not supported.
+NODX-E035	Inline ![alt](url)	Markdown image is not supported inline; use :::image { src=... alt=... }.
+NODX-E036	Inline <https://...> or autolink-shaped text	Autolinks are not supported; use [text](url).
+NODX-E037	Inline [txt][ref] or [txt][]	Reference-style links are not supported in NODX 1.0.
+NODX-E038	Line starts with ```	Backtick fenced code blocks are not supported; use ::code {lang="..."} ... ::.
+Severity warning ⇒ exit code 0 (per docs/reference/diagnostics.md
+exit-code table). Document each code in docs/reference/diagnostics.md
+in the same PR.
 
-NODX ha già supporto per **signing** nella reference impl (menzionato in README e RFC come reserved profile `signature`, ma con infrastruttura presente). Usa quello come base.
+A.2 — Emit the codes in the parser
+Add detection to crates/nodx-core/src/block_parser.rs (for
+E030/E031/E033/E034/E038) and crates/nodx-core/src/inline_parser.rs
+(for E032/E035/E036/E037). Mirror the change in
+packages/nodx-js/src/blockParser.mjs + inlineParser.mjs and
+packages/nodx-py/src/nodx/block_parser.py + inline_parser.py.
 
-#### Soluzione ibrida semplice e robusta:
+The AST must not change. The line still becomes the same paragraph
+or text node it does today; only doc.diagnostics grows.
 
-1. **Struttura del pacchetto** (ZIP):
-   - `main.nodx` → il documento testuale (o entry point).
-   - `manifest.json` (o embedded in front-matter) con metadata autore (user ID, pubkey, timestamp, ecc.).
-   - `signature.jws` (o detached signature) che firma un **hash canonico** dell'intero contenuto rilevante (es. Canonical AST + assets ordinati + manifest).
+A.3 — Add fixtures + gate
+For each new code, add a negative fixture under spec/tests/negative/
+named e030-*.nodx … e038-*.nodx. The existing test
+negative_corpus_emits_expected_code_class
+(crates/nodx-validate/src/lib.rs ~line 964) will pick them up
+automatically if the file name follows the existing e0NN-*.nodx
+convention.
 
-2. **Cosa firmare** (per immutabilità forte):
-   - Non firmare i byte raw grezzi del ZIP (troppo fragile a ri-packaging).
-   - Firma il **Canonical AST JSON** (deterministico per design in NODX) + hash degli asset (file paths + content digest, già supportati).
-   - O un "package digest tree" (Merkle-like) per permettere verifica parziale.
-   - Includi nel signed payload: autore (did, username, pubkey fingerprint), timestamp, profile `signature`, claims ("this document is read-only / authored by X").
+A.4 — Update gap-analysis docs
+Replace the "silent" bullet in AGENTS.md "Open known gaps →
+CommonMark interop" with a one-liner: "NODX warns when it detects
+Markdown-only constructs; see NODX-E030..E038."
 
-3. **Implementazione minima**:
-   - Usa **JWS** (JSON Web Signature) con ECDSA (P-256 o Ed25519) — standard, librerie everywhere (Rust: `jsonwebtoken` o `ecdsa` crate; già menzionato in NODX).
-   - Aggiungi comandi CLI: `nodx package sign ... --key private.pem` e `nodx package verify`.
-   - Nel package: metti la firma in un file dedicato (`_nodx/signature.jws`).
-   - Per "sola lettura umana": il documento testuale rimane leggibile. La firma protegge semanticamente (verifica che AST non sia cambiato).
-   - Per legare all'utente: usa Web of Trust leggero, DID, o semplicemente chiave pubblica associata a identità (es. GitHub, email + cert, o chiave in un registry semplice).
+A.5 — Parity gate
+Run all 7 verification gates. If run_conformance.sh fails, the most
+likely cause is that JS/Py emit the new codes in a different order than
+Rust — fix the implementation, not the test.
 
-4. **Verifica**:
-   - Processor verifica firma → se OK, mostra badge "Certified by @user — immutable".
-   - Se modificato (anche ri-zippato senza compressione), firma fallisce.
-   - Rimane resistente a OCR/foto perché la firma è sul contenuto semantico strutturato, non sui pixel.
+Phase A is done when: all 7 gates are green and at least 9 new
+fixtures (one per code) live under spec/tests/negative/.
 
-**Vantaggi**:
-- Non rompe compatibilità: documenti senza firma continuano a funzionare (profile `signature` optional).
-- Integra con package esistente (manifest + digests).
-- Sicuro e standard (no crypto inventata).
-- "Indissolubile" a livello crittografico (firma privata dell'autore).
-- Leggibile: il testo principale non è criptato.
+Phase B — Re-evaluate the front-matter delimiter
+The current --- delimiter for front matter collides with:
 
-**Alternative / Estensioni**:
-- **Timestamping authority** (es. OpenTimestamps) per prova di esistenza temporale.
-- **Blockchain anchor** (hash sul chain) per immutabilità pubblica (più complicato, ma forte).
-- Per "sola lettura" UI: renderer che, se firma OK, disabilita edit o mostra warning.
-- Se vuoi evitare ZIP esterno: embed firma in un blocco speciale alla fine del documento testuale (es. `::signature { ... }` con JWS base64), ma package è più pulito per asset.
+Markdown setext H2 underline (--- after a non-blank line).
+Markdown thematic break.
+YAML document separator (which NODX rejects anyway, but the visual ambiguity remains).
+The collision matters because Phase A added NODX-E030/NODX-E031 that
+also detect ----shaped lines. The parser disambiguates by position
+(only --- at byte 0 after start or before EOF closes front matter),
+but the rule is fragile and confusing to readers.
 
-**Potenziali gotcha**:
-- Gestisci ri-packaging deterministico (ordine file nel ZIP, compression=store).
-- Revoca chiavi (problema classico — usa short-lived cert o CRL semplice).
-- UX: rendi signing one-command e verifica automatica nel viewer.
+B.1 — Design alternatives (decide, do not implement)
+Before touching code, write a one-page comparison in
+docs/internals/front-matter-delimiter.md covering at least:
 
-Questa approccio è **sicuro, non troppo complicato**, e si sposa perfettamente con la filosofia NODX (determinismo + package + profili). Se vuoi, posso aiutarti a sketchare codice Rust/CLI o schema del manifest firmato. 
+Keep --- (status quo).
++++ (Hugo/Zola convention — TOML/YAML signal).
+---nodx / ---/nodx (typed delimiter; still YAML-looking).
+:::front ... ::: (full node syntax; consistent with NODX's own block delimiters).
+::: meta ... ::: (typed, namespace-prefixed).
+For each option list: discoverability, collision risk with CommonMark
+constructs E030/E031/E034, migration cost (existing *.nodx files in
+this repo plus the conformance bundle), and back-compat ("can we accept
+both --- and the new form during a transition window?").
 
-Fammi sapere dettagli sul tuo flusso (es. chi è l'"autore" — utente finale, server, ecc.) per raffinare!
+Recommend the option you think is best, with one paragraph of
+reasoning. Do not code anything yet.
 
+B.2 — Hand the recommendation back
+End Phase B with the design doc committed and a PR comment that asks
+the maintainers for explicit go-ahead before implementation. The
+parser/canonical AST/conformance bundle all depend on this delimiter;
+changing it is a 1.x breaking change unless we accept both forms.
 
+If approval is granted, the implementation work is roughly:
 
-**No, non è una scelta troppo stringente per NODX 1.0.** È una delle scelte più coerenti e difendibili del formato.
-
-### Perché è sensata (e forte)
-
-- **Sicurezza fail-closed** è un pilastro del progetto (vedi SECURITY.md e sezione 19 della RFC). Consentire fetch remoti di default aprirebbe a:
-  - Tracking / fingerprinting dell’utente che apre il documento.
-  - Dipendenza da disponibilità esterna (link rotto = documento degradato).
-  - Attacchi indiretti (malicious image che sfrutta decoder del browser, o future 0-day).
-  - Violazione del principio “il documento è completamente portabile e deterministico”.
-- Il modello **package-first** (ZIP con assets locali + manifest + digest) è uno dei grandi punti di forza rispetto a Markdown. Permette integrità verificabile, offline-first, signing futuro, ecc.
-- Per i **link testuali** (`[testo](https://...)`) invece gli http/https sono già consentiti (solo per navigazione, non per asset).
-
-**In sintesi**: per un formato che vuole essere “Markdown ma con garanzie forti”, il divieto su remote media è corretto per la baseline 1.0.
-
-### Quando ha senso rilassarlo
-
-Sì, è utile dare la possibilità **in modo controllato**, soprattutto per casi reali:
-- Documenti live / dashboard
-- Report aziendali con immagini da CDN interno
-- Knowledge base condivise
-- Preview veloci durante authoring
-
-### Come implementerei l’estensione (senza rompere nulla)
-
-#### 1. Nuovo profilo opzionale
-```yaml
-profiles:
-  optional:
-    - remote-assets   # o remote-media
-```
-
-- Se il profilo non è dichiarato e richiesto → comportamento attuale (rifiuto).
-- Se dichiarato in `optional` → processori che lo supportano possono abilitarlo.
-
-#### 2. Policy granulare nella sezione URL (estensione di Sezione 19)
-
-Aggiungi nella tabella Reference-Kind Policy:
-
-| Reference kind | Allowed (con remote-assets) |
-|----------------|-----------------------------|
-| Asset / Image / Media / Embed | safe package-relative + http/https (con policy) + data: (già permesso) |
-
-**Regole di sicurezza per remote assets** (da applicare obbligatoriamente):
-
-- Solo `https` (http rifiutato).
-- **Allow-list** di host/domains (configurazione del processor/host, es. `trusted-cdns = ["*.mycompany.com", "cdn.example.org"]`). Default vuoto (quindi niente).
-- Opzione “any” solo in contesti esplicitamente trusted (es. viewer desktop dell’azienda).
-- **Content-Security-Policy** forte generata nell’HTML renderer.
-- **Timeout + size limit** sul fetch (es. 10s, 5-10 MiB per risorsa).
-- **Cache aggressiva** con ETag/Last-Modified e fallback offline al package (se presente).
-- **Digest opzionale** nell’attributo: `src="https://..." sha256="..."` → verifica integrità dopo download.
-- Diagnostic dedicato (es. `NODX-E028 Remote asset fetched` o warning se non in allow-list).
-
-#### 3. Sintassi (retrocompatibile)
-
-```nodx
-::image {src="https://cdn.example.com/photo.jpg" alt="..." cache="true" timeout="8s"}
-
-::media {src="https://..." sha256="base64url-digest" ...}
-```
-
-O un attributo generico:
-`remote="allowed"` / `remote-policy="strict"`
-
-#### 4. Comportamento del processor
-
-- **CLI baseline** (`nodx html ...`): rifiuta di default, a meno di flag `--allow-remote-assets --trusted-hosts "*.internal"`.
-- **Viewer/Editor integrati**: opzione nelle impostazioni dell’app.
-- **Package mode**: può includere una sezione `remote-assets` nel manifest con allow-list consigliata dall’autore.
-- **NCP / AST**: mantieni l’URL originale nell’attributo `src`, aggiungi campo `resolved` o `fetched` solo nel rendering.
-
-#### 5. Altre best practice
-
-- Durante il packaging (`nodx package ...`) → opzione per **embed** automatico di remote assets referenziati (scarica e include nel ZIP).
-- Per firma (future profile signature): il signed payload può includere gli hash degli assets remoti approvati.
-- Warning visibile nel rendering: “This document loads remote images from trusted sources”.
-
-### Raccomandazione finale
-
-- **Mantieni il default strict** (è un vantaggio competitivo).
-- Aggiungi il profilo `remote-assets` (o `network`) come **optional** nella 1.1 o come estensione post-1.0.
-- Implementalo con allow-list + digest opzionali + cache → resta molto più sicuro di Markdown/HTML normale.
-
-Vuoi che ti sketchi esattamente come modificherei la sezione 19 della RFC o il codice Rust del URL validator? O preferisci prima vedere pro/contro di alternative (es. solo CDN allow-list globale vs per-documento)?
+Lexer change in block_parser.{rs,mjs,py} to recognize the new opener and matching closer.
+Update every .nodx fixture in examples/, spec/conformance/, spec/tests/, docs/ to use the new form (script-assisted: a one- shot Python script that rewrites ^---$ … ^---$ → new form, with review of the diff).
+Add a deprecation warning NODX-E039 "legacy --- front-matter delimiter — migrate to <new>" that fires only when --- is seen at line 1, severity warning.
+Update RFC §6.1 and §30 grammar summary.
+Add fixtures that exercise both forms (until the deprecation window closes).
+Run all 7 gates.
+Constraints / things to NOT do (re-read AGENTS.md if unsure)
+Do not change the AST shape during Phase A. Detection is side-channel; the canonical AST stays byte-identical.
+Do not add any new external dependency.
+Do not propose making NODX accept raw HTML, autolinks, setext headings, indented code, or any of the gap-1..19 constructs as behavior. They remain rejected/degraded; we only add visibility.
+Do not edit spec/conformance/v1.0/expected/ by hand.
+Do not skip the Python parity branch of run_conformance.sh to "make the demo green".
+Do not amend or force-push.
+Exit criteria
+Phase A: 9 new diagnostic codes registered, emitted from all three parsers, covered by negative fixtures, gates green.
+Phase B: design doc committed; no code change without explicit maintainer approval.
+When in doubt, prefer the smaller change. The repo culture (and the
+Karpathy guidelines surfaced in this session) prizes surgical edits and
+verifiable goals.
