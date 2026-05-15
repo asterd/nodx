@@ -268,6 +268,13 @@ stop and discuss before proceeding.
   pinned by [`spec/conformance/v1.0/fixtures/autolinks.nodx`](./spec/conformance/v1.0/fixtures/autolinks.nodx)
   plus the matching `spec/tests/conformance/autolinks.nodx`; the unsafe
   case lives in [`spec/tests/negative/e020-autolink-javascript.nodx`](./spec/tests/negative/e020-autolink-javascript.nodx).
+- **CommonMark-only constructs now surface as parser warnings**
+  (`NODX-W030`..`NODX-W035`) instead of degrading silently. Emitters live
+  in `crates/nodx-core/src/block_parser.rs` (`emit_block_commonmark_warnings`,
+  `scan_inline_commonmark_warnings`) with byte-stable JS / Py twins in
+  `packages/nodx-js/src/blockParser.mjs` and
+  `packages/nodx-py/src/nodx/block_parser.py`. Codes are warning-severity,
+  exit code stays `0`. Fixture: `spec/conformance/v1.0/fixtures/commonmark-warnings.nodx`.
 
 ### Still open
 

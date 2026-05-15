@@ -51,6 +51,11 @@ check_output autolinks.ncp "target/debug/nodx ncp $root/fixtures/autolinks.nodx"
 check_output autolinks.diagnostics "target/debug/nodx diagnostics $root/fixtures/autolinks.nodx --format json" expected/autolinks.diagnostics.json
 check_output autolinks.html "target/debug/nodx html $root/fixtures/autolinks.nodx" expected/autolinks.html
 
+check_output commonmark-warnings.ast "target/debug/nodx ast $root/fixtures/commonmark-warnings.nodx" expected/commonmark-warnings.ast.json
+check_output commonmark-warnings.ncp "target/debug/nodx ncp $root/fixtures/commonmark-warnings.nodx" expected/commonmark-warnings.ncp.json
+check_output commonmark-warnings.diagnostics "target/debug/nodx diagnostics $root/fixtures/commonmark-warnings.nodx --format json" expected/commonmark-warnings.diagnostics.json
+check_output commonmark-warnings.html "target/debug/nodx html $root/fixtures/commonmark-warnings.nodx" expected/commonmark-warnings.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

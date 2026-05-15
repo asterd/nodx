@@ -173,7 +173,8 @@
       "NODX-E007",
       "NODX-E008",
       "NODX-E020",
-      "NODX-E027"
+      "NODX-E027",
+      "NODX-W035"
     ],
     "exit_code": 2
   },

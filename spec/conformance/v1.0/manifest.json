@@ -36,6 +36,17 @@
       "exitCode": 0
     },
     {
+      "name": "commonmark-warnings",
+      "source": "fixtures/commonmark-warnings.nodx",
+      "expected": {
+        "ast": "expected/commonmark-warnings.ast.json",
+        "ncp": "expected/commonmark-warnings.ncp.json",
+        "diagnostics": "expected/commonmark-warnings.diagnostics.json",
+        "html": "expected/commonmark-warnings.html"
+      },
+      "exitCode": 0
+    },
+    {
       "name": "invalid-required-profile",
       "source": "fixtures/invalid-required-profile.nodx",
       "expected": {

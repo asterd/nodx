@@ -1,9 +1,17 @@
 # Diagnostic codes
 
 Every diagnostic produced by the reference implementation has a stable
-`NODX-Exxx` code, a severity, a human message, and a source location when
-one is available. The codes never change across patch releases of the
-spec, which is what lets you pin lints in CI.
+code, a severity, a human message, and a source location when one is
+available. The codes never change across patch releases of the spec,
+which is what lets you pin lints in CI. Two prefixes are in use:
+
+- `NODX-Exxx` — structural problems: schema, references, security,
+  resource limits.
+- `NODX-Wxxx` — non-blocking compatibility hints. The `Wxxx` block is
+  reserved for "did-you-mean" warnings about constructs NODX does not
+  natively support (typically CommonMark-only shapes). Warnings never
+  raise the CLI exit code above `0`; the codes are stable just like the
+  `Exxx` registry.
 
 ## Severities
 
@@ -50,11 +58,23 @@ handle this document* from *the document is wrong*.
 | `NODX-E026` | warning | renderer | A capability used by the document is not supported in the active renderer. |
 | `NODX-E027` | error | style | NODS stylesheet contains a forbidden construct; the rule is dropped. |
 | `NODX-E028` | error | validator | Front matter `integrity` is malformed or does not match the canonical AST digest. |
+| `NODX-W030` | warning | parser | Setext-style heading detected. Use `# Heading` (ATX-style) instead. |
+| `NODX-W031` | warning | parser | Indented code block detected. Use `::code` fenced block instead. |
+| `NODX-W032` | warning | parser | Inline image syntax (`![alt](url)`) is not supported in 1.0. Use a `:::image` block. |
+| `NODX-W033` | warning | parser | Link reference syntax (`[label][ref]`, `[ref]: url`) is not supported. Use inline links. |
+| `NODX-W034` | warning | parser | GFM footnote definitions (`[^id]:`) are not part of 1.0. Use the `::footnote` block. |
+| `NODX-W035` | warning | parser | HTML entity references are not decoded. Use the Unicode character directly. |
 
 > `NODX-E011` and `NODX-E015` are reserved in baseline 1.0 and intentionally
 > absent from the emitter map. Future profiles (`include`, renderer
 > lossy-fallback split) will activate them. The codes themselves are part of
 > the stable registry — do not reuse them for unrelated purposes.
+>
+> `NODX-W030`–`NODX-W035` are CommonMark compatibility hints. They never
+> raise the CLI exit code above `0` and the parsed document is unaffected:
+> the warned construct degrades to plain text (or, for thematic breaks, is
+> handled by the dedicated rule). They exist so authors coming from
+> Markdown see a "did-you-mean" instead of silent degradation.
 
 ## Examples
 
@@ -76,6 +96,45 @@ handle this document* from *the document is wrong*.
 
 ```nodx
 [click](javascript:alert(1))    ← raises NODX-E020, link is blocked
+```
+
+**W030 — Setext heading**
+
+```nodx
+Title
+=====    ← raises NODX-W030; use `# Title` instead.
+```
+
+**W031 — Indented code block**
+
+```nodx
+    fn main() {}    ← raises NODX-W031; use a `:::code` fenced block.
+```
+
+**W032 — Inline image**
+
+```nodx
+See ![logo](logo.png) here.    ← raises NODX-W032; use `:::image`.
+```
+
+**W033 — Link reference**
+
+```nodx
+Use [label][ref] here.
+
+[ref]: https://example.test    ← both lines raise NODX-W033.
+```
+
+**W034 — Footnote definition**
+
+```nodx
+[^fn]: footnote text.    ← raises NODX-W034; use `::footnote`.
+```
+
+**W035 — HTML entity**
+
+```nodx
+Plain &amp; entity.    ← raises NODX-W035; write `&` directly.
 ```
 
 **E024 — unsupported required profile**

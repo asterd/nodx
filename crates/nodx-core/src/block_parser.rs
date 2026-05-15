@@ -321,6 +321,10 @@ impl Parser<'_> {
                 out.push(self.parse_pipe_table());
                 continue;
             }
+            // CommonMark compatibility warnings (W030..W035). These do not
+            // alter parse output; they hint did-you-mean for users coming from
+            // CommonMark/GFM. See `docs/reference/diagnostics.md` and RFC §23.
+            self.emit_block_commonmark_warnings();
             let para_line = self.pos + 1;
             if !self.count_node(para_line) {
                 break;
@@ -474,11 +478,77 @@ impl Parser<'_> {
             }
             self.pos += 1;
         }
+        // Emit CommonMark inline-shape warnings (W032/W033/W035) on the
+        // paragraph slice before turning it into inlines. The scan operates
+        // on the raw source lines so JS and Python can replicate it
+        // line-for-line and produce byte-identical diagnostics.
+        scan_inline_commonmark_warnings(&self.lines[start..self.pos], start, &mut self.diagnostics);
         Node::textual(
             "paragraph",
             Attrs::default(),
             parse_inlines(&self.lines[start..self.pos].join("\n")),
         )
+    }
+
+    /// Block-level CommonMark compatibility checks.
+    ///
+    /// Looks at `self.lines[self.pos]` (and the next line for setext) and
+    /// pushes warnings for constructs NODX does not natively support. Never
+    /// advances `self.pos`; the regular parse flow handles that.
+    fn emit_block_commonmark_warnings(&mut self) {
+        let pos = self.pos;
+        if pos >= self.lines.len() {
+            return;
+        }
+        let line = self.lines[pos];
+
+        // W030 — Setext-style heading: the *next* line is `===` (≥3) and
+        // the current line is a non-empty potential heading text. The `-` /
+        // `---` variant is intercepted upstream as a thematic break (PR1)
+        // or as a closer/empty line, so we only fire on `=`.
+        if !line.trim().is_empty() && pos + 1 < self.lines.len() {
+            let next = self.lines[pos + 1];
+            if next.len() >= 3 && next.chars().all(|c| c == '=') {
+                self.diagnostics.push(diag(
+                    "NODX-W030",
+                    "warning",
+                    "Setext-style heading detected. Use '# Heading' (ATX-style) instead.",
+                    pos + 2,
+                    1,
+                ));
+            }
+        }
+
+        // W031 — Indented code block: a line that starts with 4 spaces and
+        // is not inside a list item (the surrounding parse loop already
+        // dispatches lists separately, so we only see top-level blocks
+        // here). One warning per contiguous run; subsequent indented
+        // lines are absorbed by `parse_paragraph` without re-emitting.
+        if line.starts_with("    ") {
+            let prev_indented = pos > 0 && self.lines[pos - 1].starts_with("    ");
+            if !prev_indented {
+                self.diagnostics.push(diag(
+                    "NODX-W031",
+                    "warning",
+                    "Indented code block detected. Use '::code' fenced block instead.",
+                    pos + 1,
+                    1,
+                ));
+            }
+        }
+
+        // W034 — GFM footnote definition: an isolated line of the form
+        // `[^id]: …`. NODX parses it as a paragraph; the warning points
+        // users at the `::footnote` block.
+        if is_footnote_definition(line) {
+            self.diagnostics.push(diag(
+                "NODX-W034",
+                "warning",
+                "Footnote definitions are not part of 1.0. Use the '::footnote' block.",
+                pos + 1,
+                1,
+            ));
+        }
     }
 }
 /// A thematic break (NODX-RFC-0001 §6) is a line whose trimmed content is
@@ -496,6 +566,193 @@ pub(crate) fn is_thematic_break(line: &str) -> bool {
         return false;
     }
     trimmed.bytes().all(|b| b == first)
+}
+
+/// Returns `true` when `line` is `[^id]:` followed by space and content,
+/// i.e. a GFM footnote definition. We deliberately do not parse the body —
+/// the caller emits a warning and lets the regular paragraph flow run.
+fn is_footnote_definition(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("[^") else {
+        return false;
+    };
+    let Some(end) = rest.find(']') else {
+        return false;
+    };
+    let id = &rest[..end];
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return false;
+    }
+    let after = &rest[end + 1..];
+    after.starts_with(':')
+}
+
+/// Scan a paragraph slice for CommonMark-only inline shapes and emit
+/// W032/W033/W035 warnings. The scan is purely textual and is replicated
+/// byte-for-byte in `packages/nodx-js/src/blockParser.mjs` and
+/// `packages/nodx-py/src/nodx/block_parser.py` so all three parsers agree
+/// on the resulting diagnostics list (order, line, column, message).
+fn scan_inline_commonmark_warnings(
+    lines: &[&str],
+    base_line: usize,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (offset, line) in lines.iter().enumerate() {
+        let line_no = base_line + offset + 1;
+
+        // W033 — top-level link reference definition `[ref]: url`.
+        // Only triggers on the first line of the paragraph; if it appears
+        // mid-paragraph it falls back to the inline scan below.
+        if offset == 0 && is_link_reference_definition(line) {
+            diagnostics.push(diag(
+                "NODX-W033",
+                "warning",
+                "Link reference syntax not supported. Use inline links '[label](url)' instead.",
+                line_no,
+                1,
+            ));
+        }
+
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let rest = &line[i..];
+
+            // W032 — inline image `![alt](url)`.
+            if rest.starts_with("![")
+                && let Some(close) = rest.find("](")
+                && let Some(end) = rest[close + 2..].find(')')
+            {
+                diagnostics.push(diag(
+                    "NODX-W032",
+                    "warning",
+                    "Inline image syntax not supported in 1.0. Use ':::image' block (see RFC §6) for block-level images.",
+                    line_no,
+                    i + 1,
+                ));
+                i += close + 2 + end + 1;
+                continue;
+            }
+
+            // W033 — inline link reference `[label][ref]` or `[label][]`.
+            if rest.starts_with('[')
+                && !rest.starts_with("[^")
+                && !rest.starts_with("[@")
+                && let Some(close) = rest.find(']')
+                && rest[close + 1..].starts_with('[')
+                && let Some(end) = rest[close + 1..].find(']')
+                && close > 0
+            {
+                diagnostics.push(diag(
+                    "NODX-W033",
+                    "warning",
+                    "Link reference syntax not supported. Use inline links '[label](url)' instead.",
+                    line_no,
+                    i + 1,
+                ));
+                i += close + 1 + end + 1;
+                continue;
+            }
+
+            // W035 — HTML entity reference: `&name;`, `&#NNN;`, `&#xHHH;`.
+            if rest.starts_with('&')
+                && let Some(len) = html_entity_length(rest)
+            {
+                diagnostics.push(diag(
+                    "NODX-W035",
+                    "warning",
+                    "HTML entity references are not decoded. Use the Unicode character directly.",
+                    line_no,
+                    i + 1,
+                ));
+                i += len;
+                continue;
+            }
+
+            // Advance one UTF-8 char.
+            let ch_len = line[i..].chars().next().map_or(1, char::len_utf8);
+            i += ch_len;
+        }
+    }
+}
+
+/// `[name]: target` on a single line, with optional title. Only the
+/// minimal CommonMark "link reference definition" shape is matched —
+/// just enough to alert the author.
+fn is_link_reference_definition(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix('[') else {
+        return false;
+    };
+    let Some(end) = rest.find(']') else {
+        return false;
+    };
+    let label = &rest[..end];
+    if label.is_empty()
+        || label.starts_with('^')
+        || label.starts_with('@')
+        || !label
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == ' ')
+    {
+        return false;
+    }
+    let after = &rest[end + 1..];
+    let Some(target) = after.strip_prefix(':') else {
+        return false;
+    };
+    !target.trim().is_empty()
+}
+
+/// Return the byte length of a leading HTML entity reference, including
+/// the leading `&` and trailing `;`. Returns `None` if the slice does not
+/// start with a well-formed entity.
+fn html_entity_length(rest: &str) -> Option<usize> {
+    let bytes = rest.as_bytes();
+    if bytes.first()? != &b'&' {
+        return None;
+    }
+    let mut i = 1;
+    if bytes.get(i)? == &b'#' {
+        i += 1;
+        let hex = bytes.get(i) == Some(&b'x') || bytes.get(i) == Some(&b'X');
+        if hex {
+            i += 1;
+        }
+        let digits_start = i;
+        while let Some(byte) = bytes.get(i) {
+            let ok = if hex {
+                byte.is_ascii_hexdigit()
+            } else {
+                byte.is_ascii_digit()
+            };
+            if !ok {
+                break;
+            }
+            i += 1;
+        }
+        if i == digits_start {
+            return None;
+        }
+    } else {
+        let name_start = i;
+        while let Some(byte) = bytes.get(i) {
+            if !byte.is_ascii_alphanumeric() {
+                break;
+            }
+            i += 1;
+        }
+        if i == name_start {
+            return None;
+        }
+    }
+    if bytes.get(i) == Some(&b';') {
+        Some(i + 1)
+    } else {
+        None
+    }
 }
 
 fn is_any_close(line: &str) -> bool {

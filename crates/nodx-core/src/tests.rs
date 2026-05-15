@@ -676,3 +676,84 @@ fn build_zip_with_duplicate_path() -> Vec<u8> {
     out.extend_from_slice(&[0, 0]);
     out
 }
+
+// --- CommonMark compatibility warnings (W030..W035) ---
+
+fn diag_codes(doc: &Document) -> Vec<&str> {
+    doc.diagnostics.iter().map(|d| d.code.as_str()).collect()
+}
+
+#[test]
+fn w030_setext_heading_emits_warning() {
+    let doc = parse_str("Title\n=====\n");
+    let codes = diag_codes(&doc);
+    assert!(codes.contains(&"NODX-W030"), "codes were {:?}", codes);
+    let w = doc
+        .diagnostics
+        .iter()
+        .find(|d| d.code == "NODX-W030")
+        .unwrap();
+    assert_eq!(w.severity, "warning");
+    assert_eq!(w.line, Some(2));
+}
+
+#[test]
+fn w031_indented_code_block_emits_once_per_run() {
+    // Two contiguous indented blocks separated by a blank line. The blank
+    // line breaks the paragraph, so the second block is itself a fresh
+    // top-level dispatch and the warning is emitted again. The non-blank
+    // separator case is intentionally absorbed as paragraph continuation
+    // — CommonMark calls that a "lazy continuation", and we follow suit.
+    let doc = parse_str("    fn main() {}\n    println!();\n\n    again\n");
+    let w031: Vec<_> = doc
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "NODX-W031")
+        .collect();
+    assert_eq!(w031.len(), 2, "expected two contiguous runs");
+    assert_eq!(w031[0].line, Some(1));
+    assert_eq!(w031[1].line, Some(4));
+}
+
+#[test]
+fn w032_inline_image_emits_warning() {
+    let doc = parse_str("See ![logo](logo.png) here.\n");
+    assert!(diag_codes(&doc).contains(&"NODX-W032"));
+}
+
+#[test]
+fn w033_link_reference_definition_emits_warning() {
+    let doc = parse_str("[ref]: https://example.test\n");
+    assert!(diag_codes(&doc).contains(&"NODX-W033"));
+}
+
+#[test]
+fn w033_inline_link_reference_emits_warning() {
+    let doc = parse_str("Use [label][ref] here.\n");
+    assert!(diag_codes(&doc).contains(&"NODX-W033"));
+}
+
+#[test]
+fn w034_footnote_definition_emits_warning() {
+    let doc = parse_str("[^fn]: footnote text.\n");
+    assert!(diag_codes(&doc).contains(&"NODX-W034"));
+}
+
+#[test]
+fn w035_html_entity_emits_warning() {
+    let doc = parse_str("Use &amp; and &#x76; and &#33; here.\n");
+    let w035: Vec<_> = doc
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "NODX-W035")
+        .collect();
+    assert_eq!(w035.len(), 3);
+    assert!(w035.iter().all(|d| d.severity == "warning"));
+}
+
+#[test]
+fn commonmark_warnings_are_non_fatal() {
+    let doc = parse_str("Title\n=====\n\n    code\n\n[ref]: x\n");
+    assert!(!doc.diagnostics.iter().any(|d| d.severity == "fatal"));
+    assert!(!doc.diagnostics.iter().any(|d| d.severity == "error"));
+}

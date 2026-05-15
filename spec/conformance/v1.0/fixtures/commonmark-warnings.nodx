@@ -1,0 +1,24 @@
+---
+schema: nodx/1.0
+type: document
+title: CommonMark Compatibility Warnings
+---
+
+Setext heading
+==============
+
+# Real heading {#orphan}
+
+    fn indented_code() {
+        println!("nodx");
+    }
+
+See ![logo](logo.png) inline.
+
+Use [label][shortcut] here.
+
+[shortcut]: https://example.test
+
+[^orphan]: orphan footnote definition.
+
+Plain &amp; entity, &#x76; hex, and &#33; numeric.

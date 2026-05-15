@@ -114,6 +114,11 @@ function parseUntil(state, closeFrame) {
       out.push(parseTable(state));
       continue;
     }
+    // CommonMark compatibility warnings (W030..W035). See the Rust
+    // `emit_block_commonmark_warnings` for the canonical reference;
+    // this implementation must agree byte-for-byte on order, line,
+    // column, and message.
+    emitBlockCommonmarkWarnings(state);
     out.push(parseParagraph(state));
   }
   if (!closed) state.diagnostics.push(diag("NODX-E005", "error", "Unclosed delimited block at end of input.", Math.max(state.pos, 1), 1));
@@ -185,6 +190,9 @@ function parseParagraph(state) {
     if (state.pos + 1 < state.lines.length && isPipeHeader(state.lines[state.pos], state.lines[state.pos + 1])) break;
     state.pos++;
   }
+  // Inline-shape CommonMark warnings (W032/W033/W035) for the paragraph
+  // slice. The Rust twin lives at `scan_inline_commonmark_warnings`.
+  scanInlineCommonmarkWarnings(state.lines.slice(start, state.pos), start, state.diagnostics);
   return node("paragraph", emptyAttrs(), [], parseInlines(state.lines.slice(start, state.pos).join("\n")), null);
 }
 
@@ -318,6 +326,141 @@ function parsePipeCellAttrs(cell) {
 
 function attrsAreEmpty(attrs) {
   return !attrs.id && !attrs.classes.length && !Object.keys(attrs.attrs).length && !Object.keys(attrs.styles ?? {}).length;
+}
+
+// --- CommonMark compatibility warnings (W030..W035) ---
+//
+// These mirror `crates/nodx-core/src/block_parser.rs` (functions
+// `emit_block_commonmark_warnings`, `scan_inline_commonmark_warnings`,
+// `is_footnote_definition`, `is_link_reference_definition`,
+// `html_entity_length`). Any change here must land in Rust and Python
+// together; `scripts/run_conformance.sh` enforces byte parity.
+
+function emitBlockCommonmarkWarnings(state) {
+  const pos = state.pos;
+  if (pos >= state.lines.length) return;
+  const line = state.lines[pos];
+
+  // W030 — setext heading: next line is `=` × ≥3 and the current line
+  // is non-empty text.
+  if (line.trim() !== "" && pos + 1 < state.lines.length) {
+    const next = state.lines[pos + 1];
+    if (next.length >= 3 && /^=+$/.test(next)) {
+      state.diagnostics.push(diag("NODX-W030", "warning", "Setext-style heading detected. Use '# Heading' (ATX-style) instead.", pos + 2, 1));
+    }
+  }
+
+  // W031 — indented code block: 4-space indent at top level. One warning
+  // per contiguous run; subsequent indented lines fold into the paragraph.
+  if (line.startsWith("    ")) {
+    const prevIndented = pos > 0 && state.lines[pos - 1].startsWith("    ");
+    if (!prevIndented) {
+      state.diagnostics.push(diag("NODX-W031", "warning", "Indented code block detected. Use '::code' fenced block instead.", pos + 1, 1));
+    }
+  }
+
+  // W034 — GFM footnote definition `[^id]:`.
+  if (isFootnoteDefinition(line)) {
+    state.diagnostics.push(diag("NODX-W034", "warning", "Footnote definitions are not part of 1.0. Use the '::footnote' block.", pos + 1, 1));
+  }
+}
+
+function scanInlineCommonmarkWarnings(lines, baseLine, diagnostics) {
+  for (let offset = 0; offset < lines.length; offset += 1) {
+    const line = lines[offset];
+    const lineNo = baseLine + offset + 1;
+
+    // W033 — `[ref]: url` link reference definition (paragraph-leading).
+    if (offset === 0 && isLinkReferenceDefinition(line)) {
+      diagnostics.push(diag("NODX-W033", "warning", "Link reference syntax not supported. Use inline links '[label](url)' instead.", lineNo, 1));
+    }
+
+    let i = 0;
+    while (i < line.length) {
+      const rest = line.slice(i);
+
+      // W032 — inline image `![alt](url)`.
+      if (rest.startsWith("![")) {
+        const closeIdx = rest.indexOf("](");
+        if (closeIdx >= 0) {
+          const endIdx = rest.slice(closeIdx + 2).indexOf(")");
+          if (endIdx >= 0) {
+            diagnostics.push(diag("NODX-W032", "warning", "Inline image syntax not supported in 1.0. Use ':::image' block (see RFC §6) for block-level images.", lineNo, i + 1));
+            i += closeIdx + 2 + endIdx + 1;
+            continue;
+          }
+        }
+      }
+
+      // W033 — inline `[label][ref]` or `[label][]`.
+      if (rest.startsWith("[") && !rest.startsWith("[^") && !rest.startsWith("[@")) {
+        const close = rest.indexOf("]");
+        if (close > 0 && rest.slice(close + 1).startsWith("[")) {
+          const end = rest.slice(close + 1).indexOf("]");
+          if (end >= 0) {
+            diagnostics.push(diag("NODX-W033", "warning", "Link reference syntax not supported. Use inline links '[label](url)' instead.", lineNo, i + 1));
+            i += close + 1 + end + 1;
+            continue;
+          }
+        }
+      }
+
+      // W035 — HTML entity reference.
+      if (rest.startsWith("&")) {
+        const len = htmlEntityLength(rest);
+        if (len !== null) {
+          diagnostics.push(diag("NODX-W035", "warning", "HTML entity references are not decoded. Use the Unicode character directly.", lineNo, i + 1));
+          i += len;
+          continue;
+        }
+      }
+
+      // Advance one code unit. UTF-16 surrogates count as two units; the
+      // Rust twin advances by the char's UTF-8 length, but for the
+      // pattern matchers above the difference does not affect outputs
+      // because every pattern is ASCII-only.
+      i += 1;
+    }
+  }
+}
+
+function isFootnoteDefinition(line) {
+  if (!line.startsWith("[^")) return false;
+  const end = line.indexOf("]", 2);
+  if (end < 0) return false;
+  const id = line.slice(2, end);
+  if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) return false;
+  return line.slice(end + 1).startsWith(":");
+}
+
+function isLinkReferenceDefinition(line) {
+  if (!line.startsWith("[")) return false;
+  const end = line.indexOf("]", 1);
+  if (end < 0) return false;
+  const label = line.slice(1, end);
+  if (!label || label.startsWith("^") || label.startsWith("@")) return false;
+  if (!/^[A-Za-z0-9_ -]+$/.test(label)) return false;
+  if (!line.slice(end + 1).startsWith(":")) return false;
+  return line.slice(end + 2).trim() !== "";
+}
+
+function htmlEntityLength(rest) {
+  if (rest[0] !== "&") return null;
+  let i = 1;
+  if (rest[i] === "#") {
+    i += 1;
+    const hex = rest[i] === "x" || rest[i] === "X";
+    if (hex) i += 1;
+    const start = i;
+    const digitRe = hex ? /[0-9a-fA-F]/ : /[0-9]/;
+    while (i < rest.length && digitRe.test(rest[i])) i += 1;
+    if (i === start) return null;
+  } else {
+    const start = i;
+    while (i < rest.length && /[A-Za-z0-9]/.test(rest[i])) i += 1;
+    if (i === start) return null;
+  }
+  return rest[i] === ";" ? i + 1 : null;
 }
 
 // --- Resource limit helpers (parity with `nodx_core::parse_str_with_limits`) ---

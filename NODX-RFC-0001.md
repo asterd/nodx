@@ -1471,6 +1471,19 @@ JSON diagnostics MUST be deterministic for deterministic input.
 | `NODX-E026` | warning | export | Lossy export or preview bridge warning. |
 | `NODX-E027` | error/warning | style | Forbidden or unsupported NODS construct. |
 | `NODX-E028` | error | validate | Front matter integrity declaration is malformed or does not match the Canonical AST digest. |
+| `NODX-W030` | warning | core | Setext-style heading (`====` underline). Use `# Heading` (ATX). |
+| `NODX-W031` | warning | core | Indented code block (4-space prefix). Use a `:::code` fenced block. |
+| `NODX-W032` | warning | core | Inline image syntax `![alt](url)`. Use a `:::image` block. |
+| `NODX-W033` | warning | core | Link reference syntax (`[label][ref]`, `[ref]: url`). Use inline links. |
+| `NODX-W034` | warning | core | GFM footnote definition (`[^id]:`). Use the `::footnote` block. |
+| `NODX-W035` | warning | core | HTML entity reference. Use the Unicode character directly. |
+
+Diagnostics in the `NODX-Wxxx` block are non-fatal CommonMark compatibility
+hints. They are emitted by the parser, never raise the CLI exit code above
+`0`, and do not alter the parse output: the construct degrades to plain text
+(or, for thematic breaks, is handled by the dedicated rule). They exist so
+authors migrating from Markdown receive a "did-you-mean" pointer instead of
+silent degradation.
 
 ---
 
