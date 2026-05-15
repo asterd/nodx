@@ -423,6 +423,8 @@ def render_inlines(inlines, options=None):
             out.append('<a href="#' + escape_attr(item["target"]) + '">[' + escape_html(item["target"]) + "]</a>" if is_safe_fragment_id(item["target"]) else '<span class="nodx-blocked-link">[' + escape_html(item["target"]) + "]</span>")
         elif type_ == "mention":
             out.append('<span class="mention">@' + escape_html(item["kind"]) + ":" + escape_html(item["target"]) + "</span>")
+        elif type_ == "line-break":
+            out.append("<br>")
     return "".join(out)
 
 
@@ -627,6 +629,8 @@ def plain_inlines(inlines):
             out += item["target"]
         elif type_ == "mention":
             out += "@" + item["kind"] + ":" + item["target"]
+        elif type_ == "line-break":
+            out += " "
     return out
 
 

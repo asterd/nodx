@@ -454,6 +454,7 @@ function renderInlines(inlines, options) {
     if (item.type === "ref") return isSafeFragmentId(item.target) ? `<a href="#${escapeAttr(item.target)}">@${escapeHtml(item.target)}</a>` : `<span class="nodx-blocked-link">@${escapeHtml(item.target)}</span>`;
     if (item.type === "citation-ref" || item.type === "footnote-ref") return isSafeFragmentId(item.target) ? `<a href="#${escapeAttr(item.target)}">[${escapeHtml(item.target)}]</a>` : `<span class="nodx-blocked-link">[${escapeHtml(item.target)}]</span>`;
     if (item.type === "mention") return `<span class="mention">@${escapeHtml(item.kind)}:${escapeHtml(item.target)}</span>`;
+    if (item.type === "line-break") return "<br>";
     return "";
   }).join("");
 }
@@ -642,6 +643,9 @@ function plainInlines(inlines) {
         break;
       case "mention":
         out += "@" + item.kind + ":" + item.target;
+        break;
+      case "line-break":
+        out += " ";
         break;
     }
   }

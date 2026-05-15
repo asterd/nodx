@@ -53,6 +53,28 @@
         "html": "expected/thematic-break.html"
       },
       "exitCode": 0
+    },
+    {
+      "name": "inline-extensions",
+      "source": "fixtures/inline-extensions.nodx",
+      "expected": {
+        "ast": "expected/inline-extensions.ast.json",
+        "ncp": "expected/inline-extensions.ncp.json",
+        "diagnostics": "expected/inline-extensions.diagnostics.json",
+        "html": "expected/inline-extensions.html"
+      },
+      "exitCode": 0
+    },
+    {
+      "name": "extended-lists",
+      "source": "fixtures/extended-lists.nodx",
+      "expected": {
+        "ast": "expected/extended-lists.ast.json",
+        "ncp": "expected/extended-lists.ncp.json",
+        "diagnostics": "expected/extended-lists.diagnostics.json",
+        "html": "expected/extended-lists.html"
+      },
+      "exitCode": 0
     }
   ]
 }

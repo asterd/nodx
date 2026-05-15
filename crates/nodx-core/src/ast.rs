@@ -64,6 +64,11 @@ pub enum Inline {
     MathInline {
         source: String,
     },
+    /// Hard line break inside a paragraph or heading. Emitted by a backslash
+    /// (`\`) as the last character of a non-final source line. Renders as
+    /// `<br>` and projects to a single space in plain-text outputs so the
+    /// markdown-shaped Semantic Text and NCP `text` fields remain stable.
+    LineBreak,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

@@ -143,6 +143,97 @@ fn thematic_break_first_line_when_no_front_matter() {
 }
 
 #[test]
+fn underscore_emphasis_works_at_word_boundaries() {
+    // RFC §12 (PR2): underscore emphasis follows the CommonMark intraword
+    // rule. `_em_` and `__strong__` produce nested inlines, the same as
+    // `*em*` / `**strong**`.
+    let doc = parse_str("# T\n\nHere is _emphasis_ and __strong__ next to *star em* text.\n");
+    let inlines = &doc.body[1].inlines;
+    let kinds: Vec<&str> = inlines
+        .iter()
+        .map(|inl| match inl {
+            Inline::Em(_) => "em",
+            Inline::Strong(_) => "strong",
+            Inline::Text(_) => "text",
+            _ => "other",
+        })
+        .collect();
+    assert!(kinds.contains(&"em"));
+    assert!(kinds.contains(&"strong"));
+    let json = canonical_json(&doc);
+    assert!(json.contains("\"type\":\"em\""));
+    assert!(json.contains("\"type\":\"strong\""));
+}
+
+#[test]
+fn intraword_underscores_stay_literal() {
+    // `snake_case`, `__init__,` (with no left ws? actually `as __init__,` will
+    // open emphasis under CommonMark rules). The reliable literal cases are
+    // alnum-flanked: `snake_case` and `snake__case`.
+    let doc = parse_str("Identifiers like snake_case and snake__case stay literal.\n");
+    let json = canonical_json(&doc);
+    assert!(!json.contains("\"type\":\"em\""));
+    assert!(!json.contains("\"type\":\"strong\""));
+}
+
+#[test]
+fn code_span_with_multiple_backticks() {
+    // CommonMark code span rule: the closing run must match the opening run
+    // length exactly. Trimming a single surrounding space is applied when
+    // both sides have one and the content is not all-spaces.
+    let doc = parse_str("Show `a` then ``two ` ticks`` and ```three `` runs``` here.\n");
+    let codes: Vec<&str> = doc.body[0]
+        .inlines
+        .iter()
+        .filter_map(|inl| match inl {
+            Inline::Code(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(codes, vec!["a", "two ` ticks", "three `` runs"]);
+}
+
+#[test]
+fn extended_backslash_escapes() {
+    let doc = parse_str("Escaped: \\_ \\! \\. \\- \\+ \\< \\> \\\\ \\\" \\' done.\n");
+    let text = plain_inlines(&doc.body[0].inlines);
+    assert!(text.contains("_"));
+    assert!(text.contains("!"));
+    assert!(text.contains("."));
+    assert!(text.contains("\\"));
+    assert!(text.contains("\""));
+    assert!(text.contains("'"));
+    // No emphasis was produced because the underscore was escaped.
+    assert!(!canonical_json(&doc).contains("\"type\":\"em\""));
+}
+
+#[test]
+fn hard_line_break_inside_paragraph() {
+    let doc = parse_str("First half\\\nsecond half.\n");
+    let inlines = &doc.body[0].inlines;
+    assert!(matches!(inlines[1], Inline::LineBreak));
+    assert!(canonical_json(&doc).contains("\"type\":\"line-break\""));
+}
+
+#[test]
+fn extended_list_markers_normalize_to_kind() {
+    // Each marker variant produces the same canonical `kind` value: `- `,
+    // `* `, `+ ` → unordered; `1.`, `1)` → ordered. The literal marker is
+    // *not* preserved.
+    let doc = parse_str("- a\n- b\n\n* c\n* d\n\n+ e\n+ f\n\n1. g\n2. h\n\n1) i\n2) j\n");
+    let lists: Vec<&str> = doc
+        .body
+        .iter()
+        .filter(|n| n.node_type == "list")
+        .map(|n| n.attrs.get("kind").map(String::as_str).unwrap_or(""))
+        .collect();
+    assert_eq!(
+        lists,
+        vec!["unordered", "unordered", "unordered", "ordered", "ordered"]
+    );
+}
+
+#[test]
 fn front_matter_block_sequence_of_mappings() {
     let doc =
         parse_str("---\nschema: nodx/0.1\nauthors:\n  - name: Alice\n  - name: Bob\n---\n\nBody\n");

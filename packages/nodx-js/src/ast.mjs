@@ -62,6 +62,9 @@ export function plainInlines(inlines) {
       case "mention":
         out += "@" + item.kind + ":" + item.target;
         break;
+      case "line-break":
+        out += " ";
+        break;
     }
   }
   return out;

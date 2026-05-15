@@ -255,18 +255,23 @@ function isAnyClose(line) {
   return false;
 }
 
+// PR2 (RFC §10.3): unordered list markers are `-`, `*`, `+` followed by a
+// single space. Ordered markers are decimal digits followed by `.` or `)`
+// and a single space. The literal marker is *not* preserved in the AST: only
+// `kind` (`unordered` / `ordered` / `task`) survives, keeping canonical JSON
+// byte-stable across `- ` / `* ` / `+ ` and `1.` / `1)`.
 function listKind(line) {
   if (line.startsWith("- [ ] ") || line.startsWith("- [x] ")) return "task";
-  if (line.startsWith("- ")) return "unordered";
-  if (/^\d+\. /.test(line)) return "ordered";
+  if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ")) return "unordered";
+  if (/^\d+[.)] /.test(line)) return "ordered";
   return null;
 }
 
 function stripList(line) {
   if (line.startsWith("- [ ] ")) return [line.slice(6), false];
   if (line.startsWith("- [x] ")) return [line.slice(6), true];
-  if (line.startsWith("- ")) return [line.slice(2), null];
-  return [line.replace(/^\d+\. /, ""), null];
+  if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ")) return [line.slice(2), null];
+  return [line.replace(/^\d+[.)] /, ""), null];
 }
 
 function isPipeHeader(a, b) {

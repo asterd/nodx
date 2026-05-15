@@ -56,4 +56,6 @@ def plain_inlines(inlines):
             out += item["target"]
         elif type_ == "mention":
             out += "@" + item["kind"] + ":" + item["target"]
+        elif type_ == "line-break":
+            out += " "
     return out

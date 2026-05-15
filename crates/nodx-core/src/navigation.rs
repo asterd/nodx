@@ -207,7 +207,8 @@ fn collect_manual_inline_entries(
             | Inline::Mention { .. }
             | Inline::FootnoteRef { .. }
             | Inline::CitationRef { .. }
-            | Inline::MathInline { .. } => {}
+            | Inline::MathInline { .. }
+            | Inline::LineBreak => {}
         }
     }
 }

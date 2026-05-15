@@ -36,6 +36,16 @@ check_output thematic-break.ncp "target/debug/nodx ncp $root/fixtures/thematic-b
 check_output thematic-break.diagnostics "target/debug/nodx diagnostics $root/fixtures/thematic-break.nodx --format json" expected/thematic-break.diagnostics.json
 check_output thematic-break.html "target/debug/nodx html $root/fixtures/thematic-break.nodx" expected/thematic-break.html
 
+check_output inline-extensions.ast "target/debug/nodx ast $root/fixtures/inline-extensions.nodx" expected/inline-extensions.ast.json
+check_output inline-extensions.ncp "target/debug/nodx ncp $root/fixtures/inline-extensions.nodx" expected/inline-extensions.ncp.json
+check_output inline-extensions.diagnostics "target/debug/nodx diagnostics $root/fixtures/inline-extensions.nodx --format json" expected/inline-extensions.diagnostics.json
+check_output inline-extensions.html "target/debug/nodx html $root/fixtures/inline-extensions.nodx" expected/inline-extensions.html
+
+check_output extended-lists.ast "target/debug/nodx ast $root/fixtures/extended-lists.nodx" expected/extended-lists.ast.json
+check_output extended-lists.ncp "target/debug/nodx ncp $root/fixtures/extended-lists.nodx" expected/extended-lists.ncp.json
+check_output extended-lists.diagnostics "target/debug/nodx diagnostics $root/fixtures/extended-lists.nodx --format json" expected/extended-lists.diagnostics.json
+check_output extended-lists.html "target/debug/nodx html $root/fixtures/extended-lists.nodx" expected/extended-lists.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

@@ -1,0 +1,42 @@
+---
+schema: nodx/1.0
+type: document
+title: Extended list markers
+---
+
+# Extended list markers
+
+Dash bullets:
+
+- alpha
+- beta
+- gamma
+
+Star bullets:
+
+* alpha
+* beta
+* gamma
+
+Plus bullets:
+
++ alpha
++ beta
++ gamma
+
+Ordered with `1.`:
+
+1. first
+2. second
+3. third
+
+Ordered with `1)`:
+
+1) first
+2) second
+3) third
+
+Task list still works:
+
+- [ ] todo
+- [x] done

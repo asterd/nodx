@@ -980,7 +980,8 @@ fn collect_inline_style_values(inlines: &[Inline], out: &mut Vec<String>) {
             | Inline::Mention { .. }
             | Inline::FootnoteRef { .. }
             | Inline::CitationRef { .. }
-            | Inline::MathInline { .. } => {}
+            | Inline::MathInline { .. }
+            | Inline::LineBreak => {}
         }
     }
 }
@@ -1402,6 +1403,9 @@ fn render_inlines(out: &mut String, inlines: &[Inline], policy: ResourcePolicy) 
                 out.push_str("<code class=\"math-inline\">");
                 escape_html(out, source);
                 out.push_str("</code>");
+            }
+            Inline::LineBreak => {
+                out.push_str("<br>");
             }
         }
     }

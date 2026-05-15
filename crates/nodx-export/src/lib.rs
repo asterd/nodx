@@ -556,6 +556,11 @@ fn markdown_inlines(inlines: &[Inline]) -> String {
                 out.push_str(source);
                 out.push_str("$$");
             }
+            Inline::LineBreak => {
+                // Markdown hard break: trailing backslash. The conversion
+                // pipeline reverses the NODX source form `… \\n`.
+                out.push_str("\\\n");
+            }
         }
     }
     out
@@ -921,7 +926,8 @@ fn collect_inline_losses(inlines: &[Inline], path: &str, report: &mut LossReport
             Inline::Text(_)
             | Inline::Code(_)
             | Inline::FootnoteRef { .. }
-            | Inline::CitationRef { .. } => {}
+            | Inline::CitationRef { .. }
+            | Inline::LineBreak => {}
         }
     }
 }
@@ -1082,6 +1088,7 @@ fn inline_text(inlines: &[Inline]) -> String {
             | Inline::FootnoteRef { target }
             | Inline::CitationRef { target } => out.push_str(target),
             Inline::MathInline { source } => out.push_str(source),
+            Inline::LineBreak => out.push(' '),
         }
     }
     out

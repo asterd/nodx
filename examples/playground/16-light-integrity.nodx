@@ -5,7 +5,7 @@ theme: web
 integrity:
   alg: sha256
   scope: canonical-ast
-  value: sha256-GkKIvwYf4eF1WYMy3Asg8-PrfvFyTKEp7RL1kaIzOA8
+  value: sha256-5OKVT50Z_H10UsdyzUKbFSRNi8eWVnTmNMzemiA3buk
 ---
 
 # Light integrity header #light-integrity

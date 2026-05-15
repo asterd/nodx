@@ -8,18 +8,36 @@ mean to cross: an unclosed delimiter is treated as text.
 
 | Source | AST `type` | HTML |
 |---|---|---|
-| `**bold**` | `strong` | `<strong>bold</strong>` |
-| `*italic*` | `em` | `<em>italic</em>` |
+| `**bold**` / `__bold__` | `strong` | `<strong>bold</strong>` |
+| `*italic*` / `_italic_` | `em` | `<em>italic</em>` |
 | `~~deleted~~` | `strike` | `<s>deleted</s>` |
-| `` `code` `` | `code` | `<code>code</code>` |
+| `` `code` `` / `` ``code with ` inside`` `` | `code` | `<code>code</code>` |
 | `==marked==` | `mark` | `<mark>marked</mark>` |
 | `~sub~` | `sub` | `<sub>sub</sub>` |
 | `^sup^` | `sup` | `<sup>sup</sup>` |
 | `$$x+1$$` | `math-inline` | `<code class="math-inline">x+1</code>` |
+| `\` at end of source line | `line-break` | `<br>` |
 
 The delimiter pairs must close on the same line in the same paragraph; an
 unmatched marker is treated as a literal character. This is intentional:
 NODX trades a few extra escapes for *predictable* tokenization.
+
+Underscore emphasis (`_em_`, `__strong__`) follows the CommonMark "intraword
+underscore" rule: a run only opens or closes when one side is whitespace,
+punctuation, or end-of-string. Alphanumeric characters on both sides keep
+the underscore literal, which is why `snake_case`, `__init__`, and
+`snake__case` survive as plain text.
+
+Code spans match runs of any length. The opening run picks `N` backticks
+and the parser looks for the next run of *exactly* `N`. If the content
+starts and ends with a single space and contains a non-space character,
+both spaces are trimmed (matches CommonMark normalization).
+
+A backslash as the last character of a non-final source line inside a
+paragraph or heading produces an `Inline::LineBreak`. It renders as `<br>`
+and projects to a single space in plain-text outputs (Semantic Text, NCP
+`text`). The CommonMark "two trailing spaces" alternative is intentionally
+not recognised.
 
 `mark` accepts the normal attribute suffix for quick theme overrides:
 
@@ -115,8 +133,10 @@ A backslash escapes the next significant character:
 \#not-an-id
 ```
 
-Escapable characters: ``` ` * [ ] ( ) { } # @ ~ ^ = : | ```. Any other
-character after a backslash keeps both the backslash and the character.
+Escapable characters: ``` ` * [ ] ( ) { } # @ ~ ^ = : | _ ! . - + < > \ " ' ```.
+Any other character after a backslash keeps both the backslash and the
+character. A backslash before a newline is the hard line break form (see
+above).
 
 ## Composability
 

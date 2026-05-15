@@ -57,7 +57,7 @@ if the names disagree.
 | `columns` | `<div class="nodx-columns">` | Multicolumn flow container. Tune with `gap`, `width`, and style blocks. |
 | `frame` | `<div class="nodx-frame">` | Bordered/padded frame container for grouped content. |
 | `page` | `<div class="nodx-page">` | Page-like region with quick `bg`, `background`, spacing, and frame attributes. |
-| `list` | `<ul>` or `<ol>` | `kind` attribute is one of `unordered`, `ordered`, `task`. |
+| `list` | `<ul>` or `<ol>` | `kind` attribute is one of `unordered`, `ordered`, `task`. Unordered markers `- `, `* `, and `+ ` all normalize to `unordered`; ordered separators `.` and `)` (e.g. `1.` or `1)`) normalize to `ordered`. The literal marker is not preserved in the AST. |
 | `item` | `<li>` | Optional `checked="true|false"` for task lists. |
 | `form` | `<dl>` | Document-style forms; fields render as `dt`/`dd` pairs. |
 | `field` | inside `<dl>` as `<dt>`/`<dd>` | Has `label`, `name`, optional `value`. |

@@ -244,6 +244,20 @@ stop and discuss before proceeding.
   [`spec/conformance/v1.0/fixtures/thematic-break.nodx`](./spec/conformance/v1.0/fixtures/thematic-break.nodx)
   plus the conformance triplet in
   [`spec/tests/conformance/thematic-break.nodx`](./spec/tests/conformance/thematic-break.nodx).
+- **CommonMark-compatible inline + extended lists** (RFC §10.3, §12).
+  Underscore emphasis (`_em_`, `__strong__`) follows the CommonMark
+  intraword rule — alnum-flanked underscores stay literal so identifiers
+  like `snake_case`, `__init__`, and `snake__case` are not mis-parsed.
+  Code spans accept matching N-backtick runs (`` `single` ``,
+  `` ``two ` ticks`` ``, `` ```three `` runs``` ``). Backslash escapes the
+  extended set `` ` * [ ] ( ) { } # @ ~ ^ = : | _ ! . - + < > \ " ' ``,
+  plus a trailing `\` before `\n` emits `Inline::LineBreak` (renders to
+  `<br>`, projects to a space in plain text / NCP / Semantic Text). Lists
+  accept `- `, `* `, `+ ` for unordered and `1.` / `1)` for ordered; the
+  literal marker is *not* preserved in the AST. Triplet parity is locked
+  by [`spec/conformance/v1.0/fixtures/inline-extensions.nodx`](./spec/conformance/v1.0/fixtures/inline-extensions.nodx)
+  and [`spec/conformance/v1.0/fixtures/extended-lists.nodx`](./spec/conformance/v1.0/fixtures/extended-lists.nodx)
+  plus the matching `spec/tests/conformance/*.nodx` siblings.
 
 ### Still open
 
@@ -257,10 +271,12 @@ stop and discuss before proceeding.
   best-effort outside Rust.
 - **CommonMark interop** via `convert markdown-to-nodx` /
   `nodx-to-markdown` exists but is not a primary supported workflow.
-  Many CommonMark constructs degrade silently (no setext headings, no
-  `_em_`, no `> quote`, no inline `![img]`, no autolinks, no link
-  reference definitions, no `***` HR). See `convert` source and the gap
-  analysis when extending.
+  Several CommonMark constructs still degrade silently (no setext
+  headings, no `> quote`, no inline `![img]`, no autolinks, no link
+  reference definitions). See `convert` source and the gap analysis when
+  extending. (Underscore emphasis, multi-backtick code spans, the
+  thematic-break `***` form, and hard line breaks are now native — see
+  the matching "Closed" entries.)
 
 ## How to update this file
 

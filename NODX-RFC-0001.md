@@ -558,8 +558,16 @@ jumps SHOULD produce `NODX-E022`.
 
 ### 10.3 Lists
 
-Unordered list items begin with `- `. Ordered list items begin with an ASCII
-decimal number followed by `. `. Task items begin with `- [ ] ` or `- [x] `.
+Unordered list items begin with `- `, `* `, or `+ `. Ordered list items begin
+with one or more ASCII decimal digits followed by `. ` or `) `. Task items
+begin with `- [ ] ` or `- [x] `.
+
+```abnf
+list-item       = unordered-item / ordered-item / task-item
+unordered-item  = ("-" / "*" / "+") SP CONTENT LF
+ordered-item    = 1*DIGIT ("." / ")") SP CONTENT LF
+task-item       = "- [" (" " / "x") "]" SP CONTENT LF
+```
 
 Canonical nodes:
 
@@ -568,8 +576,16 @@ Canonical nodes:
 2. item: `type: "item"`;
 3. task item checked state: `attrs.checked` equal to `true` or `false`.
 
+The literal marker glyph is *not* preserved in the AST: `- a` / `* a` / `+ a`
+all produce identical canonical JSON, and `1. a` / `1) a` likewise share an
+`ordered` kind without recording which separator was used. This keeps the
+byte-stable AST contract intact regardless of authoring style. The ordered
+list's starting number is also not preserved in baseline 1.0; renderers MAY
+infer numbering from item order.
+
 Baseline NODX 1.0 list parsing is flat. Continued lines indented by two spaces
-are appended to the item text.
+are appended to the item text. A run of items beginning with a different
+marker kind starts a new list block.
 
 ### 10.4 Pipe Tables
 
@@ -733,9 +749,9 @@ other textual nodes.
 | Source | Inline type | Canonical fields |
 |---|---|---|
 | plain text | `text` | `text` |
-| `` `code` `` | `code` | `text` |
-| `**strong**` | `strong` | `children` |
-| `*emphasis*` | `em` | `children` |
+| `` `code` `` / `` ``code with ` inside`` `` | `code` | `text` |
+| `**strong**` / `__strong__` | `strong` | `children` |
+| `*emphasis*` / `_emphasis_` | `em` | `children` |
 | `~~strike~~` | `strike` | `children` |
 | `==mark==` | `mark` | `children`, optional `attrs` |
 | `==mark=={attrs}` | `mark` | `children`, `attrs` |
@@ -751,11 +767,34 @@ other textual nodes.
 | `[^target]` | `footnote-ref` | `target` |
 | `[@target]` | `citation-ref` | `target` |
 | `$$source$$` | `math-inline` | `source` |
+| `\` at end of source line | `line-break` | _none_ |
+
+Emphasis uses either `*` or `_` as delimiter. `*` follows the CommonMark
+"left-flanking can open / right-flanking can close" rule with no intraword
+restriction. `_` follows the stricter CommonMark "intraword underscore"
+rule: a run can open emphasis only if it is left-flanking AND (not
+right-flanking OR preceded by ASCII punctuation), and can close only if it
+is right-flanking AND (not left-flanking OR followed by ASCII punctuation).
+This keeps identifiers like `snake_case`, `__init__`, and `snake__case`
+literal when both sides are alphanumeric.
+
+Code spans use a run of one or more backticks as the opening delimiter and
+require a closing run of the same length. The closing run MUST NOT be part
+of a longer backtick run. If the content begins with a single space and
+ends with a single space, and the content is not entirely whitespace, both
+spaces are stripped. Internal newlines in the parsed content are normalized
+to a single space.
+
+A backslash at the very end of a non-final source line within a paragraph or
+heading produces a `line-break` inline. The CommonMark "two trailing spaces"
+alternative is intentionally not recognised. Hard line breaks render as
+`<br>` in HTML and project to a single space in the markdown-shaped
+Semantic Text and NCP `text` fields.
 
 Backslash escapes the following characters in inline text:
 
 ```text
-` * [ ] ( ) { } # @ ~ ^ = : |
+` * [ ] ( ) { } # @ ~ ^ = : | _ ! . - + < > \ " '
 ```
 
 Inline links MUST pass the URL policy in Section 19. Link attributes use the

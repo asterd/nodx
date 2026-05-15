@@ -517,32 +517,64 @@ fn is_list_start(line: &str) -> bool {
     list_kind(line).is_some()
 }
 
+/// Classify the first source line of a potential list. The marker character
+/// is normalized away here: the AST records only `unordered`, `ordered`, or
+/// `task` so the canonical form is byte-stable regardless of whether the
+/// author wrote `- `, `* `, `+ ` (unordered) or `1.`, `1)` (ordered).
 fn list_kind(line: &str) -> Option<&'static str> {
     if line.starts_with("- [ ] ") || line.starts_with("- [x] ") {
-        Some("task")
-    } else if line.starts_with("- ") {
-        Some("unordered")
-    } else {
-        let (n, _) = line.split_once(". ")?;
-        if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
-            Some("ordered")
-        } else {
-            None
-        }
+        return Some("task");
     }
+    if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
+        return Some("unordered");
+    }
+    if let Some(rest) = ordered_marker_len(line) {
+        let _ = rest;
+        return Some("ordered");
+    }
+    None
+}
+
+/// Length of an ordered list marker (`<digits>. ` or `<digits>) `), returning
+/// the number of bytes consumed including the trailing space, or `None`. The
+/// numeric value of the marker is not preserved in the AST.
+fn ordered_marker_len(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == 0 {
+        return None;
+    }
+    let sep = bytes.get(i).copied()?;
+    if sep != b'.' && sep != b')' {
+        return None;
+    }
+    if bytes.get(i + 1).copied()? != b' ' {
+        return None;
+    }
+    Some(i + 2)
 }
 
 fn strip_list_marker(line: &str) -> (&str, Option<bool>) {
     if let Some(rest) = line.strip_prefix("- [ ] ") {
-        (rest, Some(false))
-    } else if let Some(rest) = line.strip_prefix("- [x] ") {
-        (rest, Some(true))
-    } else if let Some(rest) = line.strip_prefix("- ") {
-        (rest, None)
-    } else {
-        let (_, rest) = line.split_once(". ").unwrap();
-        (rest, None)
+        return (rest, Some(false));
     }
+    if let Some(rest) = line.strip_prefix("- [x] ") {
+        return (rest, Some(true));
+    }
+    if let Some(rest) = line.strip_prefix("- ") {
+        return (rest, None);
+    }
+    if let Some(rest) = line.strip_prefix("* ") {
+        return (rest, None);
+    }
+    if let Some(rest) = line.strip_prefix("+ ") {
+        return (rest, None);
+    }
+    let consumed = ordered_marker_len(line).expect("ordered marker has been verified by list_kind");
+    (&line[consumed..], None)
 }
 
 fn is_pipe_table_header(a: &str, b: &str) -> bool {

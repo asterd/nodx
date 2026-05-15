@@ -3,17 +3,37 @@ import re
 from .ast import empty_attrs
 from .attrs import merge_class_suffix, parse_attrs
 
+# PR2 (RFC §12) extended backslash-escape set: previously
+# `` ` * [ ] ( ) { } # @ ~ ^ = : | ``, now adds underscore (disambiguation
+# from emphasis), `!`, `.`, `-`, `+`, `<`, `>`, `\`, `"`, `'`. Any other
+# character following `\` is preserved as-is together with the backslash.
+ESCAPE_CHARS = "`*[](){}#@~^=:|_!.-+<>\\\"'"
+
 
 def parse_inlines(input_):
     out = []
     i = 0
     while i < len(input_):
         rest = input_[i:]
-        if rest.startswith("`") and "`" in rest[1:]:
-            end = rest[1:].find("`") + 1
-            out.append({"text": rest[1:end], "type": "code"})
-            i += end + 1
-        elif rest.startswith("$$") and "$$" in rest[2:]:
+        # Code span: N backticks open, N backticks close. The opening run
+        # length is preserved and the matching close must be exactly the same
+        # length, CommonMark-style.
+        if rest.startswith("`"):
+            run = 0
+            while run < len(rest) and rest[run] == "`":
+                run += 1
+            close_off = _find_backtick_run(rest, run, run)
+            if close_off != -1:
+                raw = rest[run:close_off]
+                out.append({"text": _trim_code_span(raw), "type": "code"})
+                i += close_off + run
+                continue
+            # No matching close: literal backtick. Remaining backticks are
+            # re-examined on the next iteration.
+            push_text(out, "`")
+            i += 1
+            continue
+        if rest.startswith("$$") and "$$" in rest[2:]:
             end = rest[2:].find("$$") + 2
             out.append({"source": rest[2:end], "type": "math-inline"})
             i += end + 2
@@ -76,6 +96,24 @@ def parse_inlines(input_):
             end = rest[1:].find("*") + 1
             out.append({"children": parse_inlines(rest[1:end]), "type": "em"})
             i += end + 1
+        elif rest.startswith("__") or rest.startswith("_"):
+            # Underscore emphasis (RFC §12). CommonMark "intraword underscore"
+            # rule: a ``_`` run can open emphasis only if it is left-flanking
+            # AND (not right-flanking OR preceded by ASCII punctuation), and
+            # can close only if it is right-flanking AND (not left-flanking
+            # OR followed by ASCII punctuation). Keeps identifiers literal.
+            run = 2 if rest.startswith("__") else 1
+            opener_preceding = input_[i - 1] if i > 0 else None
+            opener_following = input_[i + run] if i + run < len(input_) else None
+            if _can_open_underscore(opener_preceding, opener_following):
+                closed = _find_underscore_close(rest, run)
+                if closed is not None:
+                    inner = rest[run : run + closed]
+                    out.append({"children": parse_inlines(inner), "type": "strong" if run == 2 else "em"})
+                    i += run + closed + run
+                    continue
+            push_text(out, "_")
+            i += 1
         elif rest.startswith("[[") and "]]" in rest:
             close = rest.find("]]")
             label = rest[2:close]
@@ -127,17 +165,126 @@ def parse_inlines(input_):
             else:
                 push_text(out, rest[0])
                 i += 1
-        elif (
-            rest.startswith("\\")
-            and len(rest) > 1
-            and rest[1] in "`*[](){}#@~^=:|"
-        ):
-            push_text(out, rest[1])
-            i += 2
+        elif rest.startswith("\\") and len(rest) > 1:
+            nxt = rest[1]
+            # Hard line break: backslash immediately before a newline emits
+            # LineBreak and consumes both characters. The paragraph parser
+            # joins source lines with `\n`, so this preserves intra-paragraph
+            # break semantics across the joined string.
+            if nxt == "\n":
+                out.append({"type": "line-break"})
+                i += 2
+                continue
+            if nxt in ESCAPE_CHARS:
+                push_text(out, nxt)
+                i += 2
+            else:
+                push_text(out, "\\")
+                i += 1
         else:
             push_text(out, rest[0])
             i += 1
     return out
+
+
+def _find_backtick_run(rest, open_len, close_len):
+    """Locate a closing backtick run of exactly ``close_len`` ticks."""
+    i = open_len
+    n = len(rest)
+    while i < n:
+        if rest[i] == "`":
+            start = i
+            while i < n and rest[i] == "`":
+                i += 1
+            if i - start == close_len:
+                return start
+        else:
+            i += 1
+    return -1
+
+
+def _trim_code_span(raw):
+    """Normalize a code-span body per the CommonMark trim rule."""
+    s = raw.replace("\n", " ")
+    if len(s) >= 2 and s.startswith(" ") and s.endswith(" ") and any(c != " " for c in s):
+        s = s[1:-1]
+    return s
+
+
+def _find_underscore_close(rest, run):
+    """Return the byte offset of a closing underscore run inside ``rest``.
+
+    The offset is relative to ``rest`` skipping the opening run; the run must
+    be at least ``run`` underscores long and must satisfy CommonMark's
+    "can close underscore" rule.
+    """
+    j = run
+    n = len(rest)
+    while j < n:
+        if rest[j] != "_":
+            j += 1
+            continue
+        start = j
+        while j < n and rest[j] == "_":
+            j += 1
+        run_len = j - start
+        if run_len < run:
+            continue
+        preceding = rest[start - 1] if start > 0 else None
+        following = rest[j] if j < n else None
+        if _can_close_underscore(preceding, following):
+            return start - run
+    return None
+
+
+def _is_left_flanking(preceding, following):
+    if following is None or _is_ascii_whitespace(following):
+        return False
+    if preceding is None or _is_ascii_whitespace(preceding):
+        return True
+    if _is_ascii_punct(preceding):
+        return True
+    return False
+
+
+def _is_right_flanking(preceding, following):
+    if preceding is None or _is_ascii_whitespace(preceding):
+        return False
+    if following is None or _is_ascii_whitespace(following):
+        return True
+    if _is_ascii_punct(following):
+        return True
+    return False
+
+
+def _can_open_underscore(preceding, following):
+    if not _is_left_flanking(preceding, following):
+        return False
+    if not _is_right_flanking(preceding, following):
+        return True
+    return preceding is not None and _is_ascii_punct(preceding)
+
+
+def _can_close_underscore(preceding, following):
+    if not _is_right_flanking(preceding, following):
+        return False
+    if not _is_left_flanking(preceding, following):
+        return True
+    return following is not None and _is_ascii_punct(following)
+
+
+def _is_ascii_alnum(ch):
+    return ch.isascii() and ch.isalnum()
+
+
+def _is_ascii_whitespace(ch):
+    return ch in (" ", "\t", "\n", "\r")
+
+
+def _is_ascii_punct(ch):
+    if not ch or ord(ch) > 0x7F:
+        return False
+    return not _is_ascii_alnum(ch) and not _is_ascii_whitespace(ch)
 
 
 def parse_span_suffix(input_):

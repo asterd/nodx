@@ -778,7 +778,8 @@ fn collect_inline_refs(
             Inline::Text(_)
             | Inline::Code(_)
             | Inline::Mention { .. }
-            | Inline::MathInline { .. } => {}
+            | Inline::MathInline { .. }
+            | Inline::LineBreak => {}
         }
     }
 }

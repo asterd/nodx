@@ -559,6 +559,11 @@ fn serialize_inlines(inlines: &[nodx_core::Inline], out: &mut String) {
                 out.push_str(source);
                 out.push('$');
             }
+            Inline::LineBreak => {
+                // Source-level CST round trip: NODX hard-break syntax is a
+                // trailing backslash before a newline.
+                out.push_str("\\\n");
+            }
         }
     }
 }

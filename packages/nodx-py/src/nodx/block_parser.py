@@ -253,11 +253,17 @@ def is_any_close(line):
 
 
 def list_kind(line):
+    """Classify a list item header. PR2 (RFC §10.3) accepts the unordered
+    markers ``-``, ``*``, ``+`` and the ordered separators ``.`` and ``)``.
+
+    The literal marker is *not* preserved in the AST: only ``kind`` survives,
+    keeping the canonical form byte-stable across the new marker variants.
+    """
     if line.startswith("- [ ] ") or line.startswith("- [x] "):
         return "task"
-    if line.startswith("- "):
+    if line.startswith("- ") or line.startswith("* ") or line.startswith("+ "):
         return "unordered"
-    if re.match(r"^\d+\. ", line):
+    if re.match(r"^\d+[.)] ", line):
         return "ordered"
     return None
 
@@ -267,9 +273,9 @@ def strip_list(line):
         return line[6:], False
     if line.startswith("- [x] "):
         return line[6:], True
-    if line.startswith("- "):
+    if line.startswith("- ") or line.startswith("* ") or line.startswith("+ "):
         return line[2:], None
-    return re.sub(r"^\d+\. ", "", line), None
+    return re.sub(r"^\d+[.)] ", "", line), None
 
 
 def is_pipe_header(a, b):

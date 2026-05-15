@@ -1,0 +1,23 @@
+---
+schema: nodx/1.0
+type: document
+title: Inline extensions
+---
+
+# Inline extensions {#inline}
+
+Underscore emphasis applies at word boundaries: _em_ and __strong__ work
+just like *em* and **strong**.
+
+Intraword underscores stay literal because the run is flanked by
+alphanumerics on both sides. Examples: snake_case identifiers, my_var_name
+references, and snake__case patterns are preserved as plain text.
+
+Code spans support runs of one, two, or three backticks: `single`, ``two ` ticks``,
+and ```three backticks `` two `` runs``` inside.
+
+Backslash escapes the extended set: \_underscore\_, \!bang, \.dot, \-dash,
+\+plus, \<less, \>greater, \\backslash, \"quote\", \'apos\'.
+
+Hard line break with backslash: first half\
+second half on the next line.

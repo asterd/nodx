@@ -138,6 +138,9 @@ fn write_inlines(out: &mut String, inlines: &[Inline]) {
                 write_json_string(out, source);
                 out.push_str(",\"type\":\"math-inline\"}");
             }
+            Inline::LineBreak => {
+                out.push_str("{\"type\":\"line-break\"}");
+            }
         }
     }
     out.push(']');
