@@ -166,11 +166,16 @@ validation or security failure, `3` unsupported required profile
 - **Do not edit `spec/conformance/v1.0/expected/` by hand.** Regenerate
   it with the reference implementation; see
   [`docs/reference/conformance.md`](./docs/reference/conformance.md).
-- **Do not add raw HTML support, autolinks, setext headings, or
-  CommonMark-only constructs** to the lite syntax. NODX is intentionally
-  not CommonMark-conformant — see §28 of the RFC and the gap analysis
-  notes. Markdown interop belongs in the `convert markdown-to-nodx`
-  importer, not in the core grammar.
+- **Do not add raw HTML support** to the lite syntax. Raw HTML is
+  rejected by design (security). Other CommonMark-shaped constructs
+  (autolinks, thematic break, `_em_`, `*`/`+` bullets, multi-backtick
+  code spans, …) are *natively supported* — see the "Closed" entries
+  below for the surface that was added. Markdown constructs that NODX
+  deliberately does not adopt natively (setext, indented code blocks,
+  inline images, link references, footnote defs, HTML entities) now
+  surface as `NODX-W030`..`NODX-W035` warnings instead of degrading
+  silently; do not paper over them, fix the document. Markdown interop
+  beyond the warning surface belongs in `convert markdown-to-nodx`.
 - **Do not introduce file writes** in parse/validate/render/projection/
   package-read code paths.
 - **Do not silence a diagnostic.** If it is wrong, fix the document or
@@ -288,13 +293,16 @@ stop and discuss before proceeding.
   best-effort outside Rust.
 - **CommonMark interop** via `convert markdown-to-nodx` /
   `nodx-to-markdown` exists but is not a primary supported workflow.
-  Several CommonMark constructs still degrade silently (no setext
-  headings, no `> quote`, no inline `![img]`, no link reference
-  definitions). See `convert` source and the gap analysis when
-  extending. (Underscore emphasis, multi-backtick code spans, the
-  thematic-break `***` form, hard line breaks, and `<scheme:...>` /
-  `<email>` autolinks are now native — see the matching "Closed"
-  entries.)
+  Constructs that NODX deliberately does not adopt natively (setext
+  headings, indented code blocks, inline images, link reference
+  definitions, GFM footnote defs, HTML entity references) now emit
+  `NODX-W030`..`NODX-W035` warnings instead of degrading silently;
+  authors are pointed at the NODX equivalent. `> quote` is still
+  silently treated as a paragraph — open follow-up. (Underscore
+  emphasis, multi-backtick code spans, `*`/`+` bullets, `1)` ordered
+  markers, the thematic-break `***`/`___` forms, hard line breaks,
+  and `<scheme:...>` / `<email>` autolinks are now native — see the
+  matching "Closed" entries.)
 
 ## How to update this file
 
