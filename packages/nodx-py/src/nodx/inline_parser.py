@@ -165,6 +165,26 @@ def parse_inlines(input_):
             else:
                 push_text(out, rest[0])
                 i += 1
+        elif rest.startswith("<"):
+            # Autolink (RFC §12, PR3). Produces an Inline::Link identical to
+            # ``[label](target)`` so URL safety stays single-sourced in
+            # ``nodx-url`` at validate/render time (no parallel policy here).
+            #
+            #   <scheme:rest>   -> label = body, target = body
+            #   <user@host.tld> -> label = body, target = "mailto:" + body
+            auto = _parse_autolink(rest)
+            if auto is not None:
+                out.append(
+                    {
+                        "label": [{"text": auto["label"], "type": "text"}],
+                        "target": auto["target"],
+                        "type": "link",
+                    }
+                )
+                i += auto["consumed"]
+                continue
+            push_text(out, "<")
+            i += 1
         elif rest.startswith("\\") and len(rest) > 1:
             nxt = rest[1]
             # Hard line break: backslash immediately before a newline emits
@@ -315,6 +335,77 @@ def parse_span_suffix(input_):
     if not attrs["styles"]:
         del attrs["styles"]
     return {"attrs": attrs, "consumed": consumed if saw else 0}
+
+
+# Autolink grammar (RFC §12, PR3). Mirrors ``parse_autolink`` in
+# ``crates/nodx-core/src/inline_parser.rs`` byte-for-byte to keep the AST
+# triplet identical. Returns ``{"consumed", "label", "target"}`` or ``None``.
+def _parse_autolink(rest):
+    # ``rest[0]`` is ``'<'`` by precondition.
+    end = 1
+    while end < len(rest):
+        ch = rest[end]
+        if ch == ">":
+            break
+        code = ord(ch)
+        if ch == "<" or ch in ("\n", "\r", "\t", " ") or code < 0x20 or code == 0x7F:
+            return None
+        end += 1
+    if end >= len(rest) or rest[end] != ">":
+        return None
+    body = rest[1:end]
+    if not body:
+        return None
+
+    # 1) Absolute URI autolink
+    colon = body.find(":")
+    if colon > 0 and _is_valid_autolink_scheme(body[:colon]):
+        return {"consumed": end + 1, "label": body, "target": body}
+
+    # 2) Email autolink
+    if _is_valid_autolink_email(body):
+        return {"consumed": end + 1, "label": body, "target": f"mailto:{body}"}
+
+    return None
+
+
+def _is_valid_autolink_scheme(scheme):
+    if not (2 <= len(scheme) <= 32):
+        return False
+    if not scheme[0].isascii() or not scheme[0].isalpha():
+        return False
+    for ch in scheme[1:]:
+        if ch.isascii() and (ch.isalnum() or ch in "+.-"):
+            continue
+        return False
+    return True
+
+
+def _is_valid_autolink_email(body):
+    if "@" not in body:
+        return False
+    local, _, domain = body.partition("@")
+    if not local or not domain:
+        return False
+    for ch in local:
+        if not (ch.isascii() and (ch.isalnum() or ch in "._%+-")):
+            return False
+    labels = domain.split(".")
+    if len(labels) < 2:
+        return False
+    for label in labels:
+        if not label:
+            return False
+        for ch in label:
+            if not (ch.isascii() and (ch.isalnum() or ch == "-")):
+                return False
+    tld = labels[-1]
+    if len(tld) < 2:
+        return False
+    for ch in tld:
+        if not (ch.isascii() and ch.isalpha()):
+            return False
+    return True
 
 
 def push_text(out, text):

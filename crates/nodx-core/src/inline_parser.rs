@@ -210,6 +210,27 @@ pub fn parse_inlines(input: &str) -> Vec<Inline> {
             }
             push_text(&mut out, "[");
             i += 1;
+        } else if rest.starts_with('<') {
+            // Autolink (RFC §12, PR3). Two shapes — both produce an `Inline::Link`
+            // identical to the explicit `[label](target)` form, so URL safety is
+            // gated by the same `nodx-url` classification at validate/render time
+            // (no parallel policy here; do not duplicate the URL whitelist).
+            //
+            //   <scheme:rest>   → label = "scheme:rest", target = "scheme:rest"
+            //   <user@host.tld> → label = "user@host.tld", target = "mailto:user@host.tld"
+            //
+            // The content must be on a single line (no `\n` inside `<...>`).
+            if let Some((consumed, label, target)) = parse_autolink(rest) {
+                out.push(Inline::Link {
+                    label: vec![Inline::Text(label)],
+                    target,
+                    attrs: Attrs::default(),
+                });
+                i += consumed;
+                continue;
+            }
+            push_text(&mut out, "<");
+            i += 1;
         } else if rest.starts_with('\\') && rest.len() > 1 {
             let next = rest.as_bytes()[1];
             // Hard line break: a backslash immediately before a newline (and
@@ -442,6 +463,120 @@ fn class_suffix_len(input: &str) -> usize {
         }
     }
     pos
+}
+
+/// Try to match a CommonMark-style autolink at the start of `rest`, which is
+/// guaranteed to begin with `<`. Returns `(consumed_bytes, label, target)` on
+/// success, where `consumed_bytes` covers `<…>` inclusive.
+///
+/// Two shapes are recognised, both producing an `Inline::Link` identical to
+/// the `[label](target)` form so that URL safety is enforced exactly once
+/// — at `nodx-validate` / `nodx-render-html` time via `nodx-url`.
+///
+/// 1. Absolute URI: scheme (`[A-Za-z][A-Za-z0-9+.\-]{1,31}`) + `:` + body of
+///    printable ASCII excluding `<`, `>`, whitespace, and control characters.
+///    Label and target are the verbatim `scheme:body` string.
+/// 2. Email: minimal RFC 5322 subset, label is the verbatim address and
+///    target is prefixed with `mailto:` so the URL whitelist gates it.
+///
+/// `<not a url>` (contains spaces), `<>`, and any `<…>` containing `\n` fall
+/// through to literal text and are NOT autolinks.
+fn parse_autolink(rest: &str) -> Option<(usize, String, String)> {
+    debug_assert!(rest.starts_with('<'));
+    let bytes = rest.as_bytes();
+    // Find the closing `>` on the same logical line. Whitespace, controls,
+    // and `<` inside the body disqualify the candidate immediately.
+    let mut end = 1;
+    while end < bytes.len() {
+        let b = bytes[end];
+        if b == b'>' {
+            break;
+        }
+        if b == b'<' || b == b'\n' || b == b'\r' || b == b'\t' || b == b' ' || b < 0x20 || b == 0x7f
+        {
+            return None;
+        }
+        end += 1;
+    }
+    if end >= bytes.len() || bytes[end] != b'>' {
+        return None;
+    }
+    let body = &rest[1..end];
+    if body.is_empty() {
+        return None;
+    }
+
+    // 1) Absolute URI autolink: scheme + ":" + opaque body.
+    if let Some(colon) = body.find(':') {
+        let scheme = &body[..colon];
+        if is_valid_autolink_scheme(scheme) {
+            return Some((end + 1, body.to_string(), body.to_string()));
+        }
+    }
+
+    // 2) Email autolink: localpart@domain.tld (minimal).
+    if is_valid_autolink_email(body) {
+        let target = format!("mailto:{}", body);
+        return Some((end + 1, body.to_string(), target));
+    }
+
+    None
+}
+
+/// Scheme grammar: `[A-Za-z][A-Za-z0-9+.\-]{1,31}` — 2 to 32 characters total.
+/// Conservative bound keeps `<a:b>` ambiguous URLs out (1-char schemes) while
+/// still admitting every IANA-registered scheme.
+fn is_valid_autolink_scheme(scheme: &str) -> bool {
+    let bytes = scheme.as_bytes();
+    if !(2..=32).contains(&bytes.len()) {
+        return false;
+    }
+    if !bytes[0].is_ascii_alphabetic() {
+        return false;
+    }
+    bytes[1..]
+        .iter()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(*b, b'+' | b'.' | b'-'))
+}
+
+/// Email grammar: `[A-Za-z0-9._%+\-]+ @ [A-Za-z0-9.\-]+ \. [A-Za-z]{2,}` —
+/// CommonMark's minimal subset. Conservative on purpose: anything fancier
+/// (RFC 5322 quoted strings, IDN, comments) is out.
+fn is_valid_autolink_email(body: &str) -> bool {
+    let Some((local, domain)) = body.split_once('@') else {
+        return false;
+    };
+    if local.is_empty() || domain.is_empty() {
+        return false;
+    }
+    if !local
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'%' | b'+' | b'-'))
+    {
+        return false;
+    }
+    // Domain must contain at least one dot, every label non-empty, and the
+    // last label must be 2+ ASCII letters (TLD).
+    let labels: Vec<&str> = domain.split('.').collect();
+    if labels.len() < 2 {
+        return false;
+    }
+    for label in &labels {
+        if label.is_empty() {
+            return false;
+        }
+        if !label
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        {
+            return false;
+        }
+    }
+    let tld = labels.last().unwrap();
+    if tld.len() < 2 {
+        return false;
+    }
+    tld.bytes().all(|b| b.is_ascii_alphabetic())
 }
 
 fn push_text(out: &mut Vec<Inline>, text: &str) {

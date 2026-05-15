@@ -139,6 +139,21 @@ export function parseInlines(input) {
         pushText(out, rest[0]);
         i++;
       }
+    } else if (rest.startsWith("<")) {
+      // Autolink (RFC §12, PR3). Produces a Link identical to the
+      // `[label](target)` form so URL safety stays single-sourced in
+      // `nodx-url` at validate/render time (no duplicate policy).
+      //
+      //   <scheme:rest>   → label = body, target = body
+      //   <user@host.tld> → label = body, target = "mailto:" + body
+      const auto = parseAutolink(rest);
+      if (auto !== null) {
+        out.push({ label: [{ text: auto.label, type: "text" }], target: auto.target, type: "link" });
+        i += auto.consumed;
+        continue;
+      }
+      pushText(out, "<");
+      i += 1;
     } else if (rest.startsWith("\\") && rest.length > 1) {
       const next = rest[1];
       // Hard line break: a backslash immediately before `\n` becomes
@@ -279,6 +294,83 @@ function parseSpanSuffix(input) {
   attrs.classes = [...new Set(attrs.classes)].sort();
   if (!Object.keys(attrs.styles).length) delete attrs.styles;
   return { attrs, consumed: saw ? consumed : 0 };
+}
+
+// Autolink grammar (RFC §12, PR3). Mirrors `parse_autolink` in
+// `crates/nodx-core/src/inline_parser.rs` byte-for-byte to keep the AST
+// triplet identical. Returns { consumed, label, target } or null.
+function parseAutolink(rest) {
+  // rest[0] is '<' by precondition.
+  let end = 1;
+  while (end < rest.length) {
+    const ch = rest[end];
+    if (ch === ">") break;
+    const code = rest.charCodeAt(end);
+    if (ch === "<" || ch === "\n" || ch === "\r" || ch === "\t" || ch === " " || code < 0x20 || code === 0x7f) {
+      return null;
+    }
+    end += 1;
+  }
+  if (end >= rest.length || rest[end] !== ">") return null;
+  const body = rest.slice(1, end);
+  if (body.length === 0) return null;
+
+  // 1) Absolute URI autolink
+  const colon = body.indexOf(":");
+  if (colon > 0 && isValidAutolinkScheme(body.slice(0, colon))) {
+    return { consumed: end + 1, label: body, target: body };
+  }
+
+  // 2) Email autolink
+  if (isValidAutolinkEmail(body)) {
+    return { consumed: end + 1, label: body, target: `mailto:${body}` };
+  }
+
+  return null;
+}
+
+function isValidAutolinkScheme(scheme) {
+  if (scheme.length < 2 || scheme.length > 32) return false;
+  const c0 = scheme.charCodeAt(0);
+  const isAlpha = (c) => (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a);
+  if (!isAlpha(c0)) return false;
+  for (let i = 1; i < scheme.length; i += 1) {
+    const c = scheme.charCodeAt(i);
+    const alnum = isAlpha(c) || (c >= 0x30 && c <= 0x39);
+    if (!alnum && scheme[i] !== "+" && scheme[i] !== "." && scheme[i] !== "-") {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidAutolinkEmail(body) {
+  const at = body.indexOf("@");
+  if (at <= 0 || at === body.length - 1) return false;
+  const local = body.slice(0, at);
+  const domain = body.slice(at + 1);
+  const isAlpha = (c) => (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a);
+  const isAlnum = (c) => isAlpha(c) || (c >= 0x30 && c <= 0x39);
+  for (let i = 0; i < local.length; i += 1) {
+    const c = local.charCodeAt(i);
+    const ok = isAlnum(c) || ["%", "+", "-", "_", ".",].includes(local[i]);
+    if (!ok) return false;
+  }
+  const labels = domain.split(".");
+  if (labels.length < 2) return false;
+  for (const label of labels) {
+    if (label.length === 0) return false;
+    for (let i = 0; i < label.length; i += 1) {
+      const c = label.charCodeAt(i);
+      if (!isAlnum(c) && label[i] !== "-") return false;
+    }
+  }
+  const tld = labels[labels.length - 1];
+  if (tld.length < 2) return false;
+  for (let i = 0; i < tld.length; i += 1) {
+    if (!isAlpha(tld.charCodeAt(i))) return false;
+  }
+  return true;
 }
 
 function pushText(out, text) {

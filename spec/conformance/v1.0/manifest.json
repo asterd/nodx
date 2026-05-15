@@ -75,6 +75,17 @@
         "html": "expected/extended-lists.html"
       },
       "exitCode": 0
+    },
+    {
+      "name": "autolinks",
+      "source": "fixtures/autolinks.nodx",
+      "expected": {
+        "ast": "expected/autolinks.ast.json",
+        "ncp": "expected/autolinks.ncp.json",
+        "diagnostics": "expected/autolinks.diagnostics.json",
+        "html": "expected/autolinks.html"
+      },
+      "exitCode": 0
     }
   ]
 }

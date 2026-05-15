@@ -1,0 +1,8 @@
+---
+schema: nodx/1.0
+title: Unsafe Autolink
+---
+
+# Unsafe Autolink {#unsafe-autolink}
+
+<javascript:alert(1)>

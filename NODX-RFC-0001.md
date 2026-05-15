@@ -759,6 +759,8 @@ other textual nodes.
 | `^sup^` | `sup` | `children` |
 | `[label](target)` | `link` | `label`, `target` |
 | `[label](target){attrs}` | `link` | `label`, `target`, `attrs` |
+| `<scheme:body>` | `link` (autolink) | `label`, `target` |
+| `<user@host.tld>` | `link` (autolink) | `label`, `target` (`mailto:`-prefixed) |
 | `[label]{attrs}` | `span` | `children`, `attrs` |
 | `{{namespace.name}}` | `var` | `namespace`, `name` |
 | `{{name}}` | `var` | `namespace: "vars"`, `name` |
@@ -803,6 +805,41 @@ same attribute grammar as spans. Portable renderers SHOULD support `title`,
 Semantic AST and ignored safely by renderers that cannot use them. References,
 footnote references, and citation references are validated against known node
 IDs. Unresolved references produce `NODX-E007`.
+
+#### Autolinks
+
+NODX recognises two CommonMark-style autolink shapes, both of which produce an
+`Inline::Link` node identical to the explicit `[label](target)` form. URL
+safety is consequently gated by the Section 19 policy exactly once, with no
+parallel allowlist.
+
+```ebnf
+absolute-autolink = "<" scheme ":" autolink-body ">"
+email-autolink    = "<" email ">"
+
+scheme         = ALPHA ( ALPHA / DIGIT / "+" / "." / "-" ){1,31}
+autolink-body  = *( %x21-3B / %x3D / %x3F-7E )   ; printable ASCII minus "<" ">" SP CTRL
+email          = local-part "@" domain
+local-part     = 1*( ALPHA / DIGIT / "." / "_" / "%" / "+" / "-" )
+domain         = 1*domain-label "." tld
+domain-label   = 1*( ALPHA / DIGIT / "-" )
+tld            = 2*ALPHA
+```
+
+Mapping:
+
+- `<scheme:body>` becomes `Inline::Link { label: [Text("scheme:body")], target: "scheme:body" }`.
+- `<localpart@domain.tld>` becomes `Inline::Link { label: [Text("localpart@domain.tld")], target: "mailto:localpart@domain.tld" }`. The `mailto:` prefix is mandatory so that the bare-email form is gated by the same Section 19 URL whitelist as the explicit `mailto:` scheme.
+
+A `<…>` candidate that contains whitespace, ASCII control characters, an
+embedded `<`, or no recognisable shape (e.g. `<not a url>`, `<>`) MUST be
+left as literal text. Autolinks are single-line: a newline inside `<…>`
+disqualifies the candidate.
+
+Unsafe autolinks (e.g. `<javascript:alert(1)>`) parse as `Inline::Link` and
+are rejected at validation with `NODX-E020`, exactly as the equivalent
+`[x](javascript:alert(1))` would be. Renderers MUST mark them blocked
+(`<a class="nodx-blocked-link">`).
 
 Variables without an explicit namespace are canonicalized to the `vars`
 namespace. Variables in the `vars` namespace SHOULD be declared in front matter.

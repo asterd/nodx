@@ -258,6 +258,16 @@ stop and discuss before proceeding.
   by [`spec/conformance/v1.0/fixtures/inline-extensions.nodx`](./spec/conformance/v1.0/fixtures/inline-extensions.nodx)
   and [`spec/conformance/v1.0/fixtures/extended-lists.nodx`](./spec/conformance/v1.0/fixtures/extended-lists.nodx)
   plus the matching `spec/tests/conformance/*.nodx` siblings.
+- **Autolinks `<scheme:...>` and `<email>` routed through `nodx-url`** (PR3,
+  RFC §12). Both shapes compile to `Inline::Link` identical to the
+  `[label](target)` form, so URL safety is gated exactly once via the
+  Section 19 policy — no parallel allowlist in the parser. Bare emails
+  acquire a `mailto:` prefix on the target so they are subject to the
+  same whitelist. Disambiguation: any `<…>` with whitespace, an embedded
+  `<`, a newline, or empty content stays literal text. Triplet parity is
+  pinned by [`spec/conformance/v1.0/fixtures/autolinks.nodx`](./spec/conformance/v1.0/fixtures/autolinks.nodx)
+  plus the matching `spec/tests/conformance/autolinks.nodx`; the unsafe
+  case lives in [`spec/tests/negative/e020-autolink-javascript.nodx`](./spec/tests/negative/e020-autolink-javascript.nodx).
 
 ### Still open
 
@@ -272,11 +282,12 @@ stop and discuss before proceeding.
 - **CommonMark interop** via `convert markdown-to-nodx` /
   `nodx-to-markdown` exists but is not a primary supported workflow.
   Several CommonMark constructs still degrade silently (no setext
-  headings, no `> quote`, no inline `![img]`, no autolinks, no link
-  reference definitions). See `convert` source and the gap analysis when
+  headings, no `> quote`, no inline `![img]`, no link reference
+  definitions). See `convert` source and the gap analysis when
   extending. (Underscore emphasis, multi-backtick code spans, the
-  thematic-break `***` form, and hard line breaks are now native — see
-  the matching "Closed" entries.)
+  thematic-break `***` form, hard line breaks, and `<scheme:...>` /
+  `<email>` autolinks are now native — see the matching "Closed"
+  entries.)
 
 ## How to update this file
 

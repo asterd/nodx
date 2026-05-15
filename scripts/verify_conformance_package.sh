@@ -46,6 +46,11 @@ check_output extended-lists.ncp "target/debug/nodx ncp $root/fixtures/extended-l
 check_output extended-lists.diagnostics "target/debug/nodx diagnostics $root/fixtures/extended-lists.nodx --format json" expected/extended-lists.diagnostics.json
 check_output extended-lists.html "target/debug/nodx html $root/fixtures/extended-lists.nodx" expected/extended-lists.html
 
+check_output autolinks.ast "target/debug/nodx ast $root/fixtures/autolinks.nodx" expected/autolinks.ast.json
+check_output autolinks.ncp "target/debug/nodx ncp $root/fixtures/autolinks.nodx" expected/autolinks.ncp.json
+check_output autolinks.diagnostics "target/debug/nodx diagnostics $root/fixtures/autolinks.nodx --format json" expected/autolinks.diagnostics.json
+check_output autolinks.html "target/debug/nodx html $root/fixtures/autolinks.nodx" expected/autolinks.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

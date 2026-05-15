@@ -76,6 +76,34 @@ class="nodx-blocked-link">`. Safe schemes today: `https`, `http`, `mailto`,
 `data:` URIs are allowed up to `limits.data_uri_bytes` (5 MiB default) and
 only for image MIME types.
 
+### Autolinks
+
+CommonMark-style autolinks are accepted in two shapes and both compile to
+the same `Inline::Link` as the explicit form, so URL safety stays
+single-sourced through `nodx-url`:
+
+| Source | Target |
+|---|---|
+| `<https://example.com>` | `https://example.com` |
+| `<mailto:foo@bar.com>` | `mailto:foo@bar.com` |
+| `<foo@bar.com>` | `mailto:foo@bar.com` *(bare email → `mailto:` prefix)* |
+
+Scheme grammar: `[A-Za-z][A-Za-z0-9+.\-]{1,31}`. Body characters are
+printable ASCII excluding `<`, `>`, whitespace, and control characters.
+Email grammar is the minimal RFC 5322 subset
+(`local @ domain.tld`, TLD ≥ 2 letters).
+
+Failure modes — both leave the `<` as literal text:
+
+- whitespace anywhere inside the `<…>` (`<not a url>`);
+- empty content (`<>`);
+- newline inside the candidate.
+
+Unsafe autolinks (e.g. `<javascript:alert(1)>`) parse as a Link node and
+the validator emits `NODX-E020`, exactly like the equivalent
+`[x](javascript:alert(1))`. The renderer turns them into a blocked
+`<a class="nodx-blocked-link">`.
+
 ## Inline spans
 
 ```nodx

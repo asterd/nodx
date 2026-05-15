@@ -234,6 +234,128 @@ fn extended_list_markers_normalize_to_kind() {
 }
 
 #[test]
+fn autolink_absolute_uri_produces_link() {
+    // RFC §12 (PR3): `<https://example.com>` is parsed as Inline::Link with
+    // label and target both equal to the verbatim URI. URL safety is gated
+    // by `nodx-url` exactly like an explicit `[label](target)` link — no
+    // duplicated policy.
+    let doc = parse_str("See <https://example.com>.\n");
+    let inlines = &doc.body[0].inlines;
+    let link = inlines
+        .iter()
+        .find_map(|inl| match inl {
+            Inline::Link { label, target, .. } => Some((label, target)),
+            _ => None,
+        })
+        .expect("autolink should parse as a link");
+    assert_eq!(link.1, "https://example.com");
+    let plain = plain_inlines(link.0);
+    assert_eq!(plain, "https://example.com");
+}
+
+#[test]
+fn autolink_email_prefixes_mailto() {
+    // Bare email autolinks acquire the `mailto:` scheme so that the URL
+    // whitelist treats them as a normal mailto link.
+    let doc = parse_str("Contact <foo@bar.com> for details.\n");
+    let target = doc.body[0]
+        .inlines
+        .iter()
+        .find_map(|inl| match inl {
+            Inline::Link { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .expect("email autolink should parse as a link");
+    assert_eq!(target, "mailto:foo@bar.com");
+}
+
+#[test]
+fn autolink_mailto_scheme_passes_through() {
+    // Explicit mailto: scheme retains its target verbatim — no double prefix.
+    let doc = parse_str("Write to <mailto:foo@bar.com>.\n");
+    let target = doc.body[0]
+        .inlines
+        .iter()
+        .find_map(|inl| match inl {
+            Inline::Link { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .expect("mailto autolink should parse as a link");
+    assert_eq!(target, "mailto:foo@bar.com");
+}
+
+#[test]
+fn autolink_javascript_scheme_parses_link_validator_rejects() {
+    // The parser is policy-free: `<javascript:...>` produces a Link node, and
+    // the existing validator path (which routes through `nodx-url`) flags it.
+    // This mirrors the explicit `[x](javascript:...)` case so safety lives in
+    // exactly one place.
+    let doc = parse_str("Bad <javascript:alert(1)> link.\n");
+    let target = doc.body[0]
+        .inlines
+        .iter()
+        .find_map(|inl| match inl {
+            Inline::Link { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .expect("javascript autolink should still parse as a link");
+    assert_eq!(target, "javascript:alert(1)");
+}
+
+#[test]
+fn autolink_with_spaces_is_literal_text() {
+    // `<not a url>` contains whitespace — disqualifies the candidate and the
+    // `<` falls through to literal text.
+    let doc = parse_str("Not a link: <not a url>.\n");
+    let has_link = doc.body[0]
+        .inlines
+        .iter()
+        .any(|inl| matches!(inl, Inline::Link { .. }));
+    assert!(!has_link);
+    let plain = plain_inlines(&doc.body[0].inlines);
+    assert!(plain.contains("<not a url>"));
+}
+
+#[test]
+fn autolink_empty_brackets_is_literal_text() {
+    // `<>` is the empty-content case and never an autolink.
+    let doc = parse_str("Empty <> here.\n");
+    let has_link = doc.body[0]
+        .inlines
+        .iter()
+        .any(|inl| matches!(inl, Inline::Link { .. }));
+    assert!(!has_link);
+}
+
+#[test]
+fn autolink_multiple_consecutive_links_parse_independently() {
+    let doc = parse_str("Hit <https://a.example> and then <mailto:b@example.com>.\n");
+    let targets: Vec<&str> = doc.body[0]
+        .inlines
+        .iter()
+        .filter_map(|inl| match inl {
+            Inline::Link { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(targets, vec!["https://a.example", "mailto:b@example.com"]);
+}
+
+#[test]
+fn autolink_with_path_query_fragment_preserves_target() {
+    let doc = parse_str("URL: <https://example.com/path?q=1#frag>.\n");
+    let target = doc.body[0]
+        .inlines
+        .iter()
+        .find_map(|inl| match inl {
+            Inline::Link { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(target, "https://example.com/path?q=1#frag");
+}
+
+#[test]
 fn front_matter_block_sequence_of_mappings() {
     let doc =
         parse_str("---\nschema: nodx/0.1\nauthors:\n  - name: Alice\n  - name: Bob\n---\n\nBody\n");

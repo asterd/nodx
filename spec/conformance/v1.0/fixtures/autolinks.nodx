@@ -1,0 +1,23 @@
+---
+schema: nodx/1.0
+type: document
+title: Autolinks
+---
+
+# Autolinks {#autolinks}
+
+Absolute URI autolinks are parsed identically to `[label](target)` links and
+routed through the URL policy. Safe schemes pass: <https://example.com> and
+<mailto:foo@bar.com> become standard links.
+
+Bare email autolinks acquire a `mailto:` scheme so they are gated by the
+same allowlist: <foo@bar.com>.
+
+Full URLs with path, query, and fragment survive verbatim:
+<https://example.com/path?q=1#frag>.
+
+Disambiguation: `<not a url>` contains whitespace and stays literal text;
+the empty form `<>` is never an autolink either.
+
+Multiple autolinks on one paragraph parse independently:
+<https://a.example.com> followed by text and <mailto:other@example.com>.
