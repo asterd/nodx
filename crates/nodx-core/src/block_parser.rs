@@ -117,6 +117,7 @@ pub fn parse_str_with_limits(input: &str, limits: ResourceLimits) -> Document {
         diagnostics,
         limits,
         node_count: 0,
+        line_offset: 0,
         depth: 0,
         nodes_limit_hit: false,
         depth_limit_hit: false,
@@ -195,12 +196,17 @@ struct Parser<'a> {
     diagnostics: Vec<Diagnostic>,
     limits: ResourceLimits,
     node_count: usize,
+    line_offset: usize,
     depth: usize,
     nodes_limit_hit: bool,
     depth_limit_hit: bool,
 }
 
 impl Parser<'_> {
+    fn line_no(&self, pos: usize) -> usize {
+        self.line_offset + pos + 1
+    }
+
     fn count_node(&mut self, line: usize) -> bool {
         self.node_count += 1;
         if self.node_count > self.limits.nodes_per_document {
@@ -229,7 +235,7 @@ impl Parser<'_> {
                     "NODX-E012",
                     "error",
                     "Line length limit exceeded.",
-                    self.pos + 1,
+                    self.line_no(self.pos),
                     1,
                 ));
             }
@@ -245,7 +251,7 @@ impl Parser<'_> {
                                 "Closing label `{}` does not match open block `{}`.",
                                 name, expected_name
                             ),
-                            self.pos + 1,
+                            self.line_no(self.pos),
                             1,
                         ));
                     }
@@ -258,7 +264,7 @@ impl Parser<'_> {
                     "NODX-E005",
                     "error",
                     "Unmatched block closer.",
-                    self.pos + 1,
+                    self.line_no(self.pos),
                     1,
                 ));
                 self.pos += 1;
@@ -270,7 +276,7 @@ impl Parser<'_> {
                 continue;
             }
             if is_thematic_break(line) {
-                let hr_line = self.pos + 1;
+                let hr_line = self.line_no(self.pos);
                 self.pos += 1;
                 if !self.count_node(hr_line) {
                     break;
@@ -278,10 +284,18 @@ impl Parser<'_> {
                 out.push(Node::container("hr", Attrs::default(), Vec::new()));
                 continue;
             }
+            if is_markdown_blockquote_start(line) {
+                let quote_line = self.line_no(self.pos);
+                if !self.count_node(quote_line) {
+                    break;
+                }
+                out.push(self.parse_markdown_blockquote());
+                continue;
+            }
             if let Some((colons, name, attrs)) =
                 parse_opener_with_cap(line, self.limits.attribute_value_bytes)
             {
-                let opener_line = self.pos + 1;
+                let opener_line = self.line_no(self.pos);
                 if !self.count_node(opener_line) {
                     break;
                 }
@@ -291,7 +305,7 @@ impl Parser<'_> {
             if let Some((level, content, attrs)) =
                 parse_heading_with_cap(line, self.limits.attribute_value_bytes)
             {
-                let heading_line = self.pos + 1;
+                let heading_line = self.line_no(self.pos);
                 self.pos += 1;
                 if !self.count_node(heading_line) {
                     break;
@@ -304,7 +318,7 @@ impl Parser<'_> {
                 continue;
             }
             if is_list_start(line) {
-                let list_line = self.pos + 1;
+                let list_line = self.line_no(self.pos);
                 if !self.count_node(list_line) {
                     break;
                 }
@@ -314,7 +328,7 @@ impl Parser<'_> {
             if self.pos + 1 < self.lines.len()
                 && is_pipe_table_header(line, self.lines[self.pos + 1])
             {
-                let table_line = self.pos + 1;
+                let table_line = self.line_no(self.pos);
                 if !self.count_node(table_line) {
                     break;
                 }
@@ -325,7 +339,7 @@ impl Parser<'_> {
             // alter parse output; they hint did-you-mean for users coming from
             // CommonMark/GFM. See `docs/reference/diagnostics.md` and RFC §23.
             self.emit_block_commonmark_warnings();
-            let para_line = self.pos + 1;
+            let para_line = self.line_no(self.pos);
             if !self.count_node(para_line) {
                 break;
             }
@@ -336,7 +350,7 @@ impl Parser<'_> {
                 "NODX-E005",
                 "error",
                 "Unclosed delimited block at end of input.",
-                self.pos.max(1),
+                self.line_offset + self.pos.max(1),
                 1,
             ));
         }
@@ -344,7 +358,7 @@ impl Parser<'_> {
     }
 
     fn parse_delimited(&mut self, colons: usize, name: String, attrs: Attrs) -> Node {
-        let opener_line = self.pos + 1;
+        let opener_line = self.line_no(self.pos);
         self.pos += 1;
         self.depth += 1;
         if self.depth > self.limits.block_nesting_depth && !self.depth_limit_hit {
@@ -376,7 +390,7 @@ impl Parser<'_> {
                             "Closing label `{}` does not match open block `{}`.",
                             label, name
                         ),
-                        self.pos + 1,
+                        self.line_no(self.pos),
                         1,
                     ));
                 }
@@ -386,7 +400,7 @@ impl Parser<'_> {
                     "NODX-E005",
                     "error",
                     "Unclosed literal block.",
-                    start + 1,
+                    self.line_no(start),
                     1,
                 ));
             }
@@ -404,7 +418,7 @@ impl Parser<'_> {
         let kind = list_kind(first);
         let mut items = Vec::new();
         while self.pos < self.lines.len() && list_kind(self.lines[self.pos]) == kind {
-            let item_line = self.pos + 1;
+            let item_line = self.line_no(self.pos);
             let raw = self.lines[self.pos];
             let (content, checked) = strip_list_marker(raw);
             self.pos += 1;
@@ -434,7 +448,7 @@ impl Parser<'_> {
     }
 
     fn parse_pipe_table(&mut self) -> Node {
-        let header_line = self.pos + 1;
+        let header_line = self.line_no(self.pos);
         let header = split_pipe_row(self.lines[self.pos]);
         let aligns = split_pipe_alignments(self.lines[self.pos + 1]);
         self.pos += 2;
@@ -446,7 +460,7 @@ impl Parser<'_> {
             && self.lines[self.pos].contains('|')
             && !self.lines[self.pos].trim().is_empty()
         {
-            let row_line = self.pos + 1;
+            let row_line = self.line_no(self.pos);
             if !self.count_node(row_line) {
                 break;
             }
@@ -469,6 +483,7 @@ impl Parser<'_> {
             && parse_heading(self.lines[self.pos]).is_none()
             && !is_list_start(self.lines[self.pos])
             && !is_thematic_break(self.lines[self.pos])
+            && !is_markdown_blockquote_start(self.lines[self.pos])
             && !is_any_close(self.lines[self.pos])
         {
             if self.pos + 1 < self.lines.len()
@@ -482,12 +497,75 @@ impl Parser<'_> {
         // paragraph slice before turning it into inlines. The scan operates
         // on the raw source lines so JS and Python can replicate it
         // line-for-line and produce byte-identical diagnostics.
-        scan_inline_commonmark_warnings(&self.lines[start..self.pos], start, &mut self.diagnostics);
+        scan_inline_commonmark_warnings(
+            &self.lines[start..self.pos],
+            self.line_offset + start,
+            &mut self.diagnostics,
+        );
         Node::textual(
             "paragraph",
             Attrs::default(),
             parse_inlines(&self.lines[start..self.pos].join("\n")),
         )
+    }
+
+    /// Parse a Markdown-style block quote (`>` prefix lines) as the syntactic
+    /// alias of `::quote`. The resulting AST node is byte-for-byte identical
+    /// to the `::quote` form: same `node_type`, default attrs, same children.
+    /// The discriminator is purely lexical at parse time; canonical JSON does
+    /// not carry any "source" or "kind" hint.
+    ///
+    /// Lazy continuation is *not* supported (unlike CommonMark): every line of
+    /// the quote must start with either `> ` (content) or `>` alone (a blank
+    /// line inside the quote). The first line that does not match closes the
+    /// block. Inside the body, nested `> ` is parsed recursively, producing a
+    /// nested `quote` node.
+    fn parse_markdown_blockquote(&mut self) -> Node {
+        let opener_line = self.line_no(self.pos);
+        let mut stripped: Vec<String> = Vec::new();
+        while self.pos < self.lines.len() {
+            let line = self.lines[self.pos];
+            if let Some(body) = strip_blockquote_prefix(line) {
+                stripped.push(body.to_string());
+                self.pos += 1;
+            } else {
+                break;
+            }
+        }
+        self.depth += 1;
+        if self.depth > self.limits.block_nesting_depth && !self.depth_limit_hit {
+            self.diagnostics.push(diag(
+                "NODX-E012",
+                "fatal",
+                "Block nesting depth limit exceeded.",
+                opener_line,
+                1,
+            ));
+            self.depth_limit_hit = true;
+        }
+        // Recursively parse the stripped body as a fresh block stream. A
+        // dedicated sub-Parser keeps `count_node` / `depth` accounting under
+        // the caller's limits, then we drain its diagnostics back so the
+        // parent sees them in source order.
+        let inner_lines: Vec<&str> = stripped.iter().map(String::as_str).collect();
+        let mut sub = Parser {
+            lines: &inner_lines,
+            pos: 0,
+            diagnostics: Vec::new(),
+            limits: self.limits,
+            node_count: self.node_count,
+            line_offset: opener_line - 1,
+            depth: self.depth,
+            nodes_limit_hit: self.nodes_limit_hit,
+            depth_limit_hit: self.depth_limit_hit,
+        };
+        let children = sub.parse_until(None);
+        self.node_count = sub.node_count;
+        self.nodes_limit_hit = sub.nodes_limit_hit;
+        self.depth_limit_hit = sub.depth_limit_hit;
+        self.diagnostics.extend(sub.diagnostics);
+        self.depth -= 1;
+        Node::container("quote", Attrs::default(), children)
     }
 
     /// Block-level CommonMark compatibility checks.
@@ -513,7 +591,7 @@ impl Parser<'_> {
                     "NODX-W030",
                     "warning",
                     "Setext-style heading detected. Use '# Heading' (ATX-style) instead.",
-                    pos + 2,
+                    self.line_offset + pos + 2,
                     1,
                 ));
             }
@@ -531,7 +609,7 @@ impl Parser<'_> {
                     "NODX-W031",
                     "warning",
                     "Indented code block detected. Use '::code' fenced block instead.",
-                    pos + 1,
+                    self.line_no(pos),
                     1,
                 ));
             }
@@ -545,7 +623,7 @@ impl Parser<'_> {
                 "NODX-W034",
                 "warning",
                 "Footnote definitions are not part of 1.0. Use the '::footnote' block.",
-                pos + 1,
+                self.line_no(pos),
                 1,
             ));
         }
@@ -566,6 +644,33 @@ pub(crate) fn is_thematic_break(line: &str) -> bool {
         return false;
     }
     trimmed.bytes().all(|b| b == first)
+}
+
+/// A Markdown-style block quote line starts with either `> ` (greater-than
+/// followed by space plus any tail) or `>` alone (blank quote line). `>>`
+/// and `>foo` without a separating space are *not* quote markers — they
+/// fall through to the paragraph fallback as literal text.
+pub(crate) fn is_markdown_blockquote_start(line: &str) -> bool {
+    strip_blockquote_prefix(line).is_some()
+}
+
+/// Strip a single Markdown blockquote prefix from `line`, returning the
+/// remaining body. Returns:
+///
+/// - `Some("...")` when the line starts with `> ` (the body after the prefix).
+/// - `Some("")` when the line is exactly `>` (blank line inside the quote).
+/// - `None` otherwise.
+///
+/// Nested quotes are produced by recursion: a body of `> foo` strips down
+/// to `foo` after a second pass.
+pub(crate) fn strip_blockquote_prefix(line: &str) -> Option<&str> {
+    if let Some(rest) = line.strip_prefix("> ") {
+        return Some(rest);
+    }
+    if line == ">" {
+        return Some("");
+    }
+    None
 }
 
 /// Returns `true` when `line` is `[^id]:` followed by space and content,

@@ -106,6 +106,15 @@ the same colon count.
 | `speaker-notes` | non-displayed presenter notes |
 | custom `::your-component` | rendered with a registered template, or falls back to a safe `<section>` |
 
+`quote` also has a Markdown-style alias when every quoted line starts with
+`> `, or is just `>` for a blank line:
+
+```nodx
+> A quoted paragraph.
+>
+> - a quoted list item
+```
+
 ### Pipe tables
 
 ```nodx

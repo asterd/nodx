@@ -356,6 +356,40 @@ fn autolink_with_path_query_fragment_preserves_target() {
 }
 
 #[test]
+fn markdown_blockquote_alias_matches_quote_node() {
+    let markdown = parse_str("> A pithy quote.\n> \n> - cited item\n");
+    let explicit = parse_str(":::quote\nA pithy quote.\n\n- cited item\n:::\n");
+    assert_eq!(canonical_json(&markdown), canonical_json(&explicit));
+    assert_eq!(markdown.body[0].node_type, "quote");
+    assert_eq!(markdown.body[0].children.len(), 2);
+}
+
+#[test]
+fn markdown_blockquote_supports_nested_quote() {
+    let doc = parse_str("> Parent.\n> > Child.\n");
+    assert_eq!(doc.body[0].node_type, "quote");
+    assert_eq!(doc.body[0].children[1].node_type, "quote");
+}
+
+#[test]
+fn markdown_blockquote_requires_space_or_blank_marker() {
+    let doc = parse_str(">literal, not a quote.\n\n>> also literal.\n");
+    assert!(doc.body.iter().all(|node| node.node_type != "quote"));
+    assert_eq!(doc.body.len(), 2);
+}
+
+#[test]
+fn markdown_blockquote_inner_diagnostics_keep_source_line() {
+    let doc = parse_str("# Before\n\n> [^fn]: quoted footnote.\n");
+    let warning = doc
+        .diagnostics
+        .iter()
+        .find(|d| d.code == "NODX-W034")
+        .expect("quoted footnote warning");
+    assert_eq!(warning.line, Some(3));
+}
+
+#[test]
 fn front_matter_block_sequence_of_mappings() {
     let doc =
         parse_str("---\nschema: nodx/0.1\nauthors:\n  - name: Alice\n  - name: Bob\n---\n\nBody\n");

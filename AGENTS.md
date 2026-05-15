@@ -280,6 +280,11 @@ stop and discuss before proceeding.
   `packages/nodx-js/src/blockParser.mjs` and
   `packages/nodx-py/src/nodx/block_parser.py`. Codes are warning-severity,
   exit code stays `0`. Fixture: `spec/conformance/v1.0/fixtures/commonmark-warnings.nodx`.
+- **Markdown-style block quotes** (`> ` and blank `>` lines) are a native
+  alias for `::quote` with default attributes. The canonical AST is identical
+  to the explicit block form; `>text`, `>> text`, and lazy continuation remain
+  plain paragraph text. Triplet parity is pinned by
+  `spec/conformance/v1.0/fixtures/markdown-blockquote.nodx`.
 
 ### Still open
 
@@ -297,11 +302,10 @@ stop and discuss before proceeding.
   headings, indented code blocks, inline images, link reference
   definitions, GFM footnote defs, HTML entity references) now emit
   `NODX-W030`..`NODX-W035` warnings instead of degrading silently;
-  authors are pointed at the NODX equivalent. `> quote` is still
-  silently treated as a paragraph — open follow-up. (Underscore
+  authors are pointed at the NODX equivalent. (Underscore
   emphasis, multi-backtick code spans, `*`/`+` bullets, `1)` ordered
   markers, the thematic-break `***`/`___` forms, hard line breaks,
-  and `<scheme:...>` / `<email>` autolinks are now native — see the
+  `> ` quote aliases, and `<scheme:...>` / `<email>` autolinks are now native — see the
   matching "Closed" entries.)
 
 ## How to update this file

@@ -56,6 +56,11 @@ check_output commonmark-warnings.ncp "target/debug/nodx ncp $root/fixtures/commo
 check_output commonmark-warnings.diagnostics "target/debug/nodx diagnostics $root/fixtures/commonmark-warnings.nodx --format json" expected/commonmark-warnings.diagnostics.json
 check_output commonmark-warnings.html "target/debug/nodx html $root/fixtures/commonmark-warnings.nodx" expected/commonmark-warnings.html
 
+check_output markdown-blockquote.ast "target/debug/nodx ast $root/fixtures/markdown-blockquote.nodx" expected/markdown-blockquote.ast.json
+check_output markdown-blockquote.ncp "target/debug/nodx ncp $root/fixtures/markdown-blockquote.nodx" expected/markdown-blockquote.ncp.json
+check_output markdown-blockquote.diagnostics "target/debug/nodx diagnostics $root/fixtures/markdown-blockquote.nodx --format json" expected/markdown-blockquote.diagnostics.json
+check_output markdown-blockquote.html "target/debug/nodx html $root/fixtures/markdown-blockquote.nodx" expected/markdown-blockquote.html
+
 if target/debug/nodx validate "$root/fixtures/invalid-required-profile.nodx" --format json > "$tmp/invalid-required-profile.diagnostics.json"; then
   echo "invalid-required-profile unexpectedly passed" >&2
   exit 1

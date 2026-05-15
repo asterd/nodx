@@ -77,3 +77,9 @@ Total: 120K
 
 Use `::style` only when a rule needs to be shared across many nodes,
 targets media queries, or belongs to a reusable theme.
+
+## Quote alias #quote-alias
+
+> Compact quote syntax parses as the same node as `::quote`.
+>
+> - quoted lists stay structured

@@ -663,7 +663,25 @@ The three-colon form remains valid. Authors MAY use three or more colons as an
 escape when literal content or deep nesting would make the two-colon form less
 readable.
 
-### 10.6 Literal Blocks
+### 10.6 Markdown-Style Quote Alias
+
+A line beginning with `> `, or the line `>` by itself, opens a quote block.
+The parser strips one quote marker from each consecutive quote line and parses
+the remaining body as normal block content. The resulting AST node MUST be
+byte-for-byte identical to the equivalent `::quote` block with default
+attributes.
+
+```nodx
+> A quoted paragraph.
+>
+> - a quoted list item
+```
+
+Nested quote markers are parsed recursively. Lazy continuation is not part of
+NODX 1.0: each source line inside the alias form MUST carry its own quote
+marker. Lines such as `>text` and `>> text` are plain paragraph text.
+
+### 10.7 Literal Blocks
 
 The block names `code`, `pre`, `math`, and `style` are literal blocks. Their
 source content is preserved as `text` and is not parsed as child blocks or

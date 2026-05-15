@@ -72,6 +72,20 @@ HTML renderers expose standard callout labels to assistive technology with
 `aria-label` unless the author already supplied `aria-label` or
 `aria-labelledby`.
 
+### Markdown-style quote alias
+
+Consecutive lines that start with `> `, plus `>` as a blank quoted line, parse
+as the same AST shape as `::quote` with default attributes:
+
+```nodx
+> A quoted paragraph.
+>
+> - a quoted list item
+```
+
+Every line in the quoted body must carry the marker. `>text` and `>> text`
+remain plain paragraph text.
+
 ## Built-in literal blocks
 
 Literal blocks preserve their body verbatim, with no further inline parsing:

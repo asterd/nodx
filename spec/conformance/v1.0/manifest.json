@@ -47,6 +47,17 @@
       "exitCode": 0
     },
     {
+      "name": "markdown-blockquote",
+      "source": "fixtures/markdown-blockquote.nodx",
+      "expected": {
+        "ast": "expected/markdown-blockquote.ast.json",
+        "ncp": "expected/markdown-blockquote.ncp.json",
+        "diagnostics": "expected/markdown-blockquote.diagnostics.json",
+        "html": "expected/markdown-blockquote.html"
+      },
+      "exitCode": 0
+    },
+    {
       "name": "invalid-required-profile",
       "source": "fixtures/invalid-required-profile.nodx",
       "expected": {

@@ -58,7 +58,7 @@ def parse(input_, limits=None):
     meta.setdefault("language", "und")
     if not had_front_matter:
         meta.setdefault("profiles", {"requires": ["core"]})
-    state = {"lines": lines, "pos": start, "diagnostics": diagnostics}
+    state = {"lines": lines, "pos": start, "diagnostics": diagnostics, "line_offset": 0}
     body = parse_until(state, None)
     return {"body": body, "diagnostics": diagnostics, "meta": meta, "schema": "nodx/1.0"}
 
@@ -72,12 +72,12 @@ def parse_until(state, close_frame):
             close = parse_matching_close(line, close_frame["colons"], close_frame["name"])
             if close:
                 if close["name"] is not None and close["name"] != close_frame["name"]:
-                    state["diagnostics"].append(diag("NODX-E005", "error", "Closing label `" + close["name"] + "` does not match open block `" + close_frame["name"] + "`.", state["pos"] + 1, 1))
+                    state["diagnostics"].append(diag("NODX-E005", "error", "Closing label `" + close["name"] + "` does not match open block `" + close_frame["name"] + "`.", line_no(state, state["pos"]), 1))
                 state["pos"] += 1
                 closed = True
                 break
         elif is_any_close(line):
-            state["diagnostics"].append(diag("NODX-E005", "error", "Unmatched block closer.", state["pos"] + 1, 1))
+            state["diagnostics"].append(diag("NODX-E005", "error", "Unmatched block closer.", line_no(state, state["pos"]), 1))
             state["pos"] += 1
             continue
         if line.strip() == "":
@@ -89,6 +89,9 @@ def parse_until(state, close_frame):
             # is unambiguous.
             state["pos"] += 1
             out.append(node("hr", empty_attrs(), [], [], None))
+            continue
+        if is_markdown_blockquote_start(line):
+            out.append(parse_markdown_blockquote(state))
             continue
         opener = parse_opener(line)
         if opener:
@@ -112,7 +115,7 @@ def parse_until(state, close_frame):
         emit_block_commonmark_warnings(state)
         out.append(parse_paragraph(state))
     if not closed:
-        state["diagnostics"].append(diag("NODX-E005", "error", "Unclosed delimited block at end of input.", max(state["pos"], 1), 1))
+        state["diagnostics"].append(diag("NODX-E005", "error", "Unclosed delimited block at end of input.", state["line_offset"] + max(state["pos"], 1), 1))
     return out
 
 
@@ -126,10 +129,10 @@ def parse_delimited(state, opener):
         if state["pos"] < len(state["lines"]):
             close = parse_matching_close(state["lines"][state["pos"]], opener["colons"], opener["name"])
             if close and close["name"] is not None and close["name"] != opener["name"]:
-                state["diagnostics"].append(diag("NODX-E005", "error", "Closing label `" + close["name"] + "` does not match open block `" + opener["name"] + "`.", state["pos"] + 1, 1))
+                state["diagnostics"].append(diag("NODX-E005", "error", "Closing label `" + close["name"] + "` does not match open block `" + opener["name"] + "`.", line_no(state, state["pos"]), 1))
             state["pos"] += 1
         else:
-            state["diagnostics"].append(diag("NODX-E005", "error", "Unclosed literal block.", start + 1, 1))
+            state["diagnostics"].append(diag("NODX-E005", "error", "Unclosed literal block.", line_no(state, start), 1))
         return node(opener["name"], opener["attrs"], [], [], text)
     return node(opener["name"], opener["attrs"], parse_until(state, {"colons": opener["colons"], "name": opener["name"]}), [], None)
 
@@ -173,6 +176,7 @@ def parse_paragraph(state):
         and not parse_heading(state["lines"][state["pos"]])
         and not list_kind(state["lines"][state["pos"]])
         and not is_thematic_break(state["lines"][state["pos"]])
+        and not is_markdown_blockquote_start(state["lines"][state["pos"]])
         and not is_any_close(state["lines"][state["pos"]])
     ):
         if state["pos"] + 1 < len(state["lines"]) and is_pipe_header(state["lines"][state["pos"]], state["lines"][state["pos"] + 1]):
@@ -180,8 +184,23 @@ def parse_paragraph(state):
         state["pos"] += 1
     # Inline-shape CommonMark warnings (W032/W033/W035). The Rust twin
     # lives at scan_inline_commonmark_warnings.
-    scan_inline_commonmark_warnings(state["lines"][start : state["pos"]], start, state["diagnostics"])
+    scan_inline_commonmark_warnings(state["lines"][start : state["pos"]], state["line_offset"] + start, state["diagnostics"])
     return node("paragraph", empty_attrs(), [], parse_inlines("\n".join(state["lines"][start : state["pos"]])), None)
+
+
+def parse_markdown_blockquote(state):
+    opener_line = line_no(state, state["pos"])
+    stripped = []
+    while state["pos"] < len(state["lines"]):
+        body = strip_blockquote_prefix(state["lines"][state["pos"]])
+        if body is None:
+            break
+        stripped.append(body)
+        state["pos"] += 1
+    sub = {"lines": stripped, "pos": 0, "diagnostics": [], "line_offset": opener_line - 1}
+    children = parse_until(sub, None)
+    state["diagnostics"].extend(sub["diagnostics"])
+    return node("quote", empty_attrs(), children, [], None)
 
 
 def parse_opener(line):
@@ -257,6 +276,22 @@ def is_any_close(line):
         name = after[1:].rstrip()
         return re.match(r"^[A-Za-z][A-Za-z0-9-]*$", name) is not None
     return False
+
+
+def line_no(state, pos):
+    return state["line_offset"] + pos + 1
+
+
+def is_markdown_blockquote_start(line):
+    return strip_blockquote_prefix(line) is not None
+
+
+def strip_blockquote_prefix(line):
+    if line.startswith("> "):
+        return line[2:]
+    if line == ">":
+        return ""
+    return None
 
 
 def list_kind(line):
@@ -374,17 +409,17 @@ def emit_block_commonmark_warnings(state):
     if line.strip() != "" and pos + 1 < len(state["lines"]):
         nxt = state["lines"][pos + 1]
         if len(nxt) >= 3 and _SETEXT_RE.match(nxt):
-            state["diagnostics"].append(diag("NODX-W030", "warning", _W030_MSG, pos + 2, 1))
+            state["diagnostics"].append(diag("NODX-W030", "warning", _W030_MSG, state["line_offset"] + pos + 2, 1))
 
     # W031 — indented code block (one warning per contiguous run).
     if line.startswith("    "):
         prev_indented = pos > 0 and state["lines"][pos - 1].startswith("    ")
         if not prev_indented:
-            state["diagnostics"].append(diag("NODX-W031", "warning", _W031_MSG, pos + 1, 1))
+            state["diagnostics"].append(diag("NODX-W031", "warning", _W031_MSG, line_no(state, pos), 1))
 
     # W034 — GFM footnote definition.
     if is_footnote_definition(line):
-        state["diagnostics"].append(diag("NODX-W034", "warning", _W034_MSG, pos + 1, 1))
+        state["diagnostics"].append(diag("NODX-W034", "warning", _W034_MSG, line_no(state, pos), 1))
 
 
 def scan_inline_commonmark_warnings(lines, base_line, diagnostics):

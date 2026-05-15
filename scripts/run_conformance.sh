@@ -155,7 +155,7 @@ compare_negative_fixture() {
   echo "ok $file"
 }
 
-for file in spec/tests/conformance/*.nodx spec/tests/ncp/*.nodx spec/tests/navigation/*.nodx spec/tests/rendering/*.nodx spec/conformance/v1.0/fixtures/minimal.nodx spec/conformance/v1.0/fixtures/rich-web.nodx spec/conformance/v1.0/fixtures/lite-syntax.nodx spec/conformance/v1.0/fixtures/commonmark-warnings.nodx examples/*.nodx examples/i18n/*.nodx examples/print/*.nodx; do
+for file in spec/tests/conformance/*.nodx spec/tests/ncp/*.nodx spec/tests/navigation/*.nodx spec/tests/rendering/*.nodx spec/conformance/v1.0/fixtures/minimal.nodx spec/conformance/v1.0/fixtures/rich-web.nodx spec/conformance/v1.0/fixtures/lite-syntax.nodx spec/conformance/v1.0/fixtures/commonmark-warnings.nodx spec/conformance/v1.0/fixtures/markdown-blockquote.nodx examples/*.nodx examples/i18n/*.nodx examples/print/*.nodx; do
   if [ "$(target/debug/nodx inspect "$file" | sed -n '1p')" = "format: packaged-nodx" ]; then
     record "$file" "skipped-packaged" "skipped-packaged" "skipped-packaged" "skipped-packaged"
     continue

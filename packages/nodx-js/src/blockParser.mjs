@@ -55,7 +55,7 @@ export function parse(input, limits = DEFAULT_LIMITS) {
   meta.dir ??= "auto";
   meta.language ??= "und";
   if (!hadFrontMatter) meta.profiles ??= { requires: ["core"] };
-  const state = { lines, pos: start, diagnostics };
+  const state = { lines, pos: start, diagnostics, lineOffset: 0 };
   const body = parseUntil(state, null);
   // Title inference is the renderer/agent's responsibility (see nodx-render-html
   // `derive_title`). Keeping the parser inert preserves AST equality after
@@ -72,14 +72,14 @@ function parseUntil(state, closeFrame) {
       const close = parseMatchingClose(line, closeFrame.colons, closeFrame.name);
       if (close) {
         if (close.name !== null && close.name !== closeFrame.name) {
-          state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + closeFrame.name + "`.", state.pos + 1, 1));
+          state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + closeFrame.name + "`.", lineNo(state, state.pos), 1));
         }
         state.pos++;
         closed = true;
         break;
       }
     } else if (isAnyClose(line)) {
-      state.diagnostics.push(diag("NODX-E005", "error", "Unmatched block closer.", state.pos + 1, 1));
+      state.diagnostics.push(diag("NODX-E005", "error", "Unmatched block closer.", lineNo(state, state.pos), 1));
       state.pos++;
       continue;
     }
@@ -92,6 +92,10 @@ function parseUntil(state, closeFrame) {
       // front matter `---` is consumed above, so by here `---` is unambiguous.
       state.pos++;
       out.push(node("hr", emptyAttrs(), [], [], null));
+      continue;
+    }
+    if (isMarkdownBlockquoteStart(line)) {
+      out.push(parseMarkdownBlockquote(state));
       continue;
     }
     const opener = parseOpener(line);
@@ -121,7 +125,7 @@ function parseUntil(state, closeFrame) {
     emitBlockCommonmarkWarnings(state);
     out.push(parseParagraph(state));
   }
-  if (!closed) state.diagnostics.push(diag("NODX-E005", "error", "Unclosed delimited block at end of input.", Math.max(state.pos, 1), 1));
+  if (!closed) state.diagnostics.push(diag("NODX-E005", "error", "Unclosed delimited block at end of input.", state.lineOffset + Math.max(state.pos, 1), 1));
   return out;
 }
 
@@ -134,11 +138,11 @@ function parseDelimited(state, opener) {
     if (state.pos < state.lines.length) {
       const close = parseMatchingClose(state.lines[state.pos], opener.colons, opener.name);
       if (close && close.name !== null && close.name !== opener.name) {
-        state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + opener.name + "`.", state.pos + 1, 1));
+        state.diagnostics.push(diag("NODX-E005", "error", "Closing label `" + close.name + "` does not match open block `" + opener.name + "`.", lineNo(state, state.pos), 1));
       }
       state.pos++;
     } else {
-      state.diagnostics.push(diag("NODX-E005", "error", "Unclosed literal block.", start + 1, 1));
+      state.diagnostics.push(diag("NODX-E005", "error", "Unclosed literal block.", lineNo(state, start), 1));
     }
     return node(opener.name, opener.attrs, [], [], text);
   }
@@ -185,6 +189,7 @@ function parseParagraph(state) {
     !parseHeading(state.lines[state.pos]) &&
     !listKind(state.lines[state.pos]) &&
     !isThematicBreak(state.lines[state.pos]) &&
+    !isMarkdownBlockquoteStart(state.lines[state.pos]) &&
     !isAnyClose(state.lines[state.pos])
   ) {
     if (state.pos + 1 < state.lines.length && isPipeHeader(state.lines[state.pos], state.lines[state.pos + 1])) break;
@@ -192,8 +197,28 @@ function parseParagraph(state) {
   }
   // Inline-shape CommonMark warnings (W032/W033/W035) for the paragraph
   // slice. The Rust twin lives at `scan_inline_commonmark_warnings`.
-  scanInlineCommonmarkWarnings(state.lines.slice(start, state.pos), start, state.diagnostics);
+  scanInlineCommonmarkWarnings(state.lines.slice(start, state.pos), state.lineOffset + start, state.diagnostics);
   return node("paragraph", emptyAttrs(), [], parseInlines(state.lines.slice(start, state.pos).join("\n")), null);
+}
+
+function parseMarkdownBlockquote(state) {
+  const openerLine = lineNo(state, state.pos);
+  const stripped = [];
+  while (state.pos < state.lines.length) {
+    const body = stripBlockquotePrefix(state.lines[state.pos]);
+    if (body === null) break;
+    stripped.push(body);
+    state.pos++;
+  }
+  const sub = {
+    lines: stripped,
+    pos: 0,
+    diagnostics: [],
+    lineOffset: openerLine - 1,
+  };
+  const children = parseUntil(sub, null);
+  state.diagnostics.push(...sub.diagnostics);
+  return node("quote", emptyAttrs(), children, [], null);
 }
 
 function parseOpener(line) {
@@ -261,6 +286,20 @@ function isAnyClose(line) {
     return /^[A-Za-z][A-Za-z0-9-]*$/.test(name);
   }
   return false;
+}
+
+function lineNo(state, pos) {
+  return state.lineOffset + pos + 1;
+}
+
+function isMarkdownBlockquoteStart(line) {
+  return stripBlockquotePrefix(line) !== null;
+}
+
+function stripBlockquotePrefix(line) {
+  if (line.startsWith("> ")) return line.slice(2);
+  if (line === ">") return "";
+  return null;
 }
 
 // PR2 (RFC §10.3): unordered list markers are `-`, `*`, `+` followed by a
@@ -346,7 +385,7 @@ function emitBlockCommonmarkWarnings(state) {
   if (line.trim() !== "" && pos + 1 < state.lines.length) {
     const next = state.lines[pos + 1];
     if (next.length >= 3 && /^=+$/.test(next)) {
-      state.diagnostics.push(diag("NODX-W030", "warning", "Setext-style heading detected. Use '# Heading' (ATX-style) instead.", pos + 2, 1));
+      state.diagnostics.push(diag("NODX-W030", "warning", "Setext-style heading detected. Use '# Heading' (ATX-style) instead.", state.lineOffset + pos + 2, 1));
     }
   }
 
@@ -355,13 +394,13 @@ function emitBlockCommonmarkWarnings(state) {
   if (line.startsWith("    ")) {
     const prevIndented = pos > 0 && state.lines[pos - 1].startsWith("    ");
     if (!prevIndented) {
-      state.diagnostics.push(diag("NODX-W031", "warning", "Indented code block detected. Use '::code' fenced block instead.", pos + 1, 1));
+      state.diagnostics.push(diag("NODX-W031", "warning", "Indented code block detected. Use '::code' fenced block instead.", lineNo(state, pos), 1));
     }
   }
 
   // W034 — GFM footnote definition `[^id]:`.
   if (isFootnoteDefinition(line)) {
-    state.diagnostics.push(diag("NODX-W034", "warning", "Footnote definitions are not part of 1.0. Use the '::footnote' block.", pos + 1, 1));
+    state.diagnostics.push(diag("NODX-W034", "warning", "Footnote definitions are not part of 1.0. Use the '::footnote' block.", lineNo(state, pos), 1));
   }
 }
 

@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from nodx import parse  # noqa: E402
+from nodx import canonical_json, parse  # noqa: E402
 
 
 def codes(doc):
@@ -66,3 +66,23 @@ def test_commonmark_warnings_are_non_fatal():
     doc = parse("Title\n=====\n\n    code\n\n[ref]: x\n")
     assert not any(d["severity"] == "fatal" for d in doc["diagnostics"])
     assert not any(d["severity"] == "error" for d in doc["diagnostics"])
+
+
+def test_markdown_blockquote_alias_matches_quote_node():
+    markdown = parse("> A pithy quote.\n> \n> - cited item\n")
+    explicit = parse(":::quote\nA pithy quote.\n\n- cited item\n:::\n")
+    assert canonical_json(markdown) == canonical_json(explicit)
+    assert markdown["body"][0]["type"] == "quote"
+    assert len(markdown["body"][0]["children"]) == 2
+
+
+def test_markdown_blockquote_requires_space_or_blank_marker():
+    doc = parse(">literal, not a quote.\n\n>> also literal.\n")
+    assert all(item["type"] != "quote" for item in doc["body"])
+    assert len(doc["body"]) == 2
+
+
+def test_markdown_blockquote_inner_diagnostics_keep_source_line():
+    doc = parse("# Before\n\n> [^fn]: quoted footnote.\n")
+    warning = next(d for d in doc["diagnostics"] if d["code"] == "NODX-W034")
+    assert warning["line"] == 3

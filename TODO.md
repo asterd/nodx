@@ -68,7 +68,7 @@ Code	Trigger pattern	Hint
 NODX-E030	Line matches ^(={3,}|-{3,})$ and previous line is non-blank text	Looks like a setext heading; use # H1 / ## H2.
 NODX-E031	Line matches ^(\*\*\*|___)\s*$	Looks like a Markdown thematic break; not supported in NODX 1.0.
 NODX-E032	Inline _text_ or __text__ with word boundaries	Underscore emphasis is not part of NODX lite syntax; use * / **.
-NODX-E033	Line starts with >	Markdown blockquote; use ::quote { ... } ::.
+NODX-E033	Line is `> ` content or blank `>`	Closed: native `::quote` aliases.
 NODX-E034	Line starts with * or + (not nested)	Bullet markers other than - are not supported.
 NODX-E035	Inline ![alt](url)	Markdown image is not supported inline; use :::image { src=... alt=... }.
 NODX-E036	Inline <https://...> or autolink-shaped text	Autolinks are not supported; use [text](url).

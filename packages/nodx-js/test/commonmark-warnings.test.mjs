@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parse } from "../src/index.mjs";
+import { canonicalJson, parse } from "../src/index.mjs";
 
 // Mirrors `crates/nodx-core/src/tests.rs` W030..W035 coverage. The Rust
 // suite is authoritative for behaviour; this file checks the JS twin
@@ -58,4 +58,24 @@ test("CommonMark warnings are non-fatal", () => {
   const doc = parse("Title\n=====\n\n    code\n\n[ref]: x\n");
   assert.ok(!doc.diagnostics.some((d) => d.severity === "fatal"));
   assert.ok(!doc.diagnostics.some((d) => d.severity === "error"));
+});
+
+test("Markdown blockquote alias matches quote node", () => {
+  const markdown = parse("> A pithy quote.\n> \n> - cited item\n");
+  const explicit = parse(":::quote\nA pithy quote.\n\n- cited item\n:::\n");
+  assert.equal(canonicalJson(markdown), canonicalJson(explicit));
+  assert.equal(markdown.body[0].type, "quote");
+  assert.equal(markdown.body[0].children.length, 2);
+});
+
+test("Markdown blockquote requires space or blank marker", () => {
+  const doc = parse(">literal, not a quote.\n\n>> also literal.\n");
+  assert.ok(doc.body.every((item) => item.type !== "quote"));
+  assert.equal(doc.body.length, 2);
+});
+
+test("Markdown blockquote inner diagnostics keep source line", () => {
+  const doc = parse("# Before\n\n> [^fn]: quoted footnote.\n");
+  const warning = doc.diagnostics.find((d) => d.code === "NODX-W034");
+  assert.equal(warning.line, 3);
 });

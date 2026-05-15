@@ -1,0 +1,19 @@
+---
+schema: nodx/1.0
+title: Markdown Blockquote Alias
+profiles:
+  requires:
+    - core
+    - rich
+---
+
+# Markdown blockquote alias #markdown-blockquote
+
+> A quoted paragraph with **strong** text.
+>
+> - quoted item
+> > Nested quoted paragraph.
+
+>literal, not a quote.
+
+>> also literal.
